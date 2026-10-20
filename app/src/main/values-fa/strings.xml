@@ -1,1 +1,26 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LightningLab</string>
+    <string name="subtitle">تشخیص و عکاسی صاعقه</string>
+    <string name="language">زبان</string>
+    <string name="detect">تشخیص صاعقه در ویدئو</string>
+    <string name="edit_video_soon">ویرایش ویدئو (هنوز پیاده‌سازی نشده)</string>
+    <string name="about">درباره</string>
+    <string name="back">بازگشت</string>
+    <string name="sensitivity">حساسیت تشخیص</string>
+    <string name="cancel">لغو</string>
+    <string name="stage_scan">در حال اسکن فریم‌ها…</string>
+    <string name="stage_refine">در حال تحلیل فلش‌های کاندید…</string>
+    <string name="stage_thumbs">در حال آماده‌سازی نتایج…</string>
+    <string name="stage_compose">در حال ترکیب فریم‌ها…</string>
+    <string name="no_events">صاعقه‌ای پیدا نشد. حساسیت را بالا ببرید و دوباره امتحان کنید.</string>
+    <string name="error_generic">خطا: %1$s</string>
+    <string name="select_all">انتخاب همه</string>
+    <string name="deselect_all">لغو انتخاب همه</string>
+    <string name="create_photo">ساخت عکس صاعقه</string>
+    <string name="save_png">ذخیره PNG (با واترمارک)</string>
+    <string name="composed_info">فریم‌های استفاده‌شده: %1$d، ردشده (آسمان سفیدشده یا اندازه‌ی نامتناسب): %2$d</string>
+    <string name="saved">در Pictures/LightningLab ذخیره شد</string>
+    <string name="heuristic_note">امتیاز فقط یک شاخص ابتکاری است، نه احتمال کالیبره‌شده.</string>
+    <string name="about_text">نسخه ۱٫۰\nطراحی: Hassan Mehrzad\n\nتمام پردازش روی همین دستگاه انجام می‌شود. برنامه مجوز اینترنت درخواست نمی‌کند.</string>
+</resources>
