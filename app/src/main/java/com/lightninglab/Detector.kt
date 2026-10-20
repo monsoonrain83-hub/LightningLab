@@ -61,7 +61,10 @@ class Detector(private val ctx: Context) {
                 if (g > 40f) edges++
             }
         }
-        for (i in cells.indices) cells[i] /= max(1, cnt[i])
+        for (i in cells.indices) {
+            val d = max(1, cnt[i]).toFloat()
+            cells[i] = cells[i] / d
+        }
         val n = luma.size.toFloat()
         return Metrics(mean, cells, (edges / n) * (1f - clipped / n))
     }
