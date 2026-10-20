@@ -1,1 +1,26 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LightningLab</string>
+    <string name="subtitle">Lightning Detection &amp; Photography</string>
+    <string name="language">Language</string>
+    <string name="detect">Detect Lightning in Video</string>
+    <string name="edit_video_soon">Edit Video (not implemented yet)</string>
+    <string name="about">About</string>
+    <string name="back">Back</string>
+    <string name="sensitivity">Detection sensitivity</string>
+    <string name="cancel">Cancel</string>
+    <string name="stage_scan">Scanning frames…</string>
+    <string name="stage_refine">Analyzing candidate flashes…</string>
+    <string name="stage_thumbs">Preparing results…</string>
+    <string name="stage_compose">Combining frames…</string>
+    <string name="no_events">No lightning detected. Increase sensitivity and try again.</string>
+    <string name="error_generic">Error: %1$s</string>
+    <string name="select_all">Select all</string>
+    <string name="deselect_all">Deselect all</string>
+    <string name="create_photo">Create Lightning Photo</string>
+    <string name="save_png">Save PNG (with watermark)</string>
+    <string name="composed_info">Frames used: %1$d, skipped (washed-out sky or size mismatch): %2$d</string>
+    <string name="saved">Saved to Pictures/LightningLab</string>
+    <string name="heuristic_note">The score is a heuristic, not a calibrated probability.</string>
+    <string name="about_text">Version 1.0\nDesigned by Hassan Mehrzad\n\nAll processing happens on this device. The app does not request the internet permission.</string>
+</resources>
