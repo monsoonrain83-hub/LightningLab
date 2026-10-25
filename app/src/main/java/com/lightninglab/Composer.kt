@@ -14,28 +14,41 @@ import kotlin.math.min
  * Then the masked pixels are combined with the chosen blend: LIGHTEN (max), SCREEN, or ADVANCED
  * (lighten + highlight protection that fades the contribution where the result is already near white).
  * Frames whose mask covers >20% of the image (misalignment / whole-sky flash) are skipped.
- * A final highlight roll-off keeps the top end from clipping. No alignment yet: assumes a static camera.
+ * A final highlight roll-off keeps the top end from clipping. Alignment: each frame is translated onto the base with [Aligner] when its edge correlation is confident; otherwise it is left unshifted.
  */
 object Composer {
     enum class Method { LIGHTEN, SCREEN, ADVANCED }
-    class Result(val bitmap: Bitmap, val used: Int, val skipped: Int, val clippedPct: Float)
+    class Result(val bitmap: Bitmap, val used: Int, val skipped: Int, val clippedPct: Float,
+                 val shifted: Int = 0, val uncertain: Int = 0)
 
     private fun blend(c: Int, o: Int, m: Float, method: Method): Int = when (method) {
         Method.SCREEN -> (255f - (255f - c) * (255f - o * m) / 255f).toInt()
         else -> if (o > c) (c + (o - c) * m).toInt() else c
     }
 
-    fun compose(base: Bitmap, others: Sequence<Bitmap?>, method: Method, intensity: Float, sensitivity: Float): Result {
+    fun compose(base: Bitmap, others: Sequence<Bitmap?>, method: Method, intensity: Float, sensitivity: Float,
+                align: Boolean = true): Result {
         val w = base.width; val h = base.height; val n = w * h
         val bp = IntArray(n); base.getPixels(bp, 0, w, 0, 0, w, h)
         val bl = FloatArray(n) { ImgUtil.luma(bp[it]) }
         val out = bp.copyOf(); val op = IntArray(n); val d = FloatArray(n)
         val t = 8f + 16f * (1f - sensitivity.coerceIn(0f, 1f))
         val r = max(6, w / 150)
-        var used = 1; var skipped = 0
+        var used = 1; var skipped = 0; var shifted = 0; var uncertain = 0
+        val ol = if (align) FloatArray(n) else null
+        val sp = if (align) IntArray(n) else null
         for (f in others) {
             if (f == null || f.width != w || f.height != h) { skipped++; f?.recycle(); continue }
             f.getPixels(op, 0, w, 0, 0, w, h); f.recycle()
+            if (align && ol != null && sp != null) {
+                for (i in 0 until n) ol[i] = ImgUtil.luma(op[i])
+                val sh = Aligner.estimate(bl, ol, w, h)
+                if (!sh.confident) uncertain++
+                else if (sh.dx != 0 || sh.dy != 0) {
+                    Aligner.shiftInto(op, sp, bp, w, h, sh.dx, sh.dy)
+                    System.arraycopy(sp, 0, op, 0, n); shifted++
+                }
+            }
             for (i in 0 until n) d[i] = ImgUtil.luma(op[i]) - bl[i]
             val blur = ImgUtil.boxBlur(d, w, h, r)
             var cover = 0
@@ -73,6 +86,6 @@ object Composer {
             out[i] = res
             if (ImgUtil.luma(res) >= 250f) clipped++
         }
-        return Result(Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888), used, skipped, 100f * clipped / n)
+        return Result(Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888), used, skipped, 100f * clipped / n, shifted, uncertain)
     }
 }

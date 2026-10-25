@@ -129,6 +129,10 @@ fun Results(vm: MainVM) {
                         { Text(stringResource(R.string.method_advanced)) })
                 }
                 Param(stringResource(R.string.intensity), vm.intensity, 0.2f..1.5f) { vm.intensity = it }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(vm.align, { vm.align = it })
+                    Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.align_frames))
+                }
                 Button(onClick = { vm.compose() }, enabled = !vm.busy && any, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.create_photo))
                 }
@@ -171,28 +175,37 @@ fun PhotoEditor(vm: MainVM) {
             TextButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                 Text(stringResource(R.string.pick_image))
             }
-            TextButton(onClick = { vm.params = PhotoParams() }) { Text(stringResource(R.string.reset)) }
+            TextButton(onClick = { vm.params = PhotoParams(); vm.commit() }) { Text(stringResource(R.string.reset)) }
+            TextButton(onClick = { vm.undo() }, enabled = vm.canUndo) { Text(stringResource(R.string.undo)) }
+            TextButton(onClick = { vm.redo() }, enabled = vm.canRedo) { Text(stringResource(R.string.redo)) }
         }
         if (prev == null) {
             Button(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pick_image)) }
             return@Column
         }
-        shown?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(it.width.toFloat() / it.height)) }
+        (if (vm.showOriginal) prev else shown)?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(it.width.toFloat() / it.height)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(vm.showOriginal, { vm.showOriginal = it })
+            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.compare_original))
+        }
         val p = vm.params
-        Param(stringResource(R.string.exposure), p.exposure, -2f..2f) { vm.params = p.copy(exposure = it) }
-        Param(stringResource(R.string.brightness), p.brightness, -1f..1f) { vm.params = p.copy(brightness = it) }
-        Param(stringResource(R.string.contrast), p.contrast, -1f..1f) { vm.params = p.copy(contrast = it) }
-        Param(stringResource(R.string.saturation), p.saturation, -1f..1f) { vm.params = p.copy(saturation = it) }
-        Param(stringResource(R.string.warmth), p.warmth, -1f..1f) { vm.params = p.copy(warmth = it) }
+        Param(stringResource(R.string.exposure), p.exposure, -2f..2f, vm::commit) { vm.params = p.copy(exposure = it) }
+        Param(stringResource(R.string.brightness), p.brightness, -1f..1f, vm::commit) { vm.params = p.copy(brightness = it) }
+        Param(stringResource(R.string.contrast), p.contrast, -1f..1f, vm::commit) { vm.params = p.copy(contrast = it) }
+        Param(stringResource(R.string.saturation), p.saturation, -1f..1f, vm::commit) { vm.params = p.copy(saturation = it) }
+        Param(stringResource(R.string.warmth), p.warmth, -1f..1f, vm::commit) { vm.params = p.copy(warmth = it) }
+        Param(stringResource(R.string.highlights), p.highlights, -1f..1f, vm::commit) { vm.params = p.copy(highlights = it) }
+        Param(stringResource(R.string.shadows), p.shadows, -1f..1f, vm::commit) { vm.params = p.copy(shadows = it) }
+        Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { vm.params = p.copy(rotate = (p.rotate + 90) % 360) }) { Text(stringResource(R.string.rotate)) }
-            OutlinedButton(onClick = { vm.params = p.copy(flipH = !p.flipH) }) { Text(stringResource(R.string.flip_h)) }
-            OutlinedButton(onClick = { vm.params = p.copy(flipV = !p.flipV) }) { Text(stringResource(R.string.flip_v)) }
+            OutlinedButton(onClick = { vm.params = p.copy(rotate = (p.rotate + 90) % 360); vm.commit() }) { Text(stringResource(R.string.rotate)) }
+            OutlinedButton(onClick = { vm.params = p.copy(flipH = !p.flipH); vm.commit() }) { Text(stringResource(R.string.flip_h)) }
+            OutlinedButton(onClick = { vm.params = p.copy(flipV = !p.flipV); vm.commit() }) { Text(stringResource(R.string.flip_v)) }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             aspects.forEach { (label, v) ->
-                FilterChip(p.aspect == v, { vm.params = p.copy(aspect = v) },
+                FilterChip(p.aspect == v, { vm.params = p.copy(aspect = v); vm.commit() },
                     { Text(if (v == 0f) stringResource(R.string.aspect_original) else label) })
             }
         }

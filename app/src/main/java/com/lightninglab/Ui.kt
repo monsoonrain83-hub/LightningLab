@@ -61,9 +61,9 @@ fun FeatureCard(title: String, subtitle: String?, enabled: Boolean = true, onCli
 }
 
 @Composable
-fun Param(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+fun Param(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onDone: () -> Unit = {}, onChange: (Float) -> Unit) {
     Column {
         Text(label + "  " + String.format(Locale.US, "%.2f", v), style = MaterialTheme.typography.bodySmall)
-        Slider(value = v, onValueChange = onChange, valueRange = range)
+        Slider(value = v, onValueChange = onChange, onValueChangeFinished = onDone, valueRange = range)
     }
 }

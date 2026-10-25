@@ -57,6 +57,23 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var photoPrev by mutableStateOf<Bitmap?>(null)
     var params by mutableStateOf(PhotoParams())
     var watermark by mutableStateOf(true)
+    var showOriginal by mutableStateOf(false)
+    var align by mutableStateOf(true)
+    var canUndo by mutableStateOf(false)
+    var canRedo by mutableStateOf(false)
+    private val hist = ArrayList<PhotoParams>(); private var hi = -1
+    private fun histFlags() { canUndo = hi > 0; canRedo = hi < hist.size - 1 }
+    private fun histReset() { hist.clear(); hist += params; hi = 0; histFlags() }
+    /** Call after a finished edit gesture (slider released, button tapped). */
+    fun commit() {
+        if (hist.getOrNull(hi) == params) return
+        while (hist.size > hi + 1) hist.removeAt(hist.size - 1)
+        hist += params
+        if (hist.size > 60) hist.removeAt(0)
+        hi = hist.size - 1; histFlags()
+    }
+    fun undo() { if (hi > 0) { hi--; params = hist[hi]; histFlags() } }
+    fun redo() { if (hi < hist.size - 1) { hi++; params = hist[hi]; histFlags() } }
 
     // video editor
     var videoUri by mutableStateOf<Uri?>(null)
@@ -122,11 +139,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val det = Detector(app)
                     val base = det.frame(u, sel[0].event.bestMs, 2048) ?: return@withContext null
                     val others = sel.drop(1).asSequence().map { det.frame(u, it.event.bestMs, 2048) }
-                    Composer.compose(base, others, method, intensity, sensitivity)
+                    Composer.compose(base, others, method, intensity, sensitivity, align)
                 }
                 if (r != null) {
                     composite = r.bitmap
-                    info(R.string.composed_info, r.used, r.skipped, String.format(Locale.US, "%.1f", r.clippedPct))
+                    info(R.string.composed_info, r.used, r.skipped, String.format(Locale.US, "%.1f", r.clippedPct), r.shifted, r.uncertain)
                 }
             } catch (c: CancellationException) { throw c
             } catch (e: Throwable) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
@@ -161,7 +178,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---------------- photo editor ----------------
     fun setPhoto(b: Bitmap) {
-        photoSrc = b; params = PhotoParams()
+        photoSrc = b; params = PhotoParams(); histReset(); showOriginal = false
         val s = 1280f / max(b.width, b.height)
         photoPrev = if (s < 1f) Bitmap.createScaledBitmap(b, (b.width * s).toInt(), (b.height * s).toInt(), true) else b
         screen = Screen.PHOTO
