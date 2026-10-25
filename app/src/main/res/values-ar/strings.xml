@@ -34,7 +34,7 @@
     <string name="intensity">شدة البرق</string>
     <string name="create_photo">إنشاء صورة البرق</string>
     <string name="edit_composite">تحرير هذه الصورة</string>
-    <string name="composed_info">الإطارات المستخدمة: %1$d، المتجاهلة: %2$d، الإضاءات المحترقة: %3$s%%</string>
+    <string name="composed_info">الإطارات المستخدمة: %1$d، المتجاهلة: %2$d، الإضاءات المحترقة: %3$s%%، المحاذاة: %4$d، غير المحاذاة (ثقة منخفضة): %5$d</string>
     <string name="saved">تم الحفظ في Pictures/LightningLab</string>
     <string name="save_png">حفظ PNG</string>
     <string name="save_jpeg">حفظ JPEG</string>
@@ -68,4 +68,11 @@
 
 تتم المعالجة بالكامل على هذا الجهاز. لا يطلب التطبيق إذن الإنترنت.</string>
     <string name="export_video">تصدير الفيديو (MP4)</string>
+    <string name="highlights">الإضاءات</string>
+    <string name="shadows">الظلال</string>
+    <string name="sharpness">الحدّة</string>
+    <string name="undo">تراجع</string>
+    <string name="redo">إعادة</string>
+    <string name="compare_original">عرض الأصلية</string>
+    <string name="align_frames">محاذاة الإطارات (حركة الكاميرا)</string>
 </resources>
