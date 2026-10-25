@@ -2,11 +2,29 @@ name: Build APK
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Apply update.zip (if present) and commit the real files
+        run: |
+          if [ -f update.zip ]; then
+            rm -rf /tmp/upd && mkdir /tmp/upd && unzip -q update.zip -d /tmp/upd
+            SRC=$(find /tmp/upd -maxdepth 3 -name settings.gradle.kts -printf '%h\n' | head -n1)
+            echo "Source root: $SRC"
+            cp -r "$SRC"/. .
+            rm -f update.zip
+            git config user.name "lightninglab-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add -A
+            git commit -m "Apply update.zip" || true
+            git push || true
+          fi
+          echo "--- Kotlin sources in build ---"
+          ls app/src/main/java/com/lightninglab
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
