@@ -34,7 +34,7 @@
     <string name="intensity">شدت صاعقه</string>
     <string name="create_photo">ساخت عکس صاعقه</string>
     <string name="edit_composite">ویرایش این عکس</string>
-    <string name="composed_info">فریم‌های استفاده‌شده: %1$d، ردشده: %2$d، هایلایت سوخته: %3$s%%</string>
+    <string name="composed_info">فریم‌های استفاده‌شده: %1$d، ردشده: %2$d، هایلایت سوخته: %3$s%%، ترازشده: %4$d، ترازنشده (اطمینان کم): %5$d</string>
     <string name="saved">در Pictures/LightningLab ذخیره شد</string>
     <string name="save_png">ذخیره PNG</string>
     <string name="save_jpeg">ذخیره JPEG</string>
@@ -68,4 +68,11 @@
 
 تمام پردازش روی همین دستگاه انجام می‌شود. برنامه مجوز اینترنت درخواست نمی‌کند.</string>
     <string name="export_video">خروجی ویدئو (MP4)</string>
+    <string name="highlights">هایلایت</string>
+    <string name="shadows">سایه</string>
+    <string name="sharpness">وضوح (شارپ)</string>
+    <string name="undo">بازگردانی</string>
+    <string name="redo">از نو</string>
+    <string name="compare_original">نمایش تصویر اصلی</string>
+    <string name="align_frames">ترازسازی فریم‌ها (جابه‌جایی دوربین)</string>
 </resources>
