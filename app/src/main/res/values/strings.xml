@@ -34,7 +34,7 @@
     <string name="intensity">Lightning intensity</string>
     <string name="create_photo">Create Lightning Photo</string>
     <string name="edit_composite">Edit this photo</string>
-    <string name="composed_info">Frames used: %1$d, skipped: %2$d, clipped highlights: %3$s%%</string>
+    <string name="composed_info">Frames used: %1$d, skipped: %2$d, clipped highlights: %3$s%%, aligned: %4$d, unaligned (low confidence): %5$d</string>
     <string name="saved">Saved to Pictures/LightningLab</string>
     <string name="save_png">Save PNG</string>
     <string name="save_jpeg">Save JPEG</string>
@@ -68,4 +68,11 @@ Designed by Hassan Mehrzad
 
 All processing happens on this device. The app does not request the internet permission.</string>
     <string name="export_video">Export video (MP4)</string>
+    <string name="highlights">Highlights</string>
+    <string name="shadows">Shadows</string>
+    <string name="sharpness">Sharpness</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="compare_original">Show original</string>
+    <string name="align_frames">Align frames (camera shift)</string>
 </resources>
