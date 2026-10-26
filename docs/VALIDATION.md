@@ -16,3 +16,10 @@
 - `CloudAnalysis.kt` + Weather tab: cloud cover (oktas) from normalised blue-red difference, texture/contrast, ROUGH rule-based type guess. Thresholds are hand-set, NOT validated on labelled data. 4 JUnit tests (clear, overcast, half, dark).
 - Video editor: brightness, contrast, 90-degree rotation (Media3 Brightness/Contrast/ScaleAndRotateTransformation effects), segment Undo/Redo. API names written from memory of Media3 1.3.1 - if the build errors here, send the `e:` lines.
 - Still missing vs PROJECT_STATUS.md: multi-clip join, music library/effects, speed, text/transitions, project save, curves/HSL/denoise/object removal, infographic export, trained cloud model.
+
+## Round 4 additions (uncompiled, unexecuted on Android)
+- Photo: S-curve, vibrance, luminance noise reduction, adjustment presets (SharedPreferences), object removal (paint marks -> `Inpaint` onion-peel fill, one-level undo). Inpaint logic checked with Python port (`inpaint_port.py`): flat hole -> exact colour, gradient hole stays within neighbour range. Smooth fill only; no texture reconstruction.
+- Video: join extra videos (each added video is a section), text overlay (Media3 TextOverlay/OverlayEffect). Guava added as explicit dependency. API names from memory of Media3 1.3.1 - unverified until CI build.
+- Weather: save infographic (photo + analysis text, StaticLayout so Persian/Arabic render).
+- 15 JUnit tests in total, never executed.
+- NOT built: playback speed, transitions, stickers/subtitles, keyframes, LUTs, PiP, multiple music tracks, music library, project files, trained cloud model (no licensed dataset/weights reviewed).

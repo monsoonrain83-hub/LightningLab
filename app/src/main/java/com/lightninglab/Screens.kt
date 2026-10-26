@@ -156,6 +156,8 @@ fun PhotoEditor(vm: MainVM) {
         if (u != null) vm.loadPhoto(u)
     }
     val prev = vm.photoPrev
+    var healMode by remember { mutableStateOf(false) }
+    var brush by remember { mutableStateOf(0.02f) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     LaunchedEffect(vm.params, prev) {
         if (prev != null) shown = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -178,7 +180,24 @@ fun PhotoEditor(vm: MainVM) {
                 modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pick_image)) }
             return@Column
         }
-        (if (vm.showOriginal) prev else shown)?.let { Image(it.asImageBitmap(), null, Modifier.fillMaxWidth().aspectRatio(it.width.toFloat() / it.height)) }
+        (if (vm.showOriginal || healMode) prev else shown)?.let { bmp ->
+            Box(Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height)) {
+                Image(bmp.asImageBitmap(), null, Modifier.matchParentSize())
+                if (healMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(healMode, { healMode = it })
+            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.heal_mode))
+        }
+        if (healMode) {
+            Param(stringResource(R.string.heal_brush), brush, 0.005f..0.05f) { brush = it }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.applyHeal() }, enabled = !vm.busy && vm.healCircles.isNotEmpty()) { Text(stringResource(R.string.heal_apply)) }
+                OutlinedButton(onClick = { vm.healCircles.clear() }) { Text(stringResource(R.string.heal_clear)) }
+                OutlinedButton(onClick = { vm.undoHeal() }, enabled = vm.canUndoHeal) { Text(stringResource(R.string.heal_undo)) }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(vm.showOriginal, { vm.showOriginal = it })
             Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.compare_original))
@@ -192,6 +211,13 @@ fun PhotoEditor(vm: MainVM) {
         Param(stringResource(R.string.highlights), p.highlights, -1f..1f, vm::commit) { vm.params = p.copy(highlights = it) }
         Param(stringResource(R.string.shadows), p.shadows, -1f..1f, vm::commit) { vm.params = p.copy(shadows = it) }
         Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }
+        Param(stringResource(R.string.scurve), p.scurve, -1f..1f, vm::commit) { vm.params = p.copy(scurve = it) }
+        Param(stringResource(R.string.vibrance), p.vibrance, -1f..1f, vm::commit) { vm.params = p.copy(vibrance = it) }
+        Param(stringResource(R.string.denoise), p.denoise, 0f..1f, vm::commit) { vm.params = p.copy(denoise = it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { vm.savePreset() }) { Text(stringResource(R.string.preset_save)) }
+            OutlinedButton(onClick = { vm.loadPreset() }) { Text(stringResource(R.string.preset_load)) }
+        }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { vm.params = p.copy(rotate = (p.rotate + 90) % 360); vm.commit() }) { Text(stringResource(R.string.rotate)) }
             OutlinedButton(onClick = { vm.params = p.copy(flipH = !p.flipH); vm.commit() }) { Text(stringResource(R.string.flip_h)) }
@@ -220,6 +246,9 @@ fun PhotoEditor(vm: MainVM) {
 fun VideoEditor(vm: MainVM) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.loadVideo(u)
+    }
+    val pickClip = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) vm.addClip(u)
     }
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) vm.music = u
@@ -264,6 +293,9 @@ fun VideoEditor(vm: MainVM) {
                 if (range.endInclusive - range.start >= 100f) vm.addSeg(Seg(range.start.toLong(), range.endInclusive.toLong()))
             }) { Text(stringResource(R.string.add_segment)) }
             OutlinedButton(onClick = { vm.clearSegs() }) { Text(stringResource(R.string.clear_segments)) }
+            OutlinedButton(onClick = { pickClip.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }) {
+                Text(stringResource(R.string.add_clip))
+            }
             TextButton(onClick = { vm.undoSeg() }, enabled = vm.canUndoSeg) { Text(stringResource(R.string.undo)) }
             TextButton(onClick = { vm.redoSeg() }, enabled = vm.canRedoSeg) { Text(stringResource(R.string.redo)) }
         }
@@ -271,12 +303,14 @@ fun VideoEditor(vm: MainVM) {
         if (vm.segments.isEmpty()) Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall)
         vm.segments.forEachIndexed { i, s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}", modifier = Modifier.weight(1f))
+                Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}" + (if (s.uri != null) "  🎞" else ""), modifier = Modifier.weight(1f))
                 TextButton(onClick = { vm.removeSeg(i) }) { Text("✕") }
             }
         }
         Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
         Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
+        OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
+            label = { Text(stringResource(R.string.overlay_text)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
             Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
         }

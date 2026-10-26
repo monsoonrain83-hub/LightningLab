@@ -93,4 +93,19 @@
     <string name="kind_layer">طبقة رمادية موحدة (شبيهة St/As)</string>
     <string name="kind_dark">تغيّم داكن (شبيه Ns/Sc)</string>
     <string name="kind_mixed">مختلط / غير محدد</string>
+    <string name="scurve">منحنى S (التباين)</string>
+    <string name="vibrance">النشاط اللوني</string>
+    <string name="denoise">تقليل الضوضاء</string>
+    <string name="preset_save">حفظ الإعداد</string>
+    <string name="preset_load">تحميل الإعداد</string>
+    <string name="preset_saved">تم حفظ الإعداد</string>
+    <string name="preset_none">لا يوجد إعداد محفوظ</string>
+    <string name="heal_mode">إزالة العناصر (ارسم فوقها)</string>
+    <string name="heal_brush">حجم الفرشاة</string>
+    <string name="heal_apply">تطبيق الإزالة</string>
+    <string name="heal_clear">مسح العلامات</string>
+    <string name="heal_undo">تراجع عن الإزالة</string>
+    <string name="add_clip">إضافة فيديو آخر</string>
+    <string name="overlay_text">نص على الفيديو (اختياري)</string>
+    <string name="save_infographic">حفظ الإنفوغرافيك</string>
 </resources>

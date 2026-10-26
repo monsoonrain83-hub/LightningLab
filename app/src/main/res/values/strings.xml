@@ -93,4 +93,19 @@ Rough type guess: %5$s</string>
     <string name="kind_layer">uniform grey layer (St/As-like)</string>
     <string name="kind_dark">dark overcast (Ns/Sc-like)</string>
     <string name="kind_mixed">mixed / undetermined</string>
+    <string name="scurve">S-curve (contrast curve)</string>
+    <string name="vibrance">Vibrance</string>
+    <string name="denoise">Noise reduction</string>
+    <string name="preset_save">Save preset</string>
+    <string name="preset_load">Load preset</string>
+    <string name="preset_saved">Preset saved</string>
+    <string name="preset_none">No saved preset</string>
+    <string name="heal_mode">Remove objects (paint over)</string>
+    <string name="heal_brush">Brush size</string>
+    <string name="heal_apply">Apply removal</string>
+    <string name="heal_clear">Clear marks</string>
+    <string name="heal_undo">Undo removal</string>
+    <string name="add_clip">Add another video</string>
+    <string name="overlay_text">Text on video (optional)</string>
+    <string name="save_infographic">Save infographic</string>
 </resources>

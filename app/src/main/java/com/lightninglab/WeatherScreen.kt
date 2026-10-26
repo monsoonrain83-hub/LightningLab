@@ -43,6 +43,9 @@ fun WeatherScreen(vm: MainVM) {
             Text(stringResource(R.string.wx_report, (r.cover * 100).roundToInt(), r.oktas,
                 String.format(Locale.US, "%.1f", r.texture), r.cloudLuma.roundToInt(), stringResource(kindRes(r.kind))))
             Text(stringResource(R.string.wx_disclaimer), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9AA7BD))
+            Button(onClick = { vm.saveInfographic() }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.save_infographic))
+            }
         }
         InfoText(vm)
         Spacer(Modifier.height(24.dp))

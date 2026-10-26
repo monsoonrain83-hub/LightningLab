@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.text.SpannableString
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +17,10 @@ import androidx.media3.common.Effect
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
+import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.TextOverlay
+import androidx.media3.effect.TextureOverlay
+import com.google.common.collect.ImmutableList
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.Composition
@@ -40,7 +45,7 @@ import kotlin.math.max
 enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
-data class Seg(val startMs: Long, val endMs: Long)
+data class Seg(val startMs: Long, val endMs: Long, val uri: Uri? = null)
 
 class MainVM(private val app: Application) : AndroidViewModel(app) {
     var screen by mutableStateOf(Screen.HOME)
@@ -89,6 +94,92 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var vBrightness by mutableStateOf(0f)
     var vContrast by mutableStateOf(0f)
     var vRotate by mutableStateOf(0)
+    var overlayText by mutableStateOf("")
+
+    /** Appends a whole extra video as its own section (joined after the others on export). */
+    fun addClip(c: Uri) {
+        viewModelScope.launch {
+            try {
+                val d = withContext(Dispatchers.IO) {
+                    val r = MediaMetadataRetriever()
+                    try {
+                        r.setDataSource(app, c)
+                        r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                    } finally { r.release() }
+                }
+                if (d <= 0L) { info(R.string.error_generic, "video"); return@launch }
+                if (segments.isEmpty()) addSeg(Seg(0, videoDur))
+                addSeg(Seg(0, d, c))
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") }
+        }
+    }
+
+    // ---- object removal (destructive on the working source; one-level undo) ----
+    val healCircles = mutableStateListOf<Heal>()
+    var canUndoHeal by mutableStateOf(false)
+    private var healBackup: Bitmap? = null
+    fun addHeal(h: Heal) { if (healCircles.size < 400) healCircles += h }
+    private fun replaceSource(b: Bitmap) {
+        photoSrc = b
+        val s = 1280f / max(b.width, b.height)
+        photoPrev = if (s < 1f) Bitmap.createScaledBitmap(b, (b.width * s).toInt(), (b.height * s).toInt(), true) else b
+    }
+    fun applyHeal() {
+        val s = photoSrc ?: return
+        if (healCircles.isEmpty() || busy) return
+        busy = true
+        val marks = healCircles.toList()
+        viewModelScope.launch {
+            try {
+                val n = withContext(Dispatchers.Default) { PhotoEdit.heal(s, marks) }
+                healBackup = s; replaceSource(n); healCircles.clear(); canUndoHeal = true
+            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "heal") } finally { busy = false }
+        }
+    }
+    fun undoHeal() { healBackup?.let { replaceSource(it); healBackup = null; canUndoHeal = false } }
+
+    // ---- photo presets (adjustment sliders only) ----
+    private val prefs get() = app.getSharedPreferences("lightninglab", android.content.Context.MODE_PRIVATE)
+    fun savePreset() {
+        val p = params
+        prefs.edit().putString("photo_preset", listOf(p.exposure, p.brightness, p.contrast, p.saturation, p.warmth,
+            p.highlights, p.shadows, p.sharpness, p.scurve, p.denoise, p.vibrance).joinToString(",")).apply()
+        info(R.string.preset_saved)
+    }
+    fun loadPreset() {
+        val v = prefs.getString("photo_preset", null)?.split(",")?.mapNotNull { it.toFloatOrNull() }
+        if (v == null || v.size < 11) { info(R.string.preset_none); return }
+        params = params.copy(exposure = v[0], brightness = v[1], contrast = v[2], saturation = v[3], warmth = v[4],
+            highlights = v[5], shadows = v[6], sharpness = v[7], scurve = v[8], denoise = v[9], vibrance = v[10])
+        commit()
+    }
+
+    // ---- infographic ----
+    fun saveInfographic() {
+        val b = wxBitmap ?: return; val r = wx ?: return
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            try {
+                val kindRes = when (r.kind) {
+                    CloudAnalysis.Kind.CLEAR -> R.string.kind_clear
+                    CloudAnalysis.Kind.THIN_STREAKS -> R.string.kind_thin
+                    CloudAnalysis.Kind.CUMULIFORM -> R.string.kind_cumuliform
+                    CloudAnalysis.Kind.UNIFORM_LAYER -> R.string.kind_layer
+                    CloudAnalysis.Kind.DARK_OVERCAST -> R.string.kind_dark
+                    CloudAnalysis.Kind.MIXED -> R.string.kind_mixed
+                }
+                withContext(Dispatchers.Default) {
+                    val txt = app.getString(R.string.wx_report, Math.round(r.cover * 100), r.oktas,
+                        String.format(Locale.US, "%.1f", r.texture), Math.round(r.cloudLuma), app.getString(kindRes))
+                    val img = Infographic.render(b, app.getString(R.string.weather_title),
+                        txt.split("\n") + app.getString(R.string.wx_disclaimer), "LightningLab")
+                    Exporter.saveImage(app, img, false, 92, false, "LightningLab_sky_${System.currentTimeMillis()}")
+                }
+                info(R.string.saved)
+            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "infographic") } finally { busy = false }
+        }
+    }
     var canUndoSeg by mutableStateOf(false)
     var canRedoSeg by mutableStateOf(false)
     private val segHist = ArrayList<List<Seg>>(); private var segHi = 0
@@ -282,9 +373,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val fx = ArrayList<Effect>()
                 if (vBrightness != 0f) fx += Brightness(vBrightness)
                 if (vContrast != 0f) fx += Contrast(vContrast)
+                if (overlayText.isNotBlank()) fx += OverlayEffect(ImmutableList.of<TextureOverlay>(
+                    TextOverlay.createStaticTextOverlay(SpannableString(overlayText.trim()))))
                 if (vRotate != 0) fx += ScaleAndRotateTransformation.Builder().setRotationDegrees(vRotate.toFloat()).build()
                 val items = segs.map { s ->
-                    val mi = MediaItem.Builder().setUri(u).setClippingConfiguration(
+                    val mi = MediaItem.Builder().setUri(s.uri ?: u).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(s.startMs).setEndPositionMs(s.endMs).build()).build()
                     EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal)

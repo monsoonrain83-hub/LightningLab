@@ -93,4 +93,19 @@
     <string name="kind_layer">لایه‌ی خاکستری یکنواخت (شبیه St/As)</string>
     <string name="kind_dark">پوشش تیره (شبیه Ns/Sc)</string>
     <string name="kind_mixed">ترکیبی / نامشخص</string>
+    <string name="scurve">منحنی S (کنتراست)</string>
+    <string name="vibrance">ویبرنس (رنگ ملایم)</string>
+    <string name="denoise">کاهش نویز</string>
+    <string name="preset_save">ذخیره‌ی پیش‌تنظیم</string>
+    <string name="preset_load">بارگذاری پیش‌تنظیم</string>
+    <string name="preset_saved">پیش‌تنظیم ذخیره شد</string>
+    <string name="preset_none">پیش‌تنظیمی ذخیره نشده</string>
+    <string name="heal_mode">حذف شیء (روی آن بکشید)</string>
+    <string name="heal_brush">اندازه‌ی قلم</string>
+    <string name="heal_apply">اعمال حذف</string>
+    <string name="heal_clear">پاک‌کردن علامت‌ها</string>
+    <string name="heal_undo">بازگردانی حذف</string>
+    <string name="add_clip">افزودن ویدئوی دیگر</string>
+    <string name="overlay_text">متن روی ویدئو (اختیاری)</string>
+    <string name="save_infographic">ذخیره‌ی اینفوگرافی</string>
 </resources>
