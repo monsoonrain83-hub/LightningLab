@@ -10,3 +10,9 @@
 - `Aligner.kt` (NCC on gradient images, coarse 256 px + full-res refine). Python port `aligner_port.py` on a synthetic 1024x576 scene with sky brightening + a lightning line: exact recovery of (0,0), (5,-3), (-9,6), (14,2); featureless noise -> not confident (frame left unshifted). Translation only; rotation/zoom not handled.
 - `PhotoEdit.tonePass` (highlights, shadows, sharpness, banded processing) and photo Undo/Redo + before/after: NOT numerically tested, NOT compiled.
 - 9 JUnit tests total (7 FlashAnalyzer + 2 Aligner), none executed yet.
+
+## Round 3 additions (all uncompiled, unexecuted)
+- Bottom navigation (4 sections: Lightning / Photo / Video / Weather); Photo and Video cards removed from Home to avoid duplicate entry points.
+- `CloudAnalysis.kt` + Weather tab: cloud cover (oktas) from normalised blue-red difference, texture/contrast, ROUGH rule-based type guess. Thresholds are hand-set, NOT validated on labelled data. 4 JUnit tests (clear, overcast, half, dark).
+- Video editor: brightness, contrast, 90-degree rotation (Media3 Brightness/Contrast/ScaleAndRotateTransformation effects), segment Undo/Redo. API names written from memory of Media3 1.3.1 - if the build errors here, send the `e:` lines.
+- Still missing vs PROJECT_STATUS.md: multi-clip join, music library/effects, speed, text/transitions, project save, curves/HSL/denoise/object removal, infographic export, trained cloud model.

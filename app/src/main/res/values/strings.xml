@@ -75,4 +75,22 @@ All processing happens on this device. The app does not request the internet per
     <string name="redo">Redo</string>
     <string name="compare_original">Show original</string>
     <string name="align_frames">Align frames (camera shift)</string>
+    <string name="nav_lightning">Lightning</string>
+    <string name="nav_photo">Photo</string>
+    <string name="nav_video">Video</string>
+    <string name="nav_weather">Weather</string>
+    <string name="weather_title">Sky and cloud analysis</string>
+    <string name="pick_sky">Choose a sky photo</string>
+    <string name="wx_hint">Use a photo that is mostly sky (crop out ground and sun).</string>
+    <string name="wx_report">Cloud cover: %1$d%% (%2$d/8 oktas)
+Texture index: %3$s
+Cloud brightness: %4$d/255
+Rough type guess: %5$s</string>
+    <string name="wx_disclaimer">Rule-based estimate, not validated. Cover uses a red/blue ratio; the type is only a rough guess, not a WMO classification.</string>
+    <string name="kind_clear">clear sky</string>
+    <string name="kind_thin">thin streaky cloud (Ci/Cc-like)</string>
+    <string name="kind_cumuliform">heaped cloud (Cu-like)</string>
+    <string name="kind_layer">uniform grey layer (St/As-like)</string>
+    <string name="kind_dark">dark overcast (Ns/Sc-like)</string>
+    <string name="kind_mixed">mixed / undetermined</string>
 </resources>

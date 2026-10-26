@@ -12,7 +12,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Effect
 import androidx.media3.common.MimeTypes
+import androidx.media3.effect.Brightness
+import androidx.media3.effect.Contrast
+import androidx.media3.effect.ScaleAndRotateTransformation
+import androidx.media3.transformer.Effects
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
@@ -32,7 +37,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.max
 
-enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO }
+enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
 data class Seg(val startMs: Long, val endMs: Long)
@@ -81,6 +86,44 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     val segments = mutableStateListOf<Seg>()
     var music by mutableStateOf<Uri?>(null)
     var muteOriginal by mutableStateOf(false)
+    var vBrightness by mutableStateOf(0f)
+    var vContrast by mutableStateOf(0f)
+    var vRotate by mutableStateOf(0)
+    var canUndoSeg by mutableStateOf(false)
+    var canRedoSeg by mutableStateOf(false)
+    private val segHist = ArrayList<List<Seg>>(); private var segHi = 0
+    private fun segFlags() { canUndoSeg = segHi > 0; canRedoSeg = segHi < segHist.size - 1 }
+    private fun segReset() { segHist.clear(); segHist += emptyList<Seg>(); segHi = 0; segFlags() }
+    private fun segPush() {
+        while (segHist.size > segHi + 1) segHist.removeAt(segHist.size - 1)
+        segHist += segments.toList(); segHi = segHist.size - 1; segFlags()
+    }
+    private fun segRestore() { segments.clear(); segments.addAll(segHist[segHi]); segFlags() }
+    fun addSeg(sg: Seg) { segments += sg; segPush() }
+    fun removeSeg(i: Int) { if (i in segments.indices) { segments.removeAt(i); segPush() } }
+    fun clearSegs() { if (segments.isNotEmpty()) { segments.clear(); segPush() } }
+    fun undoSeg() { if (segHi > 0) { segHi--; segRestore() } }
+    fun redoSeg() { if (segHi < segHist.size - 1) { segHi++; segRestore() } }
+
+    var wxBitmap by mutableStateOf<Bitmap?>(null)
+    var wx by mutableStateOf<CloudAnalysis.Result?>(null)
+    fun analyzeSky(u: Uri) {
+        viewModelScope.launch {
+            try {
+                val (bmp, res) = withContext(Dispatchers.Default) {
+                    val b = ImageDecoder.decodeBitmap(ImageDecoder.createSource(app.contentResolver, u)) { dec, inf, _ ->
+                        dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        var k = 1; var m = max(inf.size.width, inf.size.height)
+                        while (m / k > 1024) k *= 2
+                        dec.setTargetSampleSize(k)
+                    }
+                    val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
+                    b to CloudAnalysis.analyze(px, b.width, b.height)
+                }
+                wxBitmap = bmp; wx = res; infoRes = null
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "image") }
+        }
+    }
 
     private fun info(res: Int, vararg a: Any) { infoRes = res; infoArgs = a.toList() }
 
@@ -222,7 +265,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         try {
             r.setDataSource(app, u)
             videoDur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            videoUri = u; segments.clear(); infoRes = null
+            videoUri = u; segments.clear(); segReset(); infoRes = null
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
@@ -236,11 +279,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             var tr: Transformer? = null
             try {
                 val segs = if (segments.isEmpty()) listOf(Seg(0, videoDur)) else segments.toList()
+                val fx = ArrayList<Effect>()
+                if (vBrightness != 0f) fx += Brightness(vBrightness)
+                if (vContrast != 0f) fx += Contrast(vContrast)
+                if (vRotate != 0) fx += ScaleAndRotateTransformation.Builder().setRotationDegrees(vRotate.toFloat()).build()
                 val items = segs.map { s ->
                     val mi = MediaItem.Builder().setUri(u).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(s.startMs).setEndPositionMs(s.endMs).build()).build()
-                    EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal).build()
+                    EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal)
+                        .setEffects(Effects(emptyList(), fx)).build()
                 }
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)

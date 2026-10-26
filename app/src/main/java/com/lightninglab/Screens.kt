@@ -57,12 +57,6 @@ fun Home(vm: MainVM) {
             FeatureCard(stringResource(R.string.detect), stringResource(R.string.detect_sub), enabled = !vm.busy) {
                 pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
             }
-            FeatureCard(stringResource(R.string.edit_photo), stringResource(R.string.photo_sub)) {
-                vm.screen = Screen.PHOTO
-            }
-            FeatureCard(stringResource(R.string.edit_video), stringResource(R.string.video_sub)) {
-                vm.screen = Screen.VIDEO
-            }
             FeatureCard(stringResource(R.string.about), null) { vm.screen = Screen.ABOUT }
         }
     }
@@ -267,17 +261,24 @@ fun VideoEditor(vm: MainVM) {
         }, valueRange = 0f..vm.videoDur.toFloat().coerceAtLeast(1f))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
-                if (range.endInclusive - range.start >= 100f) vm.segments += Seg(range.start.toLong(), range.endInclusive.toLong())
+                if (range.endInclusive - range.start >= 100f) vm.addSeg(Seg(range.start.toLong(), range.endInclusive.toLong()))
             }) { Text(stringResource(R.string.add_segment)) }
-            OutlinedButton(onClick = { vm.segments.clear() }) { Text(stringResource(R.string.clear_segments)) }
+            OutlinedButton(onClick = { vm.clearSegs() }) { Text(stringResource(R.string.clear_segments)) }
+            TextButton(onClick = { vm.undoSeg() }, enabled = vm.canUndoSeg) { Text(stringResource(R.string.undo)) }
+            TextButton(onClick = { vm.redoSeg() }, enabled = vm.canRedoSeg) { Text(stringResource(R.string.redo)) }
         }
         Text(stringResource(R.string.segments_title), fontWeight = FontWeight.SemiBold)
         if (vm.segments.isEmpty()) Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall)
         vm.segments.forEachIndexed { i, s ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}", modifier = Modifier.weight(1f))
-                TextButton(onClick = { vm.segments.removeAt(i) }) { Text("✕") }
+                TextButton(onClick = { vm.removeSeg(i) }) { Text("✕") }
             }
+        }
+        Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
+        Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
+        OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
+            Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(vm.muteOriginal, { vm.muteOriginal = it })

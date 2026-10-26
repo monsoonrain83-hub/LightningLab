@@ -75,4 +75,22 @@
     <string name="redo">از نو</string>
     <string name="compare_original">نمایش تصویر اصلی</string>
     <string name="align_frames">ترازسازی فریم‌ها (جابه‌جایی دوربین)</string>
+    <string name="nav_lightning">صاعقه</string>
+    <string name="nav_photo">عکس</string>
+    <string name="nav_video">ویدئو</string>
+    <string name="nav_weather">هواشناسی</string>
+    <string name="weather_title">تحلیل آسمان و ابر</string>
+    <string name="pick_sky">انتخاب عکس آسمان</string>
+    <string name="wx_hint">عکسی انتخاب کنید که بیشتر آسمان باشد (زمین و خورشید را برش بزنید).</string>
+    <string name="wx_report">پوشش ابر: %1$d%% (%2$d از ۸ اکتا)
+شاخص بافت: %3$s
+روشنایی ابر: %4$d از ۲۵۵
+حدس تقریبی نوع: %5$s</string>
+    <string name="wx_disclaimer">برآورد قانون‌محور و اعتبارسنجی‌نشده. پوشش ابر با نسبت قرمز به آبی محاسبه می‌شود؛ نوع ابر فقط حدس تقریبی است و طبقه‌بندی WMO نیست.</string>
+    <string name="kind_clear">آسمان صاف</string>
+    <string name="kind_thin">ابر نازک و رگه‌ای (شبیه Ci/Cc)</string>
+    <string name="kind_cumuliform">ابر توده‌ای (شبیه Cu)</string>
+    <string name="kind_layer">لایه‌ی خاکستری یکنواخت (شبیه St/As)</string>
+    <string name="kind_dark">پوشش تیره (شبیه Ns/Sc)</string>
+    <string name="kind_mixed">ترکیبی / نامشخص</string>
 </resources>

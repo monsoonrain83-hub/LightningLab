@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
@@ -29,15 +30,19 @@ fun App(vm: MainVM = viewModel()) {
         background = Color(0xFF0B0F17), surface = Color(0xFF121826),
         secondary = Color(0xFF8E7CFF))) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.systemBarsPadding()) {
+            Column(Modifier.systemBarsPadding()) {
                 BackHandler(enabled = vm.screen != Screen.HOME) { vm.screen = Screen.HOME }
-                when (vm.screen) {
-                    Screen.HOME -> Home(vm)
-                    Screen.RESULTS -> Results(vm)
-                    Screen.ABOUT -> About(vm)
-                    Screen.PHOTO -> PhotoEditor(vm)
-                    Screen.VIDEO -> VideoEditor(vm)
+                Box(Modifier.weight(1f)) {
+                    when (vm.screen) {
+                        Screen.HOME -> Home(vm)
+                        Screen.RESULTS -> Results(vm)
+                        Screen.ABOUT -> About(vm)
+                        Screen.PHOTO -> PhotoEditor(vm)
+                        Screen.VIDEO -> VideoEditor(vm)
+                        Screen.WEATHER -> WeatherScreen(vm)
+                    }
                 }
+                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT) NavBar(vm)
             }
         }
     }

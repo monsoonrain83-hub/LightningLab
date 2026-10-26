@@ -67,3 +67,18 @@ fun Param(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onDon
         Slider(value = v, onValueChange = onChange, onValueChangeFinished = onDone, valueRange = range)
     }
 }
+
+@Composable
+fun NavBar(vm: MainVM) {
+    val items = listOf(
+        Triple(Screen.HOME, "⚡", R.string.nav_lightning),
+        Triple(Screen.PHOTO, "🖼", R.string.nav_photo),
+        Triple(Screen.VIDEO, "🎬", R.string.nav_video),
+        Triple(Screen.WEATHER, "☁", R.string.nav_weather))
+    NavigationBar {
+        items.forEach { (sc, ic, lb) ->
+            NavigationBarItem(selected = vm.screen == sc, onClick = { vm.screen = sc },
+                icon = { Text(ic) }, label = { Text(stringResource(lb)) })
+        }
+    }
+}

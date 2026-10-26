@@ -75,4 +75,22 @@
     <string name="redo">إعادة</string>
     <string name="compare_original">عرض الأصلية</string>
     <string name="align_frames">محاذاة الإطارات (حركة الكاميرا)</string>
+    <string name="nav_lightning">البرق</string>
+    <string name="nav_photo">صورة</string>
+    <string name="nav_video">فيديو</string>
+    <string name="nav_weather">الطقس</string>
+    <string name="weather_title">تحليل السماء والغيوم</string>
+    <string name="pick_sky">اختر صورة للسماء</string>
+    <string name="wx_hint">استخدم صورة معظمها سماء (اقتطع الأرض والشمس).</string>
+    <string name="wx_report">الغطاء السحابي: %1$d%% (%2$d/8 أوكتا)
+مؤشر النسيج: %3$s
+سطوع الغيوم: %4$d/255
+تخمين تقريبي للنوع: %5$s</string>
+    <string name="wx_disclaimer">تقدير قائم على قواعد وغير مُتحقَّق منه. الغطاء يعتمد على نسبة الأحمر/الأزرق، والنوع تخمين تقريبي وليس تصنيف WMO.</string>
+    <string name="kind_clear">سماء صافية</string>
+    <string name="kind_thin">غيوم رقيقة مخططة (شبيهة Ci/Cc)</string>
+    <string name="kind_cumuliform">غيوم متكدسة (شبيهة Cu)</string>
+    <string name="kind_layer">طبقة رمادية موحدة (شبيهة St/As)</string>
+    <string name="kind_dark">تغيّم داكن (شبيه Ns/Sc)</string>
+    <string name="kind_mixed">مختلط / غير محدد</string>
 </resources>
