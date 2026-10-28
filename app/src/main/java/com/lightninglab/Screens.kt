@@ -3,6 +3,10 @@ package com.lightninglab
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,6 +24,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -32,45 +40,63 @@ fun Home(vm: MainVM) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.startDetect(u)
     }
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0B0F17), Color(0xFF111B33))))) {
-        Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { LangMenu() }
-            Image(painterResource(R.drawable.logo), null, Modifier.size(150.dp))
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.titleSmall, color = Color(0xFF9AA7BD))
-            Spacer(Modifier.height(6.dp))
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF151D2E))) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(stringResource(R.string.sensitivity) + ": " + (vm.sensitivity * 100).roundToInt() + "%")
-                    Slider(value = vm.sensitivity, onValueChange = { vm.sensitivity = it }, enabled = !vm.busy)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Box {
+            LightningHero(Modifier.fillMaxWidth().height(280.dp))
+            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) { LangMenu() }
+            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 18.dp)) {
+                Text(buildAnnotatedString {
+                    withStyle(SpanStyle(color = Storm.text)) { append("Lightning") }
+                    withStyle(SpanStyle(color = Storm.bolt)) { append("Lab") }
+                }, style = MaterialTheme.typography.displaySmall)
+                Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.bodyMedium, color = Storm.muted)
+            }
+        }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Panel {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.sensitivity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text((vm.sensitivity * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
                 }
+                Slider(value = vm.sensitivity, onValueChange = { vm.sensitivity = it }, enabled = !vm.busy)
             }
             if (vm.busy) {
-                LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
-                Text(stringResource(vm.stage))
-                OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
+                Panel {
+                    LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(vm.stage), style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
+                }
             }
             InfoText(vm)
-            FeatureCard(stringResource(R.string.detect), stringResource(R.string.detect_sub), enabled = !vm.busy) {
-                pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+            Button(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                enabled = !vm.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                AppIcon(Ic.BOLT, Storm.onBolt, Modifier.size(20.dp), filled = true)
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
             }
-            FeatureCard(stringResource(R.string.about), null) { vm.screen = Screen.ABOUT }
+            Text(stringResource(R.string.detect_sub), style = MaterialTheme.typography.bodySmall, color = Storm.muted,
+                modifier = Modifier.fillMaxWidth())
+            TextButton(onClick = { vm.screen = Screen.ABOUT }) { Text(stringResource(R.string.about), color = Storm.muted) }
         }
     }
 }
 
 @Composable
 fun About(vm: MainVM) {
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Image(painterResource(R.drawable.logo), null, Modifier.size(120.dp))
-        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary)
-        Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.about_text))
-        OutlinedButton(onClick = { vm.screen = Screen.HOME }) { Text(stringResource(R.string.back)) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val ver = remember { try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (e: Exception) { "" } }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.about), onBack = { vm.screen = Screen.HOME })
+        Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Image(painterResource(R.drawable.logo), null, Modifier.size(96.dp))
+            Text(buildAnnotatedString {
+                withStyle(SpanStyle(color = Storm.text)) { append("Lightning") }
+                withStyle(SpanStyle(color = Storm.bolt)) { append("Lab") }
+            }, style = MaterialTheme.typography.headlineLarge)
+            Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.titleSmall, color = Storm.muted)
+            Panel { Text(stringResource(R.string.about_text), style = MaterialTheme.typography.bodyMedium) }
+            Text("v" + ver, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+        }
     }
 }
 
@@ -87,14 +113,15 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text(stringResource(R.string.order_hint), style = MaterialTheme.typography.bodySmall)
-                Text(stringResource(R.string.heuristic_note), style = MaterialTheme.typography.bodySmall, color = Color(0xFF9AA7BD))
+                Text(stringResource(R.string.heuristic_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             }
         }
         items(vm.items.size) { i ->
             val item = vm.items[i]
-            Card(Modifier.clickable { vm.toggle(i) }, shape = RoundedCornerShape(14.dp),
+            Card(Modifier.clickable { vm.toggle(i) }, shape = MaterialTheme.shapes.small,
+                border = BorderStroke(if (item.order > 0) 1.5.dp else 1.dp, if (item.order > 0) Storm.bolt else Storm.outline.copy(alpha = 0.6f)),
                 colors = CardDefaults.cardColors(containerColor =
-                    if (item.order > 0) Color(0xFF173352) else Color(0xFF151D2E))) {
+                    if (item.order > 0) Storm.selected else Storm.surfaceHi)) {
                 Column {
                     Image(item.thumb.asImageBitmap(), null,
                         Modifier.fillMaxWidth().aspectRatio(item.thumb.width.toFloat() / item.thumb.height),
@@ -150,97 +177,131 @@ fun Results(vm: MainVM) {
 private val aspects = listOf("Original" to 0f, "1:1" to 1f, "4:5" to 0.8f, "4:3" to 4f / 3f,
     "3:2" to 1.5f, "16:9" to 16f / 9f, "9:16" to 9f / 16f)
 
+private enum class PTab { LIGHT, COLOR, DETAIL, CROP, REMOVE, EXPORT }
+
 @Composable
 fun PhotoEditor(vm: MainVM) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.loadPhoto(u)
     }
     val prev = vm.photoPrev
-    var healMode by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(PTab.LIGHT) }
     var brush by remember { mutableStateOf(0.02f) }
+    val healMode = tab == PTab.REMOVE
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     LaunchedEffect(vm.params, prev) {
         if (prev != null) shown = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             PhotoEdit.apply(prev, vm.params)
         }
     }
-    Column(Modifier.fillMaxSize().padding(14.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = { vm.screen = Screen.HOME }) { Text(stringResource(R.string.back)) }
-            TextButton(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-                Text(stringResource(R.string.pick_image))
-            }
-            TextButton(onClick = { vm.params = PhotoParams(); vm.commit() }) { Text(stringResource(R.string.reset)) }
-            TextButton(onClick = { vm.undo() }, enabled = vm.canUndo) { Text(stringResource(R.string.undo)) }
-            TextButton(onClick = { vm.redo() }, enabled = vm.canRedo) { Text(stringResource(R.string.redo)) }
+    val pickReq = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.nav_photo), onBack = { vm.screen = Screen.HOME }) {
+            IconAction(Ic.UNDO, vm.canUndo) { vm.undo() }
+            IconAction(Ic.REDO, vm.canRedo) { vm.redo() }
+            IconAction(Ic.PHOTO, true) { pickReq() }
         }
         if (prev == null) {
-            Button(onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pick_image)) }
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                AppIcon(Ic.PHOTO, Storm.muted, Modifier.size(64.dp))
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { pickReq() }, modifier = Modifier.heightIn(min = 52.dp)) { Text(stringResource(R.string.pick_image)) }
+            }
             return@Column
         }
-        (if (vm.showOriginal || healMode) prev else shown)?.let { bmp ->
-            Box(Modifier.fillMaxWidth().aspectRatio(bmp.width.toFloat() / bmp.height)) {
-                Image(bmp.asImageBitmap(), null, Modifier.matchParentSize())
-                if (healMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
+        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+            (if (vm.showOriginal || healMode) prev else shown)?.let { bmp ->
+                Box(Modifier.aspectRatio(bmp.width.toFloat() / bmp.height).clip(MaterialTheme.shapes.small)
+                    .then(if (!healMode) Modifier.pointerInput(Unit) {
+                        detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
+                    } else Modifier)) {
+                    Image(bmp.asImageBitmap(), null, Modifier.matchParentSize())
+                    if (healMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
+                }
+            }
+            Text(stringResource(if (healMode) R.string.heal_hint else R.string.hold_compare),
+                style = MaterialTheme.typography.labelSmall, color = Storm.text,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(6.dp)
+                    .background(Color(0x99000000), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+        }
+        Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+            border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+            Column(Modifier.padding(top = 8.dp)) {
+                Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_detail, R.string.tab_crop,
+                    R.string.tab_remove, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
+                if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    val p = vm.params
+                    Crossfade(targetState = tab, animationSpec = tween(180), label = "ptab") { t ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            when (t) {
+                                PTab.LIGHT -> {
+                                    Param(stringResource(R.string.exposure), p.exposure, -2f..2f, vm::commit) { vm.params = p.copy(exposure = it) }
+                                    Param(stringResource(R.string.brightness), p.brightness, -1f..1f, vm::commit) { vm.params = p.copy(brightness = it) }
+                                    Param(stringResource(R.string.contrast), p.contrast, -1f..1f, vm::commit) { vm.params = p.copy(contrast = it) }
+                                    Param(stringResource(R.string.highlights), p.highlights, -1f..1f, vm::commit) { vm.params = p.copy(highlights = it) }
+                                    Param(stringResource(R.string.shadows), p.shadows, -1f..1f, vm::commit) { vm.params = p.copy(shadows = it) }
+                                    Param(stringResource(R.string.scurve), p.scurve, -1f..1f, vm::commit) { vm.params = p.copy(scurve = it) }
+                                }
+                                PTab.COLOR -> {
+                                    Param(stringResource(R.string.saturation), p.saturation, -1f..1f, vm::commit) { vm.params = p.copy(saturation = it) }
+                                    Param(stringResource(R.string.vibrance), p.vibrance, -1f..1f, vm::commit) { vm.params = p.copy(vibrance = it) }
+                                    Param(stringResource(R.string.warmth), p.warmth, -1f..1f, vm::commit) { vm.params = p.copy(warmth = it) }
+                                }
+                                PTab.DETAIL -> {
+                                    Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }
+                                    Param(stringResource(R.string.denoise), p.denoise, 0f..1f, vm::commit) { vm.params = p.copy(denoise = it) }
+                                }
+                                PTab.CROP -> {
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { vm.params = p.copy(rotate = (p.rotate + 90) % 360); vm.commit() }) { Text(stringResource(R.string.rotate)) }
+                                        OutlinedButton(onClick = { vm.params = p.copy(flipH = !p.flipH); vm.commit() }) { Text(stringResource(R.string.flip_h)) }
+                                        OutlinedButton(onClick = { vm.params = p.copy(flipV = !p.flipV); vm.commit() }) { Text(stringResource(R.string.flip_v)) }
+                                    }
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        aspects.forEach { (label, v) ->
+                                            FilterChip(p.aspect == v, { vm.params = p.copy(aspect = v); vm.commit() },
+                                                { Text(if (v == 0f) stringResource(R.string.aspect_original) else label) })
+                                        }
+                                    }
+                                }
+                                PTab.REMOVE -> {
+                                    Param(stringResource(R.string.heal_brush), brush, 0.005f..0.05f) { brush = it }
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(onClick = { vm.applyHeal() }, enabled = !vm.busy && vm.healCircles.isNotEmpty()) { Text(stringResource(R.string.heal_apply)) }
+                                        OutlinedButton(onClick = { vm.healCircles.clear() }) { Text(stringResource(R.string.heal_clear)) }
+                                        OutlinedButton(onClick = { vm.undoHeal() }, enabled = vm.canUndoHeal) { Text(stringResource(R.string.heal_undo)) }
+                                    }
+                                }
+                                PTab.EXPORT -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Switch(vm.watermark, { vm.watermark = it })
+                                        Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.watermark), style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { vm.savePreset() }) { Text(stringResource(R.string.preset_save)) }
+                                        OutlinedButton(onClick = { vm.loadPreset() }) { Text(stringResource(R.string.preset_load)) }
+                                        OutlinedButton(onClick = { vm.params = PhotoParams(); vm.commit() }) { Text(stringResource(R.string.reset)) }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(onClick = { vm.savePhoto(true) }, enabled = !vm.busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.save_png)) }
+                                        Button(onClick = { vm.savePhoto(false) }, enabled = !vm.busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(stringResource(R.string.save_jpeg)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp)) { InfoText(vm) }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(healMode, { healMode = it })
-            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.heal_mode))
-        }
-        if (healMode) {
-            Param(stringResource(R.string.heal_brush), brush, 0.005f..0.05f) { brush = it }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.applyHeal() }, enabled = !vm.busy && vm.healCircles.isNotEmpty()) { Text(stringResource(R.string.heal_apply)) }
-                OutlinedButton(onClick = { vm.healCircles.clear() }) { Text(stringResource(R.string.heal_clear)) }
-                OutlinedButton(onClick = { vm.undoHeal() }, enabled = vm.canUndoHeal) { Text(stringResource(R.string.heal_undo)) }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(vm.showOriginal, { vm.showOriginal = it })
-            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.compare_original))
-        }
-        val p = vm.params
-        Param(stringResource(R.string.exposure), p.exposure, -2f..2f, vm::commit) { vm.params = p.copy(exposure = it) }
-        Param(stringResource(R.string.brightness), p.brightness, -1f..1f, vm::commit) { vm.params = p.copy(brightness = it) }
-        Param(stringResource(R.string.contrast), p.contrast, -1f..1f, vm::commit) { vm.params = p.copy(contrast = it) }
-        Param(stringResource(R.string.saturation), p.saturation, -1f..1f, vm::commit) { vm.params = p.copy(saturation = it) }
-        Param(stringResource(R.string.warmth), p.warmth, -1f..1f, vm::commit) { vm.params = p.copy(warmth = it) }
-        Param(stringResource(R.string.highlights), p.highlights, -1f..1f, vm::commit) { vm.params = p.copy(highlights = it) }
-        Param(stringResource(R.string.shadows), p.shadows, -1f..1f, vm::commit) { vm.params = p.copy(shadows = it) }
-        Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }
-        Param(stringResource(R.string.scurve), p.scurve, -1f..1f, vm::commit) { vm.params = p.copy(scurve = it) }
-        Param(stringResource(R.string.vibrance), p.vibrance, -1f..1f, vm::commit) { vm.params = p.copy(vibrance = it) }
-        Param(stringResource(R.string.denoise), p.denoise, 0f..1f, vm::commit) { vm.params = p.copy(denoise = it) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { vm.savePreset() }) { Text(stringResource(R.string.preset_save)) }
-            OutlinedButton(onClick = { vm.loadPreset() }) { Text(stringResource(R.string.preset_load)) }
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { vm.params = p.copy(rotate = (p.rotate + 90) % 360); vm.commit() }) { Text(stringResource(R.string.rotate)) }
-            OutlinedButton(onClick = { vm.params = p.copy(flipH = !p.flipH); vm.commit() }) { Text(stringResource(R.string.flip_h)) }
-            OutlinedButton(onClick = { vm.params = p.copy(flipV = !p.flipV); vm.commit() }) { Text(stringResource(R.string.flip_v)) }
-        }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            aspects.forEach { (label, v) ->
-                FilterChip(p.aspect == v, { vm.params = p.copy(aspect = v); vm.commit() },
-                    { Text(if (v == 0f) stringResource(R.string.aspect_original) else label) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(vm.watermark, { vm.watermark = it })
-            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.watermark))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.savePhoto(true) }, enabled = !vm.busy) { Text(stringResource(R.string.save_png)) }
-            Button(onClick = { vm.savePhoto(false) }, enabled = !vm.busy) { Text(stringResource(R.string.save_jpeg)) }
-        }
-        InfoText(vm)
-        Spacer(Modifier.height(24.dp))
     }
 }
+
+private enum class VTab { CUT, LOOK, TEXT, AUDIO, EXPORT }
 
 @Composable
 fun VideoEditor(vm: MainVM) {
@@ -255,18 +316,20 @@ fun VideoEditor(vm: MainVM) {
     }
     var vv by remember { mutableStateOf<android.widget.VideoView?>(null) }
     var range by remember(vm.videoDur) { mutableStateOf(0f..vm.videoDur.toFloat().coerceAtLeast(1f)) }
-    Column(Modifier.fillMaxSize().padding(14.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = { vm.screen = Screen.HOME }) { Text(stringResource(R.string.back)) }
-            TextButton(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }) {
-                Text(stringResource(R.string.pick_video))
-            }
+    var tab by remember { mutableStateOf(VTab.CUT) }
+    val pickReq = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.nav_video), onBack = { vm.screen = Screen.HOME }) {
+            IconAction(Ic.VIDEO, true) { pickReq() }
         }
         val u = vm.videoUri
         if (u == null) {
-            Button(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
-                modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pick_video)) }
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                AppIcon(Ic.VIDEO, Storm.muted, Modifier.size(64.dp))
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { pickReq() }, modifier = Modifier.heightIn(min = 52.dp)) { Text(stringResource(R.string.pick_video)) }
+            }
             return@Column
         }
         key(u) {
@@ -276,61 +339,94 @@ fun VideoEditor(vm: MainVM) {
                         setVideoURI(u); setOnPreparedListener { seekTo(1) }; vv = this
                     }
                 },
-                modifier = Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(16.dp)))
+                modifier = Modifier.weight(1f).heightIn(min = 150.dp).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clip(MaterialTheme.shapes.medium))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = { vv?.start() }) { Text(stringResource(R.string.play)) }
+            Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { vv?.pause() }) { Text(stringResource(R.string.pause)) }
         }
-        Text(stringResource(R.string.video_start) + " " + fmt(range.start.toLong()) + "   " +
-            stringResource(R.string.video_end) + " " + fmt(range.endInclusive.toLong()))
-        RangeSlider(value = range, onValueChange = { r ->
-            if (r.start != range.start) vv?.seekTo(r.start.toInt()) else vv?.seekTo(r.endInclusive.toInt())
-            range = r
-        }, valueRange = 0f..vm.videoDur.toFloat().coerceAtLeast(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                if (range.endInclusive - range.start >= 100f) vm.addSeg(Seg(range.start.toLong(), range.endInclusive.toLong()))
-            }) { Text(stringResource(R.string.add_segment)) }
-            OutlinedButton(onClick = { vm.clearSegs() }) { Text(stringResource(R.string.clear_segments)) }
-            OutlinedButton(onClick = { pickClip.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }) {
-                Text(stringResource(R.string.add_clip))
+        Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+            border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+            Column(Modifier.padding(top = 8.dp)) {
+                Tabs(listOf(R.string.tab_cut, R.string.tab_look, R.string.tab_text, R.string.tab_audio, R.string.tab_export)
+                    .map { stringResource(it) }, tab.ordinal) { tab = VTab.values()[it] }
+                if (vm.busy) {
+                    LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+                }
+                Column(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Crossfade(targetState = tab, animationSpec = tween(180), label = "vtab") { t ->
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            when (t) {
+                                VTab.CUT -> {
+                                    Text(stringResource(R.string.video_start) + " " + fmt(range.start.toLong()) + "    " +
+                                        stringResource(R.string.video_end) + " " + fmt(range.endInclusive.toLong()),
+                                        style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
+                                    RangeSlider(value = range, onValueChange = { r ->
+                                        if (r.start != range.start) vv?.seekTo(r.start.toInt()) else vv?.seekTo(r.endInclusive.toInt())
+                                        range = r
+                                    }, valueRange = 0f..vm.videoDur.toFloat().coerceAtLeast(1f))
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Button(onClick = {
+                                            if (range.endInclusive - range.start >= 100f) vm.addSeg(Seg(range.start.toLong(), range.endInclusive.toLong()))
+                                        }) { Text(stringResource(R.string.add_segment)) }
+                                        OutlinedButton(onClick = { pickClip.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }) {
+                                            Text(stringResource(R.string.add_clip))
+                                        }
+                                        OutlinedButton(onClick = { vm.clearSegs() }) { Text(stringResource(R.string.clear_segments)) }
+                                        IconAction(Ic.UNDO, vm.canUndoSeg) { vm.undoSeg() }
+                                        IconAction(Ic.REDO, vm.canRedoSeg) { vm.redoSeg() }
+                                    }
+                                    Text(stringResource(R.string.segments_title), style = MaterialTheme.typography.titleSmall)
+                                    if (vm.segments.isEmpty()) Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                    vm.segments.forEachIndexed { i, s ->
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}" + (if (s.uri != null) "  +" else ""),
+                                                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                            TextButton(onClick = { vm.removeSeg(i) }) { Text("✕") }
+                                        }
+                                    }
+                                }
+                                VTab.LOOK -> {
+                                    Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
+                                    Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
+                                    OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
+                                        Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
+                                    }
+                                }
+                                VTab.TEXT -> {
+                                    OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
+                                        label = { Text(stringResource(R.string.overlay_text)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                }
+                                VTab.AUDIO -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Switch(vm.muteOriginal, { vm.muteOriginal = it })
+                                        Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.mute_original), style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(stringResource(R.string.add_music)) }
+                                        if (vm.music != null) TextButton(onClick = { vm.music = null }) { Text(stringResource(R.string.remove_music)) }
+                                    }
+                                }
+                                VTab.EXPORT -> {
+                                    Button(onClick = { vm.exportVideo() }, enabled = !vm.busy,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.export_video)) }
+                                    if (vm.busy) {
+                                        Text(stringResource(vm.stage), style = MaterialTheme.typography.bodyMedium)
+                                        OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Box(Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp)) { InfoText(vm) }
             }
-            TextButton(onClick = { vm.undoSeg() }, enabled = vm.canUndoSeg) { Text(stringResource(R.string.undo)) }
-            TextButton(onClick = { vm.redoSeg() }, enabled = vm.canRedoSeg) { Text(stringResource(R.string.redo)) }
         }
-        Text(stringResource(R.string.segments_title), fontWeight = FontWeight.SemiBold)
-        if (vm.segments.isEmpty()) Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall)
-        vm.segments.forEachIndexed { i, s ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}" + (if (s.uri != null) "  🎞" else ""), modifier = Modifier.weight(1f))
-                TextButton(onClick = { vm.removeSeg(i) }) { Text("✕") }
-            }
-        }
-        Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
-        Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
-        OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
-            label = { Text(stringResource(R.string.overlay_text)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-        OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
-            Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(vm.muteOriginal, { vm.muteOriginal = it })
-            Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.mute_original))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(stringResource(R.string.add_music)) }
-            if (vm.music != null) TextButton(onClick = { vm.music = null }) { Text(stringResource(R.string.remove_music)) }
-        }
-        Button(onClick = { vm.exportVideo() }, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.export_video))
-        }
-        if (vm.busy) {
-            LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
-            Text(stringResource(vm.stage))
-            OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
-        }
-        InfoText(vm)
-        Spacer(Modifier.height(24.dp))
     }
 }

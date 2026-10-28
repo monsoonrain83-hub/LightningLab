@@ -117,5 +117,17 @@ Rough type guess: %5$s</string>
     <string name="model_replace">Replace cloud model (.tflite)</string>
     <string name="model_loaded">Model loaded</string>
     <string name="model_invalid">Invalid model: it must output 11 classes (see tools/train_cloud_model.py)</string>
-    <string name="model_none_hint">No trained model loaded: the type shown above is only a rough rule-based guess. Train one with tools/train_cloud_model.py (CCSN, CC0) and import it here.</string>
+    <string name="model_none_hint">No trained model loaded: the type shown above is only a rough rule-based guess. Train one with tools/train_cloud_model.py (CCSN) and import it here.</string>
+    <string name="tab_light">Light</string>
+    <string name="tab_color">Color</string>
+    <string name="tab_detail">Detail</string>
+    <string name="tab_crop">Crop</string>
+    <string name="tab_remove">Remove</string>
+    <string name="tab_export">Save</string>
+    <string name="tab_cut">Cut</string>
+    <string name="tab_look">Look</string>
+    <string name="tab_text">Text</string>
+    <string name="tab_audio">Audio</string>
+    <string name="hold_compare">Hold the photo to compare with the original</string>
+    <string name="heal_hint">Paint over the object, then tap Apply</string>
 </resources>

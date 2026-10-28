@@ -4,16 +4,16 @@ import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : AppCompatActivity() {
@@ -25,21 +25,20 @@ class MainActivity : AppCompatActivity() {
 
 @Composable
 fun App(vm: MainVM = viewModel()) {
-    MaterialTheme(colorScheme = darkColorScheme(
-        primary = Color(0xFF4FC3F7), onPrimary = Color(0xFF00212E),
-        background = Color(0xFF0B0F17), surface = Color(0xFF121826),
-        secondary = Color(0xFF8E7CFF))) {
+    LightningTheme {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.systemBarsPadding()) {
                 BackHandler(enabled = vm.screen != Screen.HOME) { vm.screen = Screen.HOME }
                 Box(Modifier.weight(1f)) {
-                    when (vm.screen) {
-                        Screen.HOME -> Home(vm)
-                        Screen.RESULTS -> Results(vm)
-                        Screen.ABOUT -> About(vm)
-                        Screen.PHOTO -> PhotoEditor(vm)
-                        Screen.VIDEO -> VideoEditor(vm)
-                        Screen.WEATHER -> WeatherScreen(vm)
+                    Crossfade(targetState = vm.screen, animationSpec = tween(200), label = "screen") { sc ->
+                        when (sc) {
+                            Screen.HOME -> Home(vm)
+                            Screen.RESULTS -> Results(vm)
+                            Screen.ABOUT -> About(vm)
+                            Screen.PHOTO -> PhotoEditor(vm)
+                            Screen.VIDEO -> VideoEditor(vm)
+                            Screen.WEATHER -> WeatherScreen(vm)
+                        }
                     }
                 }
                 if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT) NavBar(vm)

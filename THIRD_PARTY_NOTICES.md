@@ -16,7 +16,7 @@ The transient-flash analyzer (`FlashAnalyzer.kt`) is original code written for t
 | Item | License / status | Use |
 |---|---|---|
 | TensorFlow Lite runtime (`org.tensorflow:tensorflow-lite:2.14.0`) | Apache-2.0 | Dependency; runs the optional user-imported cloud model |
-| CCSN cloud database (Zhang et al.) | CC0 1.0 (per dataset survey arXiv:2211.14709; verify on the Dataverse page before redistribution) | NOT bundled. Training script downloads nothing; user fetches it |
+| CCSN cloud database (Zhang et al., CloudNet 2018) | **Licence NOT verified.** Authors' GitHub page (upuil/CCSN-Database) requires a request form for download instructions; cite the CloudNet paper | NOT bundled, not downloaded by anything. User requests it; read its terms before publishing a model trained on it |
 | SWIMCAT / GCD / MGCD / TJNU sets | Access by signed agreement or unclear | Not used |
 | MobileNetV3 ImageNet weights (Keras) | Apache-2.0 code; ImageNet-derived weights - check terms before commercial release | Used only inside tools/train_cloud_model.py |
 | WMO International Cloud Atlas (2017) vocabulary | Names only | Genus/feature tag lists in `CloudInfo.kt` |

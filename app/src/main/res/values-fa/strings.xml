@@ -117,5 +117,17 @@
     <string name="model_replace">جایگزینی مدل ابر (.tflite)</string>
     <string name="model_loaded">مدل بارگذاری شد</string>
     <string name="model_invalid">مدل نامعتبر: باید ۱۱ کلاس خروجی بدهد (tools/train_cloud_model.py را ببینید)</string>
-    <string name="model_none_hint">مدل آموزش‌دیده‌ای بارگذاری نشده: نوع نمایش‌داده‌شده فقط حدس تقریبی قانون‌محور است. با tools/train_cloud_model.py (دیتاست CCSN، مجوز CC0) مدل بسازید و اینجا وارد کنید.</string>
+    <string name="model_none_hint">مدل آموزش‌دیده‌ای بارگذاری نشده: نوع نمایش‌داده‌شده فقط حدس تقریبی قانون‌محور است. با tools/train_cloud_model.py (دیتاست CCSN) مدل بسازید و اینجا وارد کنید.</string>
+    <string name="tab_light">نور</string>
+    <string name="tab_color">رنگ</string>
+    <string name="tab_detail">جزئیات</string>
+    <string name="tab_crop">برش</string>
+    <string name="tab_remove">حذف</string>
+    <string name="tab_export">ذخیره</string>
+    <string name="tab_cut">برش</string>
+    <string name="tab_look">ظاهر</string>
+    <string name="tab_text">متن</string>
+    <string name="tab_audio">صدا</string>
+    <string name="hold_compare">برای مقایسه با اصل، روی عکس نگه دارید</string>
+    <string name="heal_hint">روی شیء بکشید، بعد «اعمال حذف» را بزنید</string>
 </resources>

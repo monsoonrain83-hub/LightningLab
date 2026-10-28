@@ -8,7 +8,7 @@ import java.nio.ByteOrder
 
 /**
  * Optional on-device cloud-genus classifier (TensorFlow Lite, Apache-2.0 runtime).
- * The app ships WITHOUT a model: you train one with tools/train_cloud_model.py (CCSN dataset, CC0) and import the
+ * The app ships WITHOUT a model: you train one with tools/train_cloud_model.py (CCSN dataset, obtained via the authors request form) and import the
  * resulting cloud_model.tflite from the Weather tab. If no valid model is loaded, callers use the rule-based
  * [CloudAnalysis] result instead. Contract: input 224x224x3 float32 RGB in 0..255 (preprocessing is INSIDE the model),
  * output 11 softmax scores in the order of [LABELS].

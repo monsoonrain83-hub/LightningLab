@@ -2,8 +2,10 @@
 Train the LightningLab cloud-genus classifier (run on a PC or free Google Colab GPU).  UNTESTED here - no TensorFlow/data
 was available in the authoring environment; run it and READ the printed test metrics before trusting the model.
 
-DATA: CCSN database (Zhang et al.; 2543 images 256x256, 11 classes Ac As Cb Cc Ci Cs Ct Cu Ns Sc St; released CC0).
-      Download it yourself (Harvard Dataverse doi:10.7910/DVN/CADDPD or GitHub upuil/CCSN-Database) and arrange as
+DATA: CCSN database (Zhang et al. 2018, CloudNet; 2543 images, 11 classes Ac As Cb Cc Ci Cs Ct Cu Ns Sc St).
+      Access: the authors' page github.com/upuil/CCSN-Database asks you to fill out a request form to receive download
+      instructions. The licence terms are NOT verified - read them (and cite the CloudNet paper) before any public release.
+      Arrange the images as
           CCSN/Ac/*.jpg  CCSN/As/*.jpg ... CCSN/St/*.jpg
       Optional: put YOUR OWN labelled sky photos in the same folders (best way to fit the model to phone images).
 

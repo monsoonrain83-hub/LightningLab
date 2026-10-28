@@ -117,5 +117,17 @@
     <string name="model_replace">استبدال نموذج الغيوم (.tflite)</string>
     <string name="model_loaded">تم تحميل النموذج</string>
     <string name="model_invalid">نموذج غير صالح: يجب أن يُخرج 11 فئة (انظر tools/train_cloud_model.py)</string>
-    <string name="model_none_hint">لا يوجد نموذج مدرَّب: النوع المعروض تخمين تقريبي قائم على قواعد فقط. درّب نموذجاً بـ tools/train_cloud_model.py (CCSN، CC0) واستورده هنا.</string>
+    <string name="model_none_hint">لا يوجد نموذج مدرَّب: النوع المعروض تخمين تقريبي قائم على قواعد فقط. درّب نموذجاً بـ tools/train_cloud_model.py (CCSN) واستورده هنا.</string>
+    <string name="tab_light">الضوء</string>
+    <string name="tab_color">اللون</string>
+    <string name="tab_detail">التفاصيل</string>
+    <string name="tab_crop">القص</string>
+    <string name="tab_remove">إزالة</string>
+    <string name="tab_export">حفظ</string>
+    <string name="tab_cut">قص</string>
+    <string name="tab_look">المظهر</string>
+    <string name="tab_text">نص</string>
+    <string name="tab_audio">الصوت</string>
+    <string name="hold_compare">اضغط مطولاً على الصورة للمقارنة مع الأصل</string>
+    <string name="heal_hint">ارسم فوق العنصر ثم اضغط تطبيق</string>
 </resources>
