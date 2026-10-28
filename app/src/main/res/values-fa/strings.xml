@@ -108,4 +108,14 @@
     <string name="add_clip">افزودن ویدئوی دیگر</string>
     <string name="overlay_text">متن روی ویدئو (اختیاری)</string>
     <string name="save_infographic">ذخیره‌ی اینفوگرافی</string>
+    <string name="wx_model_top">پیش‌بینی مدل (۳ مورد اول):</string>
+    <string name="wx_genus_pick">جنس ابر (برای اصلاح لمس کنید):</string>
+    <string name="wx_features_pick">برچسب‌های ناظر: ویژگی‌ها، گونه‌ها و گوناگونی‌ها (خودکار تشخیص داده نمی‌شوند):</string>
+    <string name="wx_genus">جنس: %1$s</string>
+    <string name="wx_features">برچسب‌ها: %1$s</string>
+    <string name="model_import">وارد کردن مدل ابر (.tflite)</string>
+    <string name="model_replace">جایگزینی مدل ابر (.tflite)</string>
+    <string name="model_loaded">مدل بارگذاری شد</string>
+    <string name="model_invalid">مدل نامعتبر: باید ۱۱ کلاس خروجی بدهد (tools/train_cloud_model.py را ببینید)</string>
+    <string name="model_none_hint">مدل آموزش‌دیده‌ای بارگذاری نشده: نوع نمایش‌داده‌شده فقط حدس تقریبی قانون‌محور است. با tools/train_cloud_model.py (دیتاست CCSN، مجوز CC0) مدل بسازید و اینجا وارد کنید.</string>
 </resources>

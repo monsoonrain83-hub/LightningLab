@@ -18,8 +18,8 @@ class FlashAnalyzerTest {
         return Clip(t, c)
     }
 
-    private fun run(k: Clip, sens: Float = 0.6f, minSep: Long = 250L): List<LightningEvent> {
-        val ms = k.t.indices.map { Sample(k.t[it], k.c[it].average().toFloat(), k.c[it], 0f) }
+    private fun run(k: Clip, sens: Float = 0.6f, minSep: Long = 250L, st: FloatArray? = null): List<LightningEvent> {
+        val ms = k.t.indices.map { Sample(k.t[it], k.c[it].average().toFloat(), k.c[it], st?.get(it) ?: 0f) }
         return FlashAnalyzer.analyze(ms, sens, minSep)
     }
 
@@ -62,5 +62,20 @@ class FlashAnalyzerTest {
 
     @Test fun pureNoiseGivesNoEvents() {
         assertEquals(0, run(clip(60, noise = 1.0f)).size)
+    }
+
+    private fun structSeries(n: Int, noise: Float = 0.0007f) = FloatArray(n) { 0.05f + noise * rnd.nextGaussian().toFloat() }
+
+    @Test fun dayThinLineFlashFoundByStructurePath() {
+        val k = clip(30, level = 170f); val st = structSeries(k.c.size)
+        st[300] += 0.004f; st[600] += 0.003f; st[601] += 0.003f
+        assertEquals(2, run(k, st = st).size)
+    }
+
+    @Test fun structureSceneCutAndDriftAreRejected() {
+        val k = clip(30, level = 170f); val st = structSeries(k.c.size)
+        for (i in 450 until st.size) st[i] += 0.03f
+        for (i in st.indices) st[i] += 0.02f * i / st.size
+        assertEquals(0, run(k, st = st).size)
     }
 }

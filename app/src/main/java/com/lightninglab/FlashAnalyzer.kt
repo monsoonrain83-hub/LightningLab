@@ -19,6 +19,14 @@ class Sample(val tMs: Long, val mean: Float, val cells: FloatArray, val structur
  * Thresholds are FIXED functions of sensitivity (not derived from whole-video noise: that made the old
  * auto-threshold explode on flashy/shaky clips).
  * The first/last [EDGE_MS] of the video are ignored (title cards, fades).
+ *
+ * DAYTIME path: a faint daytime channel changes cell means by only a few luma units but adds a thin bright line, which
+ * raises the frame's "structure" fraction (pixels brighter than their 7x7 neighbourhood). The same two-sided transient
+ * test is applied to that series; the threshold is ROBUST and per-video (median + k * 1.4826 * MAD of the
+ * transient series, never below a floor), so noisy clips raise their own bar. Rationale: background-estimate +
+ * subtraction with an adaptive threshold is the standard way to reject global illumination changes and jitter
+ * (as in satellite lightning imagers); a permanent change or slow drift cannot pass a two-sided test.
+ * Validated only on synthetic series (docs/day_lightning_port.py).
  */
 object FlashAnalyzer {
     const val GX = 16
@@ -36,6 +44,27 @@ object FlashAnalyzer {
     fun weakThreshold(sens: Float) = 0.45f * strongThreshold(sens)
 
     /** Median of `cell` over up to MAX_PICK evenly spaced samples in [lo, hi] (inclusive indices). */
+    private fun medianStruct(ms: List<Sample>, lo: Int, hi: Int, buf: FloatArray): Float {
+        val cnt = hi - lo + 1
+        val k = min(MAX_PICK, cnt)
+        for (j in 0 until k) buf[j] = ms[lo + (j.toLong() * (cnt - 1) / max(1, k - 1)).toInt()].structure
+        java.util.Arrays.sort(buf, 0, k)
+        return buf[k / 2]
+    }
+
+    /** Per-video robust threshold for the structure transient series (sens 0..1; higher = more sensitive). */
+    fun structThreshold(sr: FloatArray, sens: Float): Float {
+        val v = sr.filter { !it.isNaN() }.toFloatArray()
+        if (v.isEmpty()) return Float.MAX_VALUE
+        v.sort()
+        val med = v[v.size / 2]
+        val dev = FloatArray(v.size) { abs(v[it] - med) }; dev.sort()
+        val mad = dev[dev.size / 2]
+        val s = sens.coerceIn(0f, 1f)
+        val floor = 0.0008f + 0.002f * (1f - s); val k = 3f + 3f * (1f - s)
+        return max(floor, med + k * 1.4826f * mad)
+    }
+
     private fun medianOf(ms: List<Sample>, lo: Int, hi: Int, cell: Int, buf: FloatArray): Float {
         val cnt = hi - lo + 1
         val k = min(MAX_PICK, cnt)
@@ -45,12 +74,13 @@ object FlashAnalyzer {
     }
 
     /** Per-frame transient score. Returns flagged flag array and `rise` (strongest same-sign transient cell). */
-    class Frames(val flagged: BooleanArray, val rise: FloatArray, val meanRise: FloatArray)
+    class Frames(val flagged: BooleanArray, val rise: FloatArray, val meanRise: FloatArray, val structRise: FloatArray = FloatArray(0))
 
     fun scoreFrames(ms: List<Sample>, sens: Float): Frames {
         val n = ms.size
         val flagged = BooleanArray(n); val rise = FloatArray(n); val meanRise = FloatArray(n)
-        if (n < 5) return Frames(flagged, rise, meanRise)
+        val sRise = FloatArray(n) { Float.NaN }
+        if (n < 5) return Frames(flagged, rise, meanRise, sRise)
         val strong = strongThreshold(sens); val weak = weakThreshold(sens)
         val dead = DEADBAND * weak // sensor noise below this does not vote in the P/(P+N) ratio
         val cellN = GX * GY
@@ -84,11 +114,14 @@ object FlashAnalyzer {
                 if (d > 0f) { if (d > best) best = d; if (d > weak) weakCells++ }
                 if (d > dead) pos += d else if (d < -dead) neg -= d
             }
+            sRise[i] = min(ms[i].structure - medianStruct(ms, bLo, bHi, buf), ms[i].structure - medianStruct(ms, aLo, aHi, buf))
             rise[i] = best; meanRise[i] = pos / cellN
             val ratio = if (pos + neg > 0f) pos / (pos + neg) else 0f
             flagged[i] = ratio >= POS_RATIO && (best > strong || weakCells >= WEAK_CELLS)
         }
-        return Frames(flagged, rise, meanRise)
+        val thrS = structThreshold(sRise, sens)
+        for (i in 0 until n) if (!sRise[i].isNaN() && sRise[i] > thrS) flagged[i] = true
+        return Frames(flagged, rise, meanRise, sRise)
     }
 
     fun analyze(ms: List<Sample>, sens: Float, minSepMs: Long): List<LightningEvent> {

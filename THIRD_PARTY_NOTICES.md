@@ -11,3 +11,13 @@ Rule: no code is copied from a repo unless its license is verified AND compatibl
 | Media3 Transformer 1.3.1 | Apache-2.0 | Dependency (already in use). |
 
 The transient-flash analyzer (`FlashAnalyzer.kt`) is original code written for this project.
+
+## Round 5 additions
+| Item | License / status | Use |
+|---|---|---|
+| TensorFlow Lite runtime (`org.tensorflow:tensorflow-lite:2.14.0`) | Apache-2.0 | Dependency; runs the optional user-imported cloud model |
+| CCSN cloud database (Zhang et al.) | CC0 1.0 (per dataset survey arXiv:2211.14709; verify on the Dataverse page before redistribution) | NOT bundled. Training script downloads nothing; user fetches it |
+| SWIMCAT / GCD / MGCD / TJNU sets | Access by signed agreement or unclear | Not used |
+| MobileNetV3 ImageNet weights (Keras) | Apache-2.0 code; ImageNet-derived weights - check terms before commercial release | Used only inside tools/train_cloud_model.py |
+| WMO International Cloud Atlas (2017) vocabulary | Names only | Genus/feature tag lists in `CloudInfo.kt` |
+| Guava | Apache-2.0 | Dependency (Media3 overlay API) |

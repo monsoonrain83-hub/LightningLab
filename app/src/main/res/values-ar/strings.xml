@@ -108,4 +108,14 @@
     <string name="add_clip">إضافة فيديو آخر</string>
     <string name="overlay_text">نص على الفيديو (اختياري)</string>
     <string name="save_infographic">حفظ الإنفوغرافيك</string>
+    <string name="wx_model_top">توقع النموذج (أفضل 3):</string>
+    <string name="wx_genus_pick">جنس الغيوم (المس للتصحيح):</string>
+    <string name="wx_features_pick">وسوم المراقب: السمات والأنواع والأصناف (لا تُكتشف تلقائياً):</string>
+    <string name="wx_genus">الجنس: %1$s</string>
+    <string name="wx_features">الوسوم: %1$s</string>
+    <string name="model_import">استيراد نموذج الغيوم (.tflite)</string>
+    <string name="model_replace">استبدال نموذج الغيوم (.tflite)</string>
+    <string name="model_loaded">تم تحميل النموذج</string>
+    <string name="model_invalid">نموذج غير صالح: يجب أن يُخرج 11 فئة (انظر tools/train_cloud_model.py)</string>
+    <string name="model_none_hint">لا يوجد نموذج مدرَّب: النوع المعروض تخمين تقريبي قائم على قواعد فقط. درّب نموذجاً بـ tools/train_cloud_model.py (CCSN، CC0) واستورده هنا.</string>
 </resources>

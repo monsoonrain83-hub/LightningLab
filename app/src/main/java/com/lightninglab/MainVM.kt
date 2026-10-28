@@ -173,7 +173,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val txt = app.getString(R.string.wx_report, Math.round(r.cover * 100), r.oktas,
                         String.format(Locale.US, "%.1f", r.texture), Math.round(r.cloudLuma), app.getString(kindRes))
                     val img = Infographic.render(b, app.getString(R.string.weather_title),
-                        txt.split("\n") + app.getString(R.string.wx_disclaimer), "LightningLab")
+                        txt.split("\n") +
+                        listOfNotNull(genus?.let { app.getString(R.string.wx_genus, CloudInfo.genusName(it)) },
+                            if (features.isEmpty()) null else app.getString(R.string.wx_features, features.joinToString(", "))) +
+                        app.getString(R.string.wx_disclaimer), "LightningLab")
                     Exporter.saveImage(app, img, false, 92, false, "LightningLab_sky_${System.currentTimeMillis()}")
                 }
                 info(R.string.saved)
@@ -196,6 +199,30 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun undoSeg() { if (segHi > 0) { segHi--; segRestore() } }
     fun redoSeg() { if (segHi < segHist.size - 1) { segHi++; segRestore() } }
 
+    // ---- optional TFLite cloud model + observer tags ----
+    private val cloudModel by lazy { CloudClassifier(File(app.filesDir, "cloud_model.tflite")) }
+    var modelReady by mutableStateOf(false)
+    var topK by mutableStateOf<List<Pair<String, Float>>>(emptyList())
+    var genus by mutableStateOf<String?>(null)
+    val features = mutableStateListOf<String>()
+    fun initModel() { viewModelScope.launch { modelReady = withContext(Dispatchers.IO) { cloudModel.load() } } }
+    fun importModel(u: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                try {
+                    val f = File(app.filesDir, "cloud_model.tflite")
+                    app.contentResolver.openInputStream(u)?.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+                    val good = cloudModel.load()
+                    if (!good) f.delete()
+                    good
+                } catch (e: Throwable) { false }
+            }
+            modelReady = ok
+            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+        }
+    }
+    fun toggleFeature(f: String) { if (f in features) features.remove(f) else features.add(f) }
+
     var wxBitmap by mutableStateOf<Bitmap?>(null)
     var wx by mutableStateOf<CloudAnalysis.Result?>(null)
     fun analyzeSky(u: Uri) {
@@ -211,6 +238,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
                     b to CloudAnalysis.analyze(px, b.width, b.height)
                 }
+                val ranked = withContext(Dispatchers.Default) { cloudModel.classify(bmp) }
+                topK = ranked?.take(3) ?: emptyList(); genus = ranked?.firstOrNull()?.first
+                features.clear()
                 wxBitmap = bmp; wx = res; infoRes = null
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "image") }
         }

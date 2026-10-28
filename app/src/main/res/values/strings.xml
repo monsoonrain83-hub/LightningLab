@@ -108,4 +108,14 @@ Rough type guess: %5$s</string>
     <string name="add_clip">Add another video</string>
     <string name="overlay_text">Text on video (optional)</string>
     <string name="save_infographic">Save infographic</string>
+    <string name="wx_model_top">Model prediction (top 3):</string>
+    <string name="wx_genus_pick">Cloud genus (tap to correct):</string>
+    <string name="wx_features_pick">Observer tags - features, species, varieties (not auto-detected):</string>
+    <string name="wx_genus">Genus: %1$s</string>
+    <string name="wx_features">Tags: %1$s</string>
+    <string name="model_import">Import cloud model (.tflite)</string>
+    <string name="model_replace">Replace cloud model (.tflite)</string>
+    <string name="model_loaded">Model loaded</string>
+    <string name="model_invalid">Invalid model: it must output 11 classes (see tools/train_cloud_model.py)</string>
+    <string name="model_none_hint">No trained model loaded: the type shown above is only a rough rule-based guess. Train one with tools/train_cloud_model.py (CCSN, CC0) and import it here.</string>
 </resources>

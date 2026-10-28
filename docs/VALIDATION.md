@@ -23,3 +23,9 @@
 - Weather: save infographic (photo + analysis text, StaticLayout so Persian/Arabic render).
 - 15 JUnit tests in total, never executed.
 - NOT built: playback speed, transitions, stickers/subtitles, keyframes, LUTs, PiP, multiple music tracks, music library, project files, trained cloud model (no licensed dataset/weights reviewed).
+
+## Round 5 additions (uncompiled)
+- Daytime lightning: structure-transient path in `FlashAnalyzer` (robust per-video MAD threshold). Python port `day_lightning_port.py`, synthetic only: two faint day flashes found (+0.004 single frame, +0.003 two frames); scene cut and slow drift rejected; 0 false events in 10 seeds x 4 noise levels (0.0005-0.0015) over 120 s each (one stray event in one extra run). Weak single-frame flashes below ~0.0028 structure rise, or in very shaky/noisy clips, are missed. NOT tested on real daytime footage - needs real clips to tune.
+- Cloud types: optional TFLite classifier (11 CCSN classes: Ac As Cb Cc Ci Cs Ct Cu Ns Sc St) loaded from a user-imported `cloud_model.tflite`; `tools/train_cloud_model.py` trains/exports it with a held-out test split and writes metrics.txt. Script and model code are UNRUN: no TensorFlow, no data, no accuracy figure exists yet. Without a model the app falls back to the rule-based guess.
+- Observer tags (WMO supplementary features / species / varieties such as arcus, asperitas, virga, tuba, mamma, lenticularis, undulatus) are chosen by the user and saved into the infographic; the app does NOT detect them (no labelled data for them in CCSN).
+- Known limit: CCSN is small (2543 images, 256 px); add your own labelled sky photos to the folders before training.

@@ -10,8 +10,8 @@ android {
         applicationId = "com.lightninglab"
         minSdk = 29
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.0-r4"
+        versionCode = 5
+        versionName = "1.0-r5"
         resourceConfigurations += listOf("en", "fa", "ar")
     }
     buildTypes {
@@ -41,5 +41,6 @@ dependencies {
     implementation("androidx.media3:media3-transformer:1.3.1")
     implementation("androidx.media3:media3-effect:1.3.1")
     implementation("com.google.guava:guava:33.2.1-android")
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
     testImplementation("junit:junit:4.13.2")
 }
