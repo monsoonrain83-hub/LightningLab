@@ -34,3 +34,10 @@
 - No emulator/device in the authoring environment: layouts were never rendered. Static checks only: braces balanced in every .kt file, every R.string used exists, no duplicate/missing strings in en/fa/ar.
 - Things to eyeball on a phone: hero bolt placement and flicker, nav icon drawing (cloud/photo/video), tab sheet heights (photo max 240 dp, video max 220 dp) on small screens, hold-to-compare gesture, RTL (Persian/Arabic) mirroring of back arrow, text clipping in tabs.
 - Figma/Stitch were not available as tools here; design was derived from the brief by hand.
+
+## Section 1 (r8): video editor tool strip - NOT compiled, NOT run on a device
+- Layout like the reference screenshots: preview, play/pause, tool panel, bottom tool strip (Trim, Music, Filter, Text, Sticker, Speed, Crop, Rotate, Flip, Adjust, Save).
+- New: colour filters (RgbAdjustment + Contrast presets), crop to 1:1/4:5/16:9/9:16 (Crop effect, NDC maths unit-tested), flip H/V (+ rotate in one ScaleAndRotateTransformation), styled text (colour/size/position/background), emoji stickers (as text overlays), segment strip with copy/delete, proportional timeline of segments.
+- API names checked against developer.android.com reference pages: RgbAdjustment.Builder (setRed/Green/BlueScale), Crop(left,right,bottom,top), TextOverlay.createStaticTextOverlay. The project pins Media3 1.3.1; older-version availability of Crop/RgbAdjustment is believed but not proven until the CI build.
+- Text/sticker TOP/BOTTOM placement uses blank-line padding (library centres overlays); look at it on a device. Emoji rendering depends on the phone's emoji font.
+- NOT built (needs custom GL shaders, ML models, or large subsystems): glitch/VHS/film/beat/VFX effects, PiP, templates, AI enhance, auto captions, text-to-speech, AI trim, cutout, voice changer, reverse, freeze frame, curve speed, keyframe animation, opacity, background blur, GIF stickers (network), voice recording.

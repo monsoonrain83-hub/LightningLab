@@ -73,7 +73,8 @@ fun InfoText(vm: MainVM) {
     vm.infoRes?.let { Text(stringResource(it, *vm.infoArgs.toTypedArray()), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
 }
 
-enum class Ic { BOLT, PHOTO, VIDEO, CLOUD, UNDO, REDO, BACK, CHEVRON, CLOSE }
+enum class Ic { BOLT, PHOTO, VIDEO, CLOUD, UNDO, REDO, BACK, CHEVRON, CLOSE,
+    SCISSORS, MUSIC, FILTER, TEXT, STICKER, SPEED, CROP, ROTATE, FLIP, ADJUST, EXPORT, VOLUME }
 
 /** Vector icons drawn on a 24-unit grid; one stroke weight everywhere. `filled` is used for the selected nav item. */
 @Composable
@@ -84,6 +85,7 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier.size(24.dp), fill
         val st = Stroke(width = 1.9f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val main = if (filled) Fill else st
         val inner = if (filled) Storm.surface else tint
+        fun o(x: Float, y: Float) = Offset(x * u, y * u)
         fun poly(vararg p: Float, closed: Boolean = false): Path = Path().apply {
             moveTo(p[0] * u, p[1] * u)
             var i = 2
@@ -123,6 +125,55 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier.size(24.dp), fill
             Ic.BACK -> {
                 if (rtl) scale(-1f, 1f, pivot = Offset(size.width / 2f, size.height / 2f)) { drawPath(poly(15f, 5f, 8f, 12f, 15f, 19f), tint, style = st) }
                 else drawPath(poly(15f, 5f, 8f, 12f, 15f, 19f), tint, style = st)
+            }
+            Ic.SCISSORS -> {
+                drawCircle(tint, 2.6f * u, o(7f, 18f), style = st); drawCircle(tint, 2.6f * u, o(17f, 18f), style = st)
+                drawPath(poly(8.6f, 15.8f, 17f, 4.5f), tint, style = st); drawPath(poly(15.4f, 15.8f, 7f, 4.5f), tint, style = st)
+            }
+            Ic.MUSIC -> {
+                drawCircle(tint, 2.8f * u, o(10f, 17.5f), style = st)
+                drawPath(poly(12.8f, 17.5f, 12.8f, 4.5f, 18.5f, 7f), tint, style = st)
+            }
+            Ic.FILTER -> {
+                drawCircle(tint, 4.2f * u, o(12f, 8.5f), style = st); drawCircle(tint, 4.2f * u, o(8f, 14.5f), style = st)
+                drawCircle(tint, 4.2f * u, o(16f, 14.5f), style = st)
+            }
+            Ic.TEXT -> {
+                drawPath(poly(5f, 6f, 19f, 6f), tint, style = st); drawPath(poly(12f, 6f, 12f, 19f), tint, style = st)
+            }
+            Ic.STICKER -> {
+                drawCircle(tint, 9f * u, o(12f, 12f), style = st)
+                drawCircle(tint, 1.1f * u, o(9f, 10f)); drawCircle(tint, 1.1f * u, o(15f, 10f))
+                drawArc(tint, 25f, 130f, false, o(7.5f, 8.5f), Size(9f * u, 7f * u), style = st)
+            }
+            Ic.SPEED -> {
+                drawArc(tint, 180f, 180f, false, o(3f, 6f), Size(18f * u, 18f * u), style = st)
+                drawPath(poly(12f, 15f, 17f, 9f), tint, style = st); drawCircle(tint, 1.4f * u, o(12f, 15f))
+            }
+            Ic.CROP -> {
+                drawPath(poly(7f, 3f, 7f, 17f, 21f, 17f), tint, style = st); drawPath(poly(3f, 7f, 17f, 7f, 17f, 21f), tint, style = st)
+            }
+            Ic.ROTATE -> {
+                drawArc(tint, 40f, 270f, false, o(5f, 5f), Size(14f * u, 14f * u), style = st)
+                drawPath(poly(15f, 3f, 19f, 5.5f, 14.5f, 8f), tint, style = st)
+            }
+            Ic.FLIP -> {
+                drawPath(poly(12f, 3f, 12f, 21f), tint, style = st)
+                drawPath(poly(9f, 6f, 3f, 18f, 9f, 18f, closed = true), tint, style = st)
+                drawPath(poly(15f, 6f, 21f, 18f, 15f, 18f, closed = true), tint, style = st)
+            }
+            Ic.ADJUST -> {
+                drawPath(poly(3f, 6f, 21f, 6f), tint, style = st); drawPath(poly(3f, 12f, 21f, 12f), tint, style = st)
+                drawPath(poly(3f, 18f, 21f, 18f), tint, style = st)
+                drawCircle(tint, 2.3f * u, o(8f, 6f)); drawCircle(tint, 2.3f * u, o(16f, 12f)); drawCircle(tint, 2.3f * u, o(10f, 18f))
+            }
+            Ic.EXPORT -> {
+                drawPath(poly(12f, 4f, 12f, 15f), tint, style = st); drawPath(poly(7f, 10f, 12f, 15f, 17f, 10f), tint, style = st)
+                drawPath(poly(5f, 19f, 19f, 19f), tint, style = st)
+            }
+            Ic.VOLUME -> {
+                drawPath(poly(4f, 9f, 8f, 9f, 13f, 5f, 13f, 19f, 8f, 15f, 4f, 15f, closed = true), tint, style = main)
+                drawArc(tint, -50f, 100f, false, o(11f, 8f), Size(7f * u, 8f * u), style = st)
             }
             Ic.CLOSE -> {
                 drawPath(poly(6f, 6f, 18f, 18f), tint, style = st)
@@ -272,5 +323,18 @@ fun LightningHero(modifier: Modifier = Modifier) {
         drawPath(branch, Storm.arc.copy(alpha = 0.5f * a), style = Stroke(1.6f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         drawPath(main, Storm.bolt.copy(alpha = 0.55f + 0.45f * flick), style = Stroke(2.6f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         drawPath(main, Color.White.copy(alpha = 0.35f + 0.6f * flick), style = Stroke(1.1f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+    }
+}
+
+/** Bottom tool strip button (icon + label), >= 72 x 56 dp. */
+@Composable
+fun ToolButton(ic: Ic, label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    val fg by animateColorAsState(if (selected) Storm.bolt else Storm.muted, tween(160), label = "toolFg")
+    Column(Modifier.widthIn(min = 72.dp).heightIn(min = 56.dp).clip(MaterialTheme.shapes.small)
+        .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.Tab).padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        AppIcon(ic, fg, Modifier.size(24.dp), filled = false)
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = fg, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }

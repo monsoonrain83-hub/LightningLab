@@ -17,6 +17,7 @@ import androidx.media3.common.Effect
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
+import androidx.media3.effect.Crop
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
@@ -96,6 +97,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var vContrast by mutableStateOf(0f)
     var vRotate by mutableStateOf(0)
     var overlayText by mutableStateOf("")
+    var videoW by mutableStateOf(0)
+    var videoH by mutableStateOf(0)
+    var vFilter by mutableStateOf(0)
+    var vFlipH by mutableStateOf(false)
+    var vFlipV by mutableStateOf(false)
+    var vCrop by mutableStateOf(0f)              // 0 = original, else target width/height
+    var textColor by mutableStateOf(0xFFFFFFFF.toInt())
+    var textSize by mutableStateOf(1)
+    var textPos by mutableStateOf(1)
+    var textBg by mutableStateOf(false)
+    var sticker by mutableStateOf<String?>(null)
+    var stickerSize by mutableStateOf(1)
+    var stickerPos by mutableStateOf(1)
+    var selSeg by mutableStateOf(-1)
+    fun duplicateSeg(i: Int) {
+        if (i !in segments.indices) return
+        segments.add(i + 1, segments[i].copy()); segPush(); selSeg = i + 1
+    }
     var vSpeed by mutableStateOf(1f)
     var musicName by mutableStateOf<Int?>(null)
 
@@ -420,7 +439,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         try {
             r.setDataSource(app, u)
             videoDur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            videoUri = u; segments.clear(); segReset(); infoRes = null
+            val vw = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val vh = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            if (rot == 90 || rot == 270) { videoW = vh; videoH = vw } else { videoW = vw; videoH = vh }
+            videoUri = u; segments.clear(); segReset(); selSeg = -1; infoRes = null
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
@@ -435,12 +458,20 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             try {
                 val segs = if (segments.isEmpty()) listOf(Seg(0, videoDur)) else segments.toList()
                 val fx = ArrayList<Effect>()
+                VideoFx.cropBounds(videoW, videoH, vCrop)?.let { fx += Crop(it[0], it[1], it[2], it[3]) }
+                fx += VideoFx.filterEffects(vFilter)
                 if (vBrightness != 0f) fx += Brightness(vBrightness)
                 if (vContrast != 0f) fx += Contrast(vContrast)
-                if (overlayText.isNotBlank()) fx += OverlayEffect(ImmutableList.of<TextureOverlay>(
-                    TextOverlay.createStaticTextOverlay(SpannableString(overlayText.trim()))))
                 if (vSpeed != 1f) fx += SpeedChangeEffect(vSpeed)
-                if (vRotate != 0) fx += ScaleAndRotateTransformation.Builder().setRotationDegrees(vRotate.toFloat()).build()
+                if (vRotate != 0 || vFlipH || vFlipV) fx += ScaleAndRotateTransformation.Builder()
+                    .setScale(if (vFlipH) -1f else 1f, if (vFlipV) -1f else 1f)
+                    .setRotationDegrees(vRotate.toFloat()).build()
+                val ov = ArrayList<TextureOverlay>()
+                if (overlayText.isNotBlank()) ov += TextOverlay.createStaticTextOverlay(
+                    VideoFx.styled(overlayText.trim(), textColor, textSize, textPos, textBg))
+                sticker?.let { ov += TextOverlay.createStaticTextOverlay(
+                    VideoFx.styled(it, 0xFFFFFFFF.toInt(), stickerSize, stickerPos, false, 2.2f)) }
+                if (ov.isNotEmpty()) fx += OverlayEffect(ImmutableList.copyOf(ov))
                 val items = segs.map { s ->
                     val mi = MediaItem.Builder().setUri(s.uri ?: u).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
