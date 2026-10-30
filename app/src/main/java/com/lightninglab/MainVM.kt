@@ -18,6 +18,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import com.google.common.collect.ImmutableList
@@ -42,7 +43,7 @@ import java.io.File
 import java.util.Locale
 import kotlin.math.max
 
-enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER }
+enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
 data class Seg(val startMs: Long, val endMs: Long, val uri: Uri? = null)
@@ -95,6 +96,22 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var vContrast by mutableStateOf(0f)
     var vRotate by mutableStateOf(0)
     var overlayText by mutableStateOf("")
+    var vSpeed by mutableStateOf(1f)
+    var musicName by mutableStateOf<Int?>(null)
+
+    /** Renders a built-in effect to a WAV in the cache and uses it as the added audio track. */
+    fun useFx(k: SoundFx.Kind, nameRes: Int) {
+        viewModelScope.launch {
+            try {
+                val f = withContext(Dispatchers.Default) {
+                    val file = File(app.cacheDir, "fx_${k.name.lowercase()}.wav")
+                    if (!file.exists()) SoundFx.writeWav(file, SoundFx.render(k))
+                    file
+                }
+                music = Uri.fromFile(f); musicName = nameRes
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "fx") }
+        }
+    }
 
     /** Appends a whole extra video as its own section (joined after the others on export). */
     fun addClip(c: Uri) {
@@ -249,14 +266,31 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private fun info(res: Int, vararg a: Any) { infoRes = res; infoArgs = a.toList() }
 
     // ---------------- detection ----------------
-    fun startDetect(u: Uri) {
+    // ---- pre-detect trim ----
+    var prepUri by mutableStateOf<Uri?>(null)
+    var prepDur by mutableStateOf(0L)
+    var prepStart by mutableStateOf(0L)
+    var prepEnd by mutableStateOf(0L)
+    fun prepare(u: Uri) {
+        viewModelScope.launch {
+            val d = withContext(Dispatchers.IO) {
+                val r = MediaMetadataRetriever()
+                try { r.setDataSource(app, u); r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L }
+                catch (e: Exception) { 0L } finally { r.release() }
+            }
+            prepUri = u; prepDur = d; prepStart = 0L; prepEnd = d; infoRes = null
+            screen = Screen.PREPARE
+        }
+    }
+
+    fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
         job?.cancel(); uri = u; items.clear(); composite = null; infoRes = null
         busy = true; progress = 0f; stage = R.string.stage_scan
         job = viewModelScope.launch {
             try {
                 val det = Detector(app)
                 withContext(Dispatchers.Default) {
-                    val evs = det.detect(u, sensitivity, onProgress = { progress = it },
+                    val evs = det.detect(u, sensitivity, startMs = startMs, endMs = endMs, onProgress = { progress = it },
                         onStage = { stage = it }, cancelled = { !isActive })
                     stage = R.string.stage_thumbs
                     for (e in evs.sortedByDescending { it.score }.take(60).sortedBy { it.startMs }) {
@@ -405,17 +439,18 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 if (vContrast != 0f) fx += Contrast(vContrast)
                 if (overlayText.isNotBlank()) fx += OverlayEffect(ImmutableList.of<TextureOverlay>(
                     TextOverlay.createStaticTextOverlay(SpannableString(overlayText.trim()))))
+                if (vSpeed != 1f) fx += SpeedChangeEffect(vSpeed)
                 if (vRotate != 0) fx += ScaleAndRotateTransformation.Builder().setRotationDegrees(vRotate.toFloat()).build()
                 val items = segs.map { s ->
                     val mi = MediaItem.Builder().setUri(s.uri ?: u).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(s.startMs).setEndPositionMs(s.endMs).build()).build()
-                    EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal)
+                    EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
                         .setEffects(Effects(emptyList(), fx)).build()
                 }
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
-                val total = segs.sumOf { it.endMs - it.startMs }
+                val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
                 music?.let { mu ->
                     val mi = MediaItem.Builder().setUri(mu).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(total).build()).build()

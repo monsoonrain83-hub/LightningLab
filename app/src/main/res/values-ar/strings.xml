@@ -130,4 +130,25 @@
     <string name="tab_audio">الصوت</string>
     <string name="hold_compare">اضغط مطولاً على الصورة للمقارنة مع الأصل</string>
     <string name="heal_hint">ارسم فوق العنصر ثم اضغط تطبيق</string>
+    <string name="prepare_title">تحضير الفيديو</string>
+    <string name="start_here">ابدأ من هنا</string>
+    <string name="end_here">انتهِ هنا</string>
+    <string name="prepare_hint">اقتطع الجزء الذي فيه العاصفة ثم اضغط كشف. تُحلَّل كل الإطارات بمعدل الإطارات الأصلي للفيديو، ويجري تلقائياً فحص الخط الرفيع المقاوم لاهتزاز الكاميرا.</string>
+    <string name="fx_menu">المؤثرات الصوتية</string>
+    <string name="import_music">استيراد من الهاتف</string>
+    <string name="fx_selected">المؤثر المختار: %1$s</string>
+    <string name="speed">السرعة</string>
+    <string name="speed_audio_note">عند تغيير السرعة يُحذف الصوت الأصلي؛ أضف موسيقى أو مؤثراً بدلاً منه.</string>
+    <string name="method_multiply">ضرب (Multiply)</string>
+    <string name="a11y_remove">إزالة</string>
+    <string name="fx_thunder_rumble">رعد - هدير</string>
+    <string name="fx_thunder_crack">رعد - فرقعة</string>
+    <string name="fx_thunder_clap">رعد - دوي</string>
+    <string name="fx_rain">مطر</string>
+    <string name="fx_wind">رياح</string>
+    <string name="fx_storm">أجواء العاصفة</string>
+    <string name="fx_zap">شرارة كهربائية</string>
+    <string name="fx_boom">دوي ارتطام</string>
+    <string name="fx_whoosh">صفير</string>
+    <string name="fx_riser">صاعد</string>
 </resources>

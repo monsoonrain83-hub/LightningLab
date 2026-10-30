@@ -33,7 +33,12 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +73,7 @@ fun InfoText(vm: MainVM) {
     vm.infoRes?.let { Text(stringResource(it, *vm.infoArgs.toTypedArray()), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
 }
 
-enum class Ic { BOLT, PHOTO, VIDEO, CLOUD, UNDO, REDO, BACK, CHEVRON }
+enum class Ic { BOLT, PHOTO, VIDEO, CLOUD, UNDO, REDO, BACK, CHEVRON, CLOSE }
 
 /** Vector icons drawn on a 24-unit grid; one stroke weight everywhere. `filled` is used for the selected nav item. */
 @Composable
@@ -119,6 +124,10 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier.size(24.dp), fill
                 if (rtl) scale(-1f, 1f, pivot = Offset(size.width / 2f, size.height / 2f)) { drawPath(poly(15f, 5f, 8f, 12f, 15f, 19f), tint, style = st) }
                 else drawPath(poly(15f, 5f, 8f, 12f, 15f, 19f), tint, style = st)
             }
+            Ic.CLOSE -> {
+                drawPath(poly(6f, 6f, 18f, 18f), tint, style = st)
+                drawPath(poly(18f, 6f, 6f, 18f), tint, style = st)
+            }
             Ic.CHEVRON -> {
                 if (rtl) scale(-1f, 1f, pivot = Offset(size.width / 2f, size.height / 2f)) { drawPath(poly(9f, 5f, 16f, 12f, 9f, 19f), tint, style = st) }
                 else drawPath(poly(9f, 5f, 16f, 12f, 9f, 19f), tint, style = st)
@@ -130,15 +139,18 @@ fun AppIcon(ic: Ic, tint: Color, modifier: Modifier = Modifier.size(24.dp), fill
 @Composable
 fun TopBar(title: String, onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (onBack != null) IconButton(onClick = onBack) { AppIcon(Ic.BACK, Storm.text) } else Spacer(Modifier.width(12.dp))
+        if (onBack != null) {
+            val backDesc = stringResource(R.string.back)
+            IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = backDesc }) { AppIcon(Ic.BACK, Storm.text) }
+        } else Spacer(Modifier.width(12.dp))
         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         actions()
     }
 }
 
 @Composable
-fun IconAction(ic: Ic, enabled: Boolean = true, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled) {
+fun IconAction(ic: Ic, description: String, enabled: Boolean = true, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.semantics { contentDescription = description }) {
         AppIcon(ic, if (enabled) Storm.text else Storm.muted.copy(alpha = 0.4f))
     }
 }
@@ -147,7 +159,7 @@ fun IconAction(ic: Ic, enabled: Boolean = true, onClick: () -> Unit) {
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Surface(modifier.fillMaxWidth().animateContentSize(), shape = MaterialTheme.shapes.medium, color = Storm.surfaceHi,
-        border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+        border = BorderStroke(1.dp, Storm.hairline)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
@@ -159,8 +171,8 @@ fun Tabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
             val sel = i == selected
             val bg by animateColorAsState(if (sel) Storm.boltDim else Color.Transparent, tween(160), label = "tabBg")
             val fg by animateColorAsState(if (sel) Storm.bolt else Storm.muted, tween(160), label = "tabFg")
-            Box(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(22.dp)).background(bg)
-                .clickable { onSelect(i) }.padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(bg)
+                .selectable(selected = sel, onClick = { onSelect(i) }, role = Role.Tab).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
                 Text(l, color = fg, style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -169,8 +181,8 @@ fun Tabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
 
 @Composable
 fun FeatureCard(title: String, subtitle: String?, enabled: Boolean = true, icon: Ic? = null, onClick: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(enabled = enabled) { onClick() },
-        shape = MaterialTheme.shapes.medium, color = Storm.surfaceHi, border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+    Surface(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable(enabled = enabled, role = Role.Button) { onClick() },
+        shape = MaterialTheme.shapes.medium, color = Storm.surfaceHi, border = BorderStroke(1.dp, Storm.hairline)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Box(Modifier.size(40.dp).clip(CircleShape).background(Storm.boltDim), contentAlignment = Alignment.Center) {
@@ -195,7 +207,8 @@ fun Param(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onDon
             Text(String.format(Locale.US, "%.2f", v), style = MaterialTheme.typography.labelMedium,
                 color = if (v != 0f) Storm.bolt else Storm.muted)
         }
-        Slider(value = v, onValueChange = onChange, onValueChangeFinished = onDone, valueRange = range)
+        Slider(value = v, onValueChange = onChange, onValueChangeFinished = onDone, valueRange = range,
+            modifier = Modifier.semantics { contentDescription = label })
     }
 }
 
@@ -207,7 +220,7 @@ fun NavBar(vm: MainVM) {
         Triple(Screen.VIDEO, Ic.VIDEO, R.string.nav_video),
         Triple(Screen.WEATHER, Ic.CLOUD, R.string.nav_weather))
     Column {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Storm.outline.copy(alpha = 0.5f)))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Storm.hairline))
         NavigationBar(containerColor = Storm.surface, tonalElevation = 0.dp) {
             items.forEach { (sc, ic, lb) ->
                 val sel = vm.screen == sc
@@ -225,10 +238,15 @@ fun NavBar(vm: MainVM) {
 @Composable
 fun LightningHero(modifier: Modifier = Modifier) {
     val tr = rememberInfiniteTransition(label = "hero")
-    val flick by tr.animateFloat(0f, 1f, infiniteRepeatable(keyframes<Float> {
+    val ctx = LocalContext.current
+    val reduceMotion = remember {
+        android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+    }
+    val flickAnim by tr.animateFloat(0f, 1f, infiniteRepeatable(keyframes<Float> {
         durationMillis = 5200
         0f at 0; 0f at 3400; 1f at 3460; 0.25f at 3560; 0.9f at 3640; 0f at 4100
     }), label = "flick")
+    val flick = if (reduceMotion) 0.45f else flickAnim   // respect "remove animations": static glow, no flicker
     Canvas(modifier) {
         val w = size.width; val h = size.height
         drawRect(Brush.verticalGradient(listOf(Color(0xFF0A0E16), Color(0xFF131C2E), Storm.bg)))

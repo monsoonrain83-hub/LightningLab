@@ -21,3 +21,10 @@ The transient-flash analyzer (`FlashAnalyzer.kt`) is original code written for t
 | MobileNetV3 ImageNet weights (Keras) | Apache-2.0 code; ImageNet-derived weights - check terms before commercial release | Used only inside tools/train_cloud_model.py |
 | WMO International Cloud Atlas (2017) vocabulary | Names only | Genus/feature tag lists in `CloudInfo.kt` |
 | Guava | Apache-2.0 | Dependency (Media3 overlay API) |
+
+## Round 7
+| Item | Status |
+|---|---|
+| UI/UX Pro Max skill (user-supplied zip) | Used only as a checklist/reference for the accessibility and contrast review (non-text contrast 3:1, accessible names on icon buttons, 48 dp targets, reduced motion). No code or assets copied. Its LICENSE file is in the zip; check it before copying anything. |
+| Built-in sound effects (`SoundFx.kt`) | Original synthesis code; no recordings or samples. |
+| DayLine / FlashAnalyzer / Aligner | Original code (algorithm ideas: sub-pixel NCC tracking, background subtraction with min/median windows). |

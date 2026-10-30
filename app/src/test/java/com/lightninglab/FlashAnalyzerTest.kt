@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Random
 
-/** Synthetic-scenario tests for [FlashAnalyzer]. Mirrors the validated Python port (see docs/VALIDATION.md). */
+/** Synthetic-scenario tests for [FlashAnalyzer]; the real-clip results are in docs/REAL_CLIP_FINDINGS.md. */
 class FlashAnalyzerTest {
     private val cn = FlashAnalyzer.GX * FlashAnalyzer.GY
     private val rnd = Random(1)
@@ -18,15 +18,17 @@ class FlashAnalyzerTest {
         return Clip(t, c)
     }
 
-    private fun run(k: Clip, sens: Float = 0.6f, minSep: Long = 250L, st: FloatArray? = null): List<LightningEvent> {
-        val ms = k.t.indices.map { Sample(k.t[it], k.c[it].average().toFloat(), k.c[it], st?.get(it) ?: 0f) }
-        return FlashAnalyzer.analyze(ms, sens, minSep)
+    private fun samples(k: Clip) = k.t.indices.map { Sample(k.t[it], k.c[it].average().toFloat(), k.c[it], 0f) }
+
+    private fun run(k: Clip, sens: Float = 0.6f, minSep: Long = 250L, day: List<DayLine.Stat>? = null) =
+        FlashAnalyzer.analyze(samples(k), sens, minSep, day)
+
+    private fun flash(k: Clip, atMs: Long, amp: Float, cells: Int = 3, frames: Int = 1) {
+        val i = k.t.indexOfFirst { it >= atMs }
+        for (f in 0 until frames) for (j in 0 until cells) k.c[i + f][j] += amp
     }
 
-    private fun flash(k: Clip, atMs: Long, amp: Float, cells: Int = 3) {
-        val i = k.t.indexOfFirst { it >= atMs }
-        for (j in 0 until cells) k.c[i][j] += amp
-    }
+    private fun noDay(k: Clip) = k.t.map { DayLine.Stat(it, 0f, 0f, 0) }
 
     @Test fun nightTwoFlashes500msApartAreSeparate() {
         val k = clip(20); flash(k, 5000, 60f); flash(k, 5500, 80f)
@@ -43,39 +45,55 @@ class FlashAnalyzerTest {
         assertEquals(0, run(k).size)
     }
 
-    @Test fun cameraShakeMixedSignIsRejected() {
-        val k = clip(20)
-        for (i in 100 until 500 step 3) for (j in 0 until cn) k.c[i][j] += 25f * rnd.nextGaussian().toFloat()
-        assertEquals(0, run(k).size)
-    }
-
     @Test fun slowExposureRampIsRejected() {
         val k = clip(20); val n = k.c.size
         for (i in 0 until n) for (j in 0 until cn) k.c[i][j] += 60f * i / n
         assertEquals(0, run(k).size)
     }
 
-    @Test fun flashInFirstOrLast150msIsIgnored() {
-        val k = clip(10); for (j in 0 until 4) { k.c[0][j] += 80f; k.c[1][j] += 80f }
-        assertEquals(0, run(k).size)
+    @Test fun flashAlreadyInProgressAtVideoStartIsFound() {
+        val k = clip(10); flash(k, 0, 80f, cells = 4, frames = 2)
+        assertEquals(1, run(k).size)
     }
 
     @Test fun pureNoiseGivesNoEvents() {
         assertEquals(0, run(clip(60, noise = 1.0f)).size)
     }
 
-    private fun structSeries(n: Int, noise: Float = 0.0007f) = FloatArray(n) { 0.05f + noise * rnd.nextGaussian().toFloat() }
-
-    @Test fun dayThinLineFlashFoundByStructurePath() {
-        val k = clip(30, level = 170f); val st = structSeries(k.c.size)
-        st[300] += 0.004f; st[600] += 0.003f; st[601] += 0.003f
-        assertEquals(2, run(k, st = st).size)
+    @Test fun eightFrameFlashIsOneEvent() {
+        val k = clip(30); flash(k, 10000, 70f, frames = 8)
+        assertEquals(1, run(k).size)
     }
 
-    @Test fun structureSceneCutAndDriftAreRejected() {
-        val k = clip(30, level = 170f); val st = structSeries(k.c.size)
-        for (i in 450 until st.size) st[i] += 0.03f
-        for (i in st.indices) st[i] += 0.02f * i / st.size
-        assertEquals(0, run(k, st = st).size)
+    @Test fun shakeLikeEpisodeWithNoMotionCompensatedResidualIsDropped() {
+        val k = clip(20); flash(k, 5000, 60f)
+        assertEquals(0, run(k, day = noDay(k)).size)
+    }
+
+    @Test fun episodeWithMotionCompensatedResidualIsKept() {
+        val k = clip(20); flash(k, 5000, 60f)
+        val day = k.t.map { DayLine.Stat(it, if (it in 4900L..5100L) 0.03f else 0f, 0f, 0) }
+        assertEquals(1, run(k, day = day).size)
+    }
+
+    @Test fun thinLineStructureInDayLineStatsCreatesAnEvent() {
+        val k = clip(20, level = 170f)
+        val day = k.t.map { DayLine.Stat(it, 0f, if (it in 8000L..8030L) 300f else 0f, if (it in 8000L..8030L) 60 else 0) }
+        assertEquals(1, run(k, day = day).size)
+    }
+
+    @Test fun twoDayLineFramesFarApartAreTwoEvents() {
+        val k = clip(20, level = 170f)
+        val day = k.t.map { DayLine.Stat(it, 0f, 0f, if (it in 4000L..4010L || it in 4100L..4110L) 60 else 0) }
+        assertEquals(2, run(k, day = day).size)
+    }
+
+    @Test fun rapidStrokesWithClearDipsAreSeparatedInsideOneEpisode() {
+        val k = clip(30)
+        // two bright strokes 3 frames apart with a dark frame between them (inside one 250 ms episode)
+        val i = k.t.indexOfFirst { it >= 10000 }
+        for (j in 0 until 3) { k.c[i][j] += 90f; k.c[i + 1][j] += 90f }
+        for (j in 0 until 3) { k.c[i + 4][j] += 90f; k.c[i + 5][j] += 90f }
+        assertEquals(2, run(k).size)
     }
 }

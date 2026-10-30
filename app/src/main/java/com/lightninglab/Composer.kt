@@ -11,18 +11,20 @@ import kotlin.math.min
  *   d   = luma(frame) - luma(base)            (what became brighter)
  *   top = d - boxBlur(d)                      (top-hat: removes global brightening, keeps thin bright lines)
  *   mask = clamp((top - t) / t, 0, 1)
- * Then the masked pixels are combined with the chosen blend: LIGHTEN (max), SCREEN, or ADVANCED
+ * Then the masked pixels are combined with the chosen blend: LIGHTEN (max), SCREEN, MULTIPLY (base x (1 + glow)), or ADVANCED
  * (lighten + highlight protection that fades the contribution where the result is already near white).
  * Frames whose mask covers >20% of the image (misalignment / whole-sky flash) are skipped.
  * A final highlight roll-off keeps the top end from clipping. Alignment: each frame is translated onto the base with [Aligner] when its edge correlation is confident; otherwise it is left unshifted.
  */
 object Composer {
-    enum class Method { LIGHTEN, SCREEN, ADVANCED }
+    enum class Method { LIGHTEN, SCREEN, MULTIPLY, ADVANCED }
     class Result(val bitmap: Bitmap, val used: Int, val skipped: Int, val clippedPct: Float,
                  val shifted: Int = 0, val uncertain: Int = 0)
 
     private fun blend(c: Int, o: Int, m: Float, method: Method): Int = when (method) {
         Method.SCREEN -> (255f - (255f - c) * (255f - o * m) / 255f).toInt()
+        // MULTIPLY: the lightning frame scales the base (base x (1 + glow)); strongest over bright backgrounds (day sky).
+        Method.MULTIPLY -> min(255f, c * (1f + m * o / 255f)).toInt()
         else -> if (o > c) (c + (o - c) * m).toInt() else c
     }
 

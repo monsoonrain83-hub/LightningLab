@@ -23,7 +23,10 @@ object Storm {
     val surface = Color(0xFF0F141D)
     val surfaceHi = Color(0xFF161D2A)
     val surfaceTop = Color(0xFF2A3447)
-    val outline = Color(0xFF3A465C)
+    /** Control boundaries (outlined buttons/fields): 3.2:1 against panels (non-text contrast >= 3:1). */
+    val outline = Color(0xFF5E6D88)
+    /** Decorative hairlines around panels (deliberately subtle). */
+    val hairline = Color(0xFF2B3548)
     val text = Color(0xFFE9EEF6)
     val muted = Color(0xFF8995AA)
     val bolt = Color(0xFFFFD43B)

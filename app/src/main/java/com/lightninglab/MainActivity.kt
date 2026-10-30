@@ -38,10 +38,11 @@ fun App(vm: MainVM = viewModel()) {
                             Screen.PHOTO -> PhotoEditor(vm)
                             Screen.VIDEO -> VideoEditor(vm)
                             Screen.WEATHER -> WeatherScreen(vm)
+                            Screen.PREPARE -> PrepareScreen(vm)
                         }
                     }
                 }
-                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT) NavBar(vm)
+                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
             }
         }
     }

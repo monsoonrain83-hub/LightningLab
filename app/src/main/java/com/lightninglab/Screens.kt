@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -38,7 +40,7 @@ import kotlin.math.roundToInt
 @Composable
 fun Home(vm: MainVM) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
-        if (u != null) vm.startDetect(u)
+        if (u != null) vm.prepare(u)
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box {
@@ -119,7 +121,7 @@ fun Results(vm: MainVM) {
         items(vm.items.size) { i ->
             val item = vm.items[i]
             Card(Modifier.clickable { vm.toggle(i) }, shape = MaterialTheme.shapes.small,
-                border = BorderStroke(if (item.order > 0) 1.5.dp else 1.dp, if (item.order > 0) Storm.bolt else Storm.outline.copy(alpha = 0.6f)),
+                border = BorderStroke(if (item.order > 0) 1.5.dp else 1.dp, if (item.order > 0) Storm.bolt else Storm.hairline),
                 colors = CardDefaults.cardColors(containerColor =
                     if (item.order > 0) Storm.selected else Storm.surfaceHi)) {
                 Column {
@@ -146,6 +148,8 @@ fun Results(vm: MainVM) {
                         { Text(stringResource(R.string.method_lighten)) })
                     FilterChip(vm.method == Composer.Method.SCREEN, { vm.method = Composer.Method.SCREEN },
                         { Text(stringResource(R.string.method_screen)) })
+                    FilterChip(vm.method == Composer.Method.MULTIPLY, { vm.method = Composer.Method.MULTIPLY },
+                        { Text(stringResource(R.string.method_multiply)) })
                     FilterChip(vm.method == Composer.Method.ADVANCED, { vm.method = Composer.Method.ADVANCED },
                         { Text(stringResource(R.string.method_advanced)) })
                 }
@@ -197,9 +201,9 @@ fun PhotoEditor(vm: MainVM) {
     val pickReq = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_photo), onBack = { vm.screen = Screen.HOME }) {
-            IconAction(Ic.UNDO, vm.canUndo) { vm.undo() }
-            IconAction(Ic.REDO, vm.canRedo) { vm.redo() }
-            IconAction(Ic.PHOTO, true) { pickReq() }
+            IconAction(Ic.UNDO, stringResource(R.string.undo), vm.canUndo) { vm.undo() }
+            IconAction(Ic.REDO, stringResource(R.string.redo), vm.canRedo) { vm.redo() }
+            IconAction(Ic.PHOTO, stringResource(R.string.pick_image), true) { pickReq() }
         }
         if (prev == null) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
@@ -227,7 +231,7 @@ fun PhotoEditor(vm: MainVM) {
         }
         Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
             shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-            border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+            border = BorderStroke(1.dp, Storm.hairline)) {
             Column(Modifier.padding(top = 8.dp)) {
                 Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_detail, R.string.tab_crop,
                     R.string.tab_remove, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
@@ -303,6 +307,13 @@ fun PhotoEditor(vm: MainVM) {
 
 private enum class VTab { CUT, LOOK, TEXT, AUDIO, EXPORT }
 
+private val fxItems = listOf(
+    SoundFx.Kind.RUMBLE to R.string.fx_thunder_rumble, SoundFx.Kind.CRACK to R.string.fx_thunder_crack,
+    SoundFx.Kind.CLAP to R.string.fx_thunder_clap, SoundFx.Kind.RAIN to R.string.fx_rain,
+    SoundFx.Kind.WIND to R.string.fx_wind, SoundFx.Kind.STORM to R.string.fx_storm,
+    SoundFx.Kind.ZAP to R.string.fx_zap, SoundFx.Kind.BOOM to R.string.fx_boom,
+    SoundFx.Kind.WHOOSH to R.string.fx_whoosh, SoundFx.Kind.RISER to R.string.fx_riser)
+
 @Composable
 fun VideoEditor(vm: MainVM) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
@@ -312,7 +323,7 @@ fun VideoEditor(vm: MainVM) {
         if (u != null) vm.addClip(u)
     }
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
-        if (u != null) vm.music = u
+        if (u != null) { vm.music = u; vm.musicName = null }
     }
     var vv by remember { mutableStateOf<android.widget.VideoView?>(null) }
     var range by remember(vm.videoDur) { mutableStateOf(0f..vm.videoDur.toFloat().coerceAtLeast(1f)) }
@@ -320,7 +331,7 @@ fun VideoEditor(vm: MainVM) {
     val pickReq = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_video), onBack = { vm.screen = Screen.HOME }) {
-            IconAction(Ic.VIDEO, true) { pickReq() }
+            IconAction(Ic.VIDEO, stringResource(R.string.pick_video), true) { pickReq() }
         }
         val u = vm.videoUri
         if (u == null) {
@@ -350,7 +361,7 @@ fun VideoEditor(vm: MainVM) {
         }
         Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
             shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-            border = BorderStroke(1.dp, Storm.outline.copy(alpha = 0.6f))) {
+            border = BorderStroke(1.dp, Storm.hairline)) {
             Column(Modifier.padding(top = 8.dp)) {
                 Tabs(listOf(R.string.tab_cut, R.string.tab_look, R.string.tab_text, R.string.tab_audio, R.string.tab_export)
                     .map { stringResource(it) }, tab.ordinal) { tab = VTab.values()[it] }
@@ -379,8 +390,8 @@ fun VideoEditor(vm: MainVM) {
                                             Text(stringResource(R.string.add_clip))
                                         }
                                         OutlinedButton(onClick = { vm.clearSegs() }) { Text(stringResource(R.string.clear_segments)) }
-                                        IconAction(Ic.UNDO, vm.canUndoSeg) { vm.undoSeg() }
-                                        IconAction(Ic.REDO, vm.canRedoSeg) { vm.redoSeg() }
+                                        IconAction(Ic.UNDO, stringResource(R.string.undo), vm.canUndoSeg) { vm.undoSeg() }
+                                        IconAction(Ic.REDO, stringResource(R.string.redo), vm.canRedoSeg) { vm.redoSeg() }
                                     }
                                     Text(stringResource(R.string.segments_title), style = MaterialTheme.typography.titleSmall)
                                     if (vm.segments.isEmpty()) Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
@@ -388,13 +399,22 @@ fun VideoEditor(vm: MainVM) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text("${i + 1}.  ${fmt(s.startMs)} – ${fmt(s.endMs)}" + (if (s.uri != null) "  +" else ""),
                                                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                            TextButton(onClick = { vm.removeSeg(i) }) { Text("✕") }
+                                            IconAction(Ic.CLOSE, stringResource(R.string.a11y_remove)) { vm.removeSeg(i) }
                                         }
                                     }
                                 }
                                 VTab.LOOK -> {
                                     Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
                                     Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
+                                    Text(stringResource(R.string.speed), style = MaterialTheme.typography.bodyMedium)
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        listOf(0.25f, 0.5f, 1f, 2f, 4f).forEach { v ->
+                                            FilterChip(vm.vSpeed == v, { vm.vSpeed = v },
+                                                { Text(when (v) { 0.25f -> "0.25×"; 0.5f -> "0.5×"; else -> "${v.toInt()}×" }) })
+                                        }
+                                    }
+                                    if (vm.vSpeed != 1f) Text(stringResource(R.string.speed_audio_note),
+                                        style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                     OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
                                         Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
                                     }
@@ -408,10 +428,21 @@ fun VideoEditor(vm: MainVM) {
                                         Switch(vm.muteOriginal, { vm.muteOriginal = it })
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.mute_original), style = MaterialTheme.typography.bodyMedium)
                                     }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(stringResource(R.string.add_music)) }
-                                        if (vm.music != null) TextButton(onClick = { vm.music = null }) { Text(stringResource(R.string.remove_music)) }
+                                    var fxOpen by remember { mutableStateOf(false) }
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Box {
+                                            Button(onClick = { fxOpen = true }) { Text(stringResource(R.string.fx_menu)) }
+                                            DropdownMenu(expanded = fxOpen, onDismissRequest = { fxOpen = false }) {
+                                                fxItems.forEach { (k, res) ->
+                                                    DropdownMenuItem(text = { Text(stringResource(res)) }, onClick = { fxOpen = false; vm.useFx(k, res) })
+                                                }
+                                            }
+                                        }
+                                        OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(stringResource(R.string.import_music)) }
+                                        if (vm.music != null) TextButton(onClick = { vm.music = null; vm.musicName = null }) { Text(stringResource(R.string.remove_music)) }
                                     }
+                                    vm.musicName?.let { Text(stringResource(R.string.fx_selected, stringResource(it)), style = MaterialTheme.typography.bodySmall, color = Storm.muted) }
                                 }
                                 VTab.EXPORT -> {
                                     Button(onClick = { vm.exportVideo() }, enabled = !vm.busy,
@@ -426,6 +457,81 @@ fun VideoEditor(vm: MainVM) {
                     }
                 }
                 Box(Modifier.padding(horizontal = 16.dp).padding(bottom = 6.dp)) { InfoText(vm) }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun PrepareScreen(vm: MainVM) {
+    val u = vm.prepUri
+    var vv by remember { mutableStateOf<android.widget.VideoView?>(null) }
+    var range by remember(vm.prepDur) { mutableStateOf(0f..vm.prepDur.toFloat().coerceAtLeast(1f)) }
+    Column(Modifier.fillMaxSize()) {
+        TopBar(stringResource(R.string.prepare_title), onBack = { if (!vm.busy) vm.screen = Screen.HOME })
+        if (u == null || vm.prepDur <= 0L) {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.error_generic, "video"), color = Storm.muted)
+            }
+            return@Column
+        }
+        key(u) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                factory = { c -> android.widget.VideoView(c).apply { setVideoURI(u); setOnPreparedListener { seekTo(1) }; vv = this } },
+                modifier = Modifier.weight(1f).heightIn(min = 160.dp).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clip(MaterialTheme.shapes.medium))
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { vv?.start() }) { Text(stringResource(R.string.play)) }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { vv?.pause() }) { Text(stringResource(R.string.pause)) }
+        }
+        Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
+            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+            border = BorderStroke(1.dp, Storm.hairline)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.video_start) + " " + fmt(range.start.toLong()) + "    " +
+                    stringResource(R.string.video_end) + " " + fmt(range.endInclusive.toLong()) + "    (" +
+                    fmt((range.endInclusive - range.start).toLong()) + ")",
+                    style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
+                RangeSlider(value = range, enabled = !vm.busy, onValueChange = { r ->
+                    if (r.start != range.start) vv?.seekTo(r.start.toInt()) else vv?.seekTo(r.endInclusive.toInt())
+                    range = r; vm.prepStart = r.start.toLong(); vm.prepEnd = r.endInclusive.toLong()
+                }, valueRange = 0f..vm.prepDur.toFloat().coerceAtLeast(1f),
+                    modifier = Modifier.semantics { contentDescription = "trim" })
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(enabled = !vm.busy, onClick = {
+                        val pos = vv?.currentPosition?.toFloat() ?: 0f
+                        if (pos < range.endInclusive - 100f) range = pos..range.endInclusive
+                    }) { Text(stringResource(R.string.start_here)) }
+                    OutlinedButton(enabled = !vm.busy, onClick = {
+                        val pos = vv?.currentPosition?.toFloat() ?: 0f
+                        if (pos > range.start + 100f) range = range.start..pos
+                    }) { Text(stringResource(R.string.end_here)) }
+                    OutlinedButton(enabled = !vm.busy, onClick = { range = 0f..vm.prepDur.toFloat() }) { Text(stringResource(R.string.reset)) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.sensitivity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text((vm.sensitivity * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
+                }
+                Slider(value = vm.sensitivity, onValueChange = { vm.sensitivity = it }, enabled = !vm.busy,
+                    modifier = Modifier.semantics { contentDescription = "sensitivity" })
+                Text(stringResource(R.string.prepare_hint), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                if (vm.busy) {
+                    LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
+                    Text(stringResource(vm.stage), style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
+                } else {
+                    Button(onClick = { vm.startDetect(u, range.start.toLong(), range.endInclusive.toLong()) },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        AppIcon(Ic.BOLT, Storm.onBolt, Modifier.size(20.dp), filled = true)
+                        Spacer(Modifier.width(10.dp))
+                        Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                InfoText(vm)
             }
         }
     }

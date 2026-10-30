@@ -130,4 +130,25 @@ Rough type guess: %5$s</string>
     <string name="tab_audio">Audio</string>
     <string name="hold_compare">Hold the photo to compare with the original</string>
     <string name="heal_hint">Paint over the object, then tap Apply</string>
+    <string name="prepare_title">Prepare video</string>
+    <string name="start_here">Start here</string>
+    <string name="end_here">End here</string>
+    <string name="prepare_hint">Trim to the part with the storm, then detect. Every frame is analysed at the full frame rate of the video; a thin-line check that ignores camera shake runs automatically.</string>
+    <string name="fx_menu">Sound effects</string>
+    <string name="import_music">Import from phone</string>
+    <string name="fx_selected">Selected effect: %1$s</string>
+    <string name="speed">Speed</string>
+    <string name="speed_audio_note">At a changed speed the original audio is dropped; add music or an effect instead.</string>
+    <string name="method_multiply">Multiply</string>
+    <string name="a11y_remove">Remove</string>
+    <string name="fx_thunder_rumble">Thunder - rumble</string>
+    <string name="fx_thunder_crack">Thunder - crack</string>
+    <string name="fx_thunder_clap">Thunder - clap</string>
+    <string name="fx_rain">Rain</string>
+    <string name="fx_wind">Wind</string>
+    <string name="fx_storm">Storm ambience</string>
+    <string name="fx_zap">Electric zap</string>
+    <string name="fx_boom">Impact boom</string>
+    <string name="fx_whoosh">Whoosh</string>
+    <string name="fx_riser">Riser</string>
 </resources>
