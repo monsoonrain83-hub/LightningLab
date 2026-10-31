@@ -29,6 +29,12 @@ private fun kindRes(k: CloudAnalysis.Kind) = when (k) {
     CloudAnalysis.Kind.MIXED -> R.string.kind_mixed
 }
 
+private fun frameQualityRes(q: CloudAnalysis.FrameQuality) = when (q) {
+    CloudAnalysis.FrameQuality.GOOD -> R.string.wx_frame_good
+    CloudAnalysis.FrameQuality.CHECK_FRAME -> R.string.wx_frame_check
+    CloudAnalysis.FrameQuality.LOW_SKY_CONTENT -> R.string.wx_frame_low_sky
+}
+
 @Composable
 fun WeatherScreen(vm: MainVM) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
@@ -57,11 +63,16 @@ fun WeatherScreen(vm: MainVM) {
                         String.format(Locale.US, "%.1f", r.texture), r.cloudLuma.roundToInt(), stringResource(kindRes(r.kind))),
                         style = MaterialTheme.typography.bodyMedium)
                     Text(stringResource(R.string.wx_disclaimer), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    Text(stringResource(frameQualityRes(r.frameQuality)), style = MaterialTheme.typography.bodySmall,
+                        color = if (r.frameQuality == CloudAnalysis.FrameQuality.GOOD) Storm.muted else MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.wx_sky_fraction, (r.skyLikeFraction * 100).roundToInt()),
+                        style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                 }
                 if (vm.topK.isNotEmpty()) {
                     Panel {
                         Text(stringResource(R.string.wx_model_top), style = MaterialTheme.typography.titleSmall)
-                        vm.topK.forEach { (c, pr) -> Text(CloudInfo.genusName(c) + "  " + (pr * 100).roundToInt() + "%", style = MaterialTheme.typography.bodyMedium) }
+                        vm.topK.forEach { (c, score) -> Text(CloudInfo.genusName(c) + "  " + (score * 100).roundToInt() + "%", style = MaterialTheme.typography.bodyMedium) }
+                        Text(stringResource(R.string.wx_model_score_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                     }
                 }
                 Panel {
@@ -84,6 +95,8 @@ fun WeatherScreen(vm: MainVM) {
             OutlinedButton(onClick = { pickModel.launch("*/*") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(stringResource(if (vm.modelReady) R.string.model_replace else R.string.model_import))
             }
+            Text(stringResource(if (vm.modelReady) R.string.wx_model_ready else R.string.wx_model_not_ready),
+                style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             if (!vm.modelReady) Text(stringResource(R.string.model_none_hint), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             InfoText(vm)
             Spacer(Modifier.height(24.dp))

@@ -251,17 +251,40 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun initModel() { viewModelScope.launch { modelReady = withContext(Dispatchers.IO) { cloudModel.load() } } }
     fun importModel(u: Uri) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
+            val previousReady = modelReady
+            val result = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "cloud_model.tflite")
+                val temp = File(app.filesDir, "cloud_model.importing")
+                val backup = File(app.filesDir, "cloud_model.previous")
+                var oldModelClosed = false
                 try {
-                    val f = File(app.filesDir, "cloud_model.tflite")
-                    app.contentResolver.openInputStream(u)?.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
-                    val good = cloudModel.load()
-                    if (!good) f.delete()
-                    good
-                } catch (e: Throwable) { false }
+                    temp.delete()
+                    val input = app.contentResolver.openInputStream(u) ?: throw java.io.IOException("Cannot read selected model")
+                    input.use { src -> temp.outputStream().use { dst -> src.copyTo(dst) } }
+                    // Validate the candidate before touching the currently working model.
+                    val candidate = CloudClassifier(temp)
+                    val valid = candidate.load()
+                    candidate.close()
+                    if (!valid) throw java.io.IOException("Model tensor contract is incompatible")
+
+                    cloudModel.close()
+                    oldModelClosed = true
+                    backup.delete()
+                    if (target.exists() && !target.renameTo(backup)) throw java.io.IOException("Cannot preserve previous model")
+                    if (!temp.renameTo(target)) throw java.io.IOException("Cannot activate imported model")
+                    if (!cloudModel.load()) throw java.io.IOException("Imported model failed final validation")
+                    backup.delete()
+                    Pair(true, true)
+                } catch (_: Throwable) {
+                    temp.delete()
+                    if (target.exists() && backup.exists()) target.delete()
+                    if (!target.exists() && backup.exists()) backup.renameTo(target)
+                    val restored = if (oldModelClosed && target.exists()) cloudModel.load() else previousReady
+                    Pair(false, restored)
+                }
             }
-            modelReady = ok
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+            modelReady = result.second
+            if (result.first) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
     fun toggleFeature(f: String) { if (f in features) features.remove(f) else features.add(f) }

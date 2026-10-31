@@ -1,6 +1,7 @@
 package com.lightninglab
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CloudAnalysisTest {
@@ -26,4 +27,16 @@ class CloudAnalysisTest {
         val r = CloudAnalysis.analyze(IntArray(w * h) { rgb(70, 70, 70) }, w, h)
         assertEquals(CloudAnalysis.Kind.DARK_OVERCAST, r.kind)
     }
+    @Test fun greenDominatedFrameWarnsAboutPossibleGroundContent() {
+        val r = CloudAnalysis.analyze(IntArray(w * h) { rgb(70, 150, 65) }, w, h)
+        assertEquals(CloudAnalysis.FrameQuality.LOW_SKY_CONTENT, r.frameQuality)
+        assertTrue(r.qualityFlags.contains("possible_vegetation_or_ground"))
+    }
+
+    @Test fun blueSkyFrameHasGoodQuality() {
+        val r = CloudAnalysis.analyze(IntArray(w * h) { rgb(90, 145, 225) }, w, h)
+        assertEquals(CloudAnalysis.FrameQuality.GOOD, r.frameQuality)
+        assertTrue(r.skyLikeFraction > 0.9f)
+    }
+
 }
