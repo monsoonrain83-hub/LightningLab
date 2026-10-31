@@ -48,7 +48,7 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
-enum class Screen { HOME, DETECT, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
+enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
 data class Seg(val startMs: Long, val endMs: Long, val uri: Uri? = null)
@@ -369,8 +369,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun selectAll() { for (i in items.indices) items[i] = items[i].copy(order = i + 1) }
     fun autoSelect() {
         clearSel()
-        items.indices.sortedByDescending { items[it].event.score }.take(6).forEachIndexed { r, i ->
-            items[i] = items[i].copy(order = r + 1)
+        // Keep the actual ranked indices. The previous implementation ranked indices but
+        // then wrote to items[rank], which selected the first N cards instead of the best N.
+        val rankedIndices = items.indices
+            .sortedWith(compareByDescending<Int> { items[it].event.score }
+                .thenBy { items[it].event.bestMs })
+            .take(6)
+        rankedIndices.forEachIndexed { rank, itemIndex ->
+            items[itemIndex] = items[itemIndex].copy(order = rank + 1)
         }
     }
 

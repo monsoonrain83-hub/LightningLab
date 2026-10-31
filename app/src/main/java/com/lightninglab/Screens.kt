@@ -39,80 +39,61 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.VideoView
+import android.net.Uri
 import kotlin.math.roundToInt
 
 @Composable
 fun Home(vm: MainVM) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Box(Modifier.fillMaxWidth().height(158.dp)) {
-            androidx.compose.ui.viewinterop.AndroidView(
-                factory = { c -> android.widget.VideoView(c).apply {
-                    setVideoURI(android.net.Uri.parse("android.resource://${c.packageName}/${R.raw.lightning_header}"))
-                    setOnPreparedListener { player -> player.isLooping = true; player.setVolume(0f, 0f); start() }
-                } },
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0x99070D18), Color(0x22070D18), Color(0xAA070D18)))))
-            Column(Modifier.align(Alignment.CenterStart).padding(horizontal = 20.dp)) {
-                Text(buildAnnotatedString {
-                    withStyle(SpanStyle(color = Color.White)) { append("Lightning") }
-                    withStyle(SpanStyle(color = Storm.bolt)) { append("Lab") }
-                }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("هواشناسی تصویری و ابزارهای ویرایش", color = Color.White.copy(alpha = .88f), style = MaterialTheme.typography.bodySmall)
-            }
-            Row(Modifier.align(Alignment.TopEnd).padding(6.dp)) { LangMenu() }
-        }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("ابزارهای اصلی", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            val tiles = listOf(
-                Triple("تشخیص صاعقه", Ic.BOLT, Screen.DETECT),
-                Triple("ادیت عکس", Ic.PHOTO, Screen.PHOTO),
-                Triple("ادیت ویدئو", Ic.VIDEO, Screen.VIDEO),
-                Triple("تشخیص ابر و پدیده", Ic.CLOUD, Screen.WEATHER)
-            )
-            tiles.chunked(2).forEach { rowItems ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    rowItems.forEach { (label, icon, screen) ->
-                        Card(onClick = { vm.screen = screen }, modifier = Modifier.weight(1f).height(116.dp),
-                            colors = CardDefaults.cardColors(containerColor = Storm.surfaceHi),
-                            border = BorderStroke(1.dp, Storm.hairline), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.Center,
-                                horizontalAlignment = Alignment.CenterHorizontally) {
-                                AppIcon(icon, Storm.bolt, Modifier.size(30.dp), filled = true)
-                                Spacer(Modifier.height(9.dp))
-                                Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface)
-                            }
-                        }
-                    }
-                }
-            }
-            Text("ابزارهای پردازش تصویر و ویدئو به‌صورت آفلاین روی دستگاه اجرا می‌شوند.",
-                style = MaterialTheme.typography.bodySmall, color = Storm.muted)
-            TextButton(onClick = { vm.screen = Screen.ABOUT }) { Text("درباره برنامه") }
-        }
-    }
-}
-
-@Composable
-fun DetectionScreen(vm: MainVM) {
+    var heroPlayer by remember { mutableStateOf<VideoView?>(null) }
+    DisposableEffect(Unit) { onDispose { heroPlayer?.stopPlayback() } }
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.prepare(u)
     }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) vm.loadPhoto(u)
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBar("تشخیص صاعقه", onBack = { vm.screen = Screen.HOME })
-        Box {
-            LightningHero(Modifier.fillMaxWidth().height(150.dp))
+        Box(Modifier.fillMaxWidth().height(158.dp)) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        heroPlayer = this
+                        setVideoURI(Uri.parse("android.resource://${ctx.packageName}/${R.raw.lightning_hero}"))
+                        setOnPreparedListener { player -> player.isLooping = true; start() }
+                    }
+                },
+                update = { view -> if (!view.isPlaying) view.start() }
+            )
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xAA080B12), Color(0x22080B12), Color(0x88080B12)))))
             Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) { LangMenu() }
-            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 18.dp)) {
+            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 12.dp)) {
                 Text(buildAnnotatedString {
-                    withStyle(SpanStyle(color = Storm.text)) { append("Lightning") }
+                    withStyle(SpanStyle(color = Color.White)) { append("Lightning") }
                     withStyle(SpanStyle(color = Storm.bolt)) { append("Lab") }
-                }, style = MaterialTheme.typography.displaySmall)
-                Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.bodyMedium, color = Storm.muted)
+                }, style = MaterialTheme.typography.headlineLarge)
+                Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.bodySmall, color = Color.White)
             }
         }
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(stringResource(R.string.main_tools), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeTool(Ic.BOLT, stringResource(R.string.tool_lightning), Modifier.weight(1f)) {
+                        pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                    }
+                    HomeTool(Ic.PHOTO, stringResource(R.string.tool_photo), Modifier.weight(1f)) {
+                        pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    HomeTool(Ic.VIDEO, stringResource(R.string.tool_video), Modifier.weight(1f)) { vm.screen = Screen.VIDEO }
+                    HomeTool(Ic.CLOUD, stringResource(R.string.tool_cloud), Modifier.weight(1f)) { vm.screen = Screen.WEATHER }
+                }
+            }
+            Text(stringResource(R.string.home_tools_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.sensitivity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -128,15 +109,25 @@ fun DetectionScreen(vm: MainVM) {
                 }
             }
             InfoText(vm)
-            Button(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
-                enabled = !vm.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                AppIcon(Ic.BOLT, Storm.onBolt, Modifier.size(20.dp), filled = true)
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
-            }
-            Text(stringResource(R.string.detect_sub), style = MaterialTheme.typography.bodySmall, color = Storm.muted,
-                modifier = Modifier.fillMaxWidth())
-            TextButton(onClick = { vm.screen = Screen.ABOUT }) { Text(stringResource(R.string.about), color = Storm.muted) }
+            TextButton(onClick = { vm.screen = Screen.ABOUT }) { Text(stringResource(R.string.about), color = Storm.bolt) }
+        }
+    }
+}
+
+@Composable
+private fun HomeTool(ic: Ic, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(
+        modifier = modifier.height(118.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Storm.surfaceHi),
+        border = BorderStroke(1.dp, Storm.hairline)
+    ) {
+        Column(Modifier.fillMaxSize().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            AppIcon(ic, Storm.bolt, Modifier.size(30.dp), filled = true)
+            Spacer(Modifier.height(10.dp))
+            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
+                color = Storm.text, maxLines = 2)
         }
     }
 }
@@ -446,14 +437,22 @@ fun VideoEditor(vm: MainVM) {
             OutlinedButton(onClick = { vv?.start() }) { Text(stringResource(R.string.play)) }
             Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = { vv?.pause() }) { Text(stringResource(R.string.pause)) }
-            OutlinedButton(onClick = {
-                val activity = micCtx as? android.app.Activity
-                if (android.os.Build.VERSION.SDK_INT >= 26 && activity != null) {
-                    val params = android.app.PictureInPictureParams.Builder()
-                        .setAspectRatio(android.util.Rational(16, 9)).build()
-                    activity.enterPictureInPictureMode(params)
-                }
-            }) { Text("PIP") }
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                OutlinedButton(onClick = {
+                    val activity = micCtx as? android.app.Activity
+                    val w = vm.videoW.coerceAtLeast(16); val h = vm.videoH.coerceAtLeast(9)
+                    try {
+                        activity?.enterPictureInPictureMode(
+                            android.app.PictureInPictureParams.Builder()
+                                .setAspectRatio(android.util.Rational(w, h).let { r ->
+                                    val max = 2.39f; val min = 1f / 2.39f
+                                    if (r.toFloat() > max) android.util.Rational(239, 100)
+                                    else if (r.toFloat() < min) android.util.Rational(100, 239) else r
+                                })
+                                .build())
+                    } catch (_: Exception) { }
+                }) { Text(stringResource(R.string.pip_mode)) }
+            }
         }
         Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
             shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), border = BorderStroke(1.dp, Storm.hairline)) {

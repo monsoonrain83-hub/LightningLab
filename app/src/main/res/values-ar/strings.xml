@@ -209,4 +209,18 @@
     <string name="hsl_purple">بنفسجي</string>
     <string name="hsl_hue">الصبغة</string>
     <string name="hsl_lum">السطوع</string>
+    <string name="main_tools">الأدوات الرئيسية</string>
+    <string name="tool_lightning">كشف البرق</string>
+    <string name="tool_photo">تحرير الصور</string>
+    <string name="tool_video">تحرير الفيديو</string>
+    <string name="tool_cloud">السحب والظواهر الجوية</string>
+    <string name="home_tools_note">تعمل أدوات الصور والفيديو محلياً على جهازك.</string>
+    <string name="wx_frame_good">فحص جودة الصورة: لا يوجد تحذير كبير بشأن محتوى السماء.</string>
+    <string name="wx_frame_check">تحذير جودة الصورة: قد تؤثر صبغة اللون أو العناصر غير السماوية في التقدير.</string>
+    <string name="wx_frame_low_sky">نسبة السماء الظاهرة منخفضة. قص الصورة لتشمل السماء غالباً ثم أعد التحليل.</string>
+    <string name="wx_sky_fraction">نسبة البكسلات الشبيهة بالسماء (تقدير استدلالي): %1$d%%</string>
+    <string name="wx_model_score_note">درجات النموذج قيم مطبّعة خام وليست احتمالات معايرة أو ثقة مؤكدة.</string>
+    <string name="wx_model_ready">تم تحميل نموذج السحب ويعمل دون اتصال على الجهاز.</string>
+    <string name="wx_model_not_ready">لم يتم تثبيت نموذج مدرّب للسحب؛ التقدير الحالي استدلالي فقط.</string>
+    <string name="pip_mode">صورة داخل صورة</string>
 </resources>

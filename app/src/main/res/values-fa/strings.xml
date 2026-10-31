@@ -217,4 +217,11 @@
     <string name="wx_model_ready">مدل ابر روی گوشی بارگذاری شده و به‌صورت آفلاین اجرا می‌شود.</string>
     <string name="wx_model_not_ready">مدل آموزش‌دیده‌ای نصب نشده است؛ تخمین نوع ابر فعلی صرفاً ابتکاری است.</string>
 
+    <string name="main_tools">ابزارهای اصلی</string>
+    <string name="tool_lightning">تشخیص صاعقه</string>
+    <string name="tool_photo">ادیت عکس</string>
+    <string name="tool_video">ادیت ویدئو</string>
+    <string name="tool_cloud">تشخیص ابر و پدیده</string>
+    <string name="home_tools_note">ابزارهای پردازش تصویر و ویدئو به‌صورت آفلاین روی دستگاه اجرا می‌شوند.</string>
+    <string name="pip_mode">تصویر در تصویر</string>
 </resources>

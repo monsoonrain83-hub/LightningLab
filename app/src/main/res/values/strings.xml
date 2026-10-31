@@ -217,4 +217,11 @@ Rough type guess: %5$s</string>
     <string name="wx_model_ready">On-device cloud model is loaded and runs offline.</string>
     <string name="wx_model_not_ready">No trained cloud model is installed. Current cloud-type estimate is heuristic only.</string>
 
+    <string name="main_tools">Main tools</string>
+    <string name="tool_lightning">Lightning Detection</string>
+    <string name="tool_photo">Photo Editor</string>
+    <string name="tool_video">Video Editor</string>
+    <string name="tool_cloud">Cloud &amp; Weather Phenomena</string>
+    <string name="home_tools_note">Image and video tools run locally on your device.</string>
+    <string name="pip_mode">Picture-in-picture</string>
 </resources>
