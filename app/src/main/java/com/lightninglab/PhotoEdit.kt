@@ -30,7 +30,8 @@ data class PhotoParams(
     val sharpness: Float = 0f,   // 0..1 unsharp mask
     val scurve: Float = 0f,      // -1..1 S-curve contrast (tone curve)
     val denoise: Float = 0f,     // 0..1 luminance noise reduction
-    val vibrance: Float = 0f     // -1..1 boosts weak colours more than strong ones
+    val vibrance: Float = 0f,    // -1..1 boosts weak colours more than strong ones
+    val hsl: List<Float> = List(21) { 0f }   // [hue x7][sat x7][lum x7]; bands red..purple
 )
 
 /** One removal mark: x,y normalised to image width/height, r normalised to image WIDTH. */
@@ -62,7 +63,7 @@ object PhotoEdit {
         cm.postConcat(ColorMatrix().apply { setSaturation(1f + p.saturation) })
         val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
         Canvas(out).drawBitmap(b, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(cm) })
-        if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f) return out
+        if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f && p.hsl.all { it == 0f }) return out
         val res = tonePass(out, p)
         out.recycle()
         return res
@@ -83,6 +84,10 @@ object PhotoEdit {
         val rBig = max(8, w / 60); val rSmall = 2
         val band = 512; val m = if (needTone) rBig else rSmall
         val twoPi = 2.0 * PI
+        val hslOn = p.hsl.any { it != 0f }
+        val hueA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(it) { 0f } }
+        val satA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(Hsl.BANDS + it) { 0f } }
+        val lumA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(2 * Hsl.BANDS + it) { 0f } }
         val lut = IntArray(256) { i ->
             val v = i / 255.0
             (255.0 * (v - p.scurve * sin(twoPi * v) / twoPi)).roundToInt().coerceIn(0, 255)
@@ -118,6 +123,10 @@ object PhotoEdit {
                     r = (lum + (r - lum) * f).toInt().coerceIn(0, 255)
                     g = (lum + (g - lum) * f).toInt().coerceIn(0, 255)
                     b = (lum + (b - lum) * f).toInt().coerceIn(0, 255)
+                }
+                if (hslOn) {
+                    val a = Hsl.adjust((0xFF shl 24) or (r shl 16) or (g shl 8) or b, hueA, satA, lumA)
+                    r = (a shr 16) and 255; g = (a shr 8) and 255; b = a and 255
                 }
                 if (p.scurve != 0f) { r = lut[r]; g = lut[g]; b = lut[b] }
                 out[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b

@@ -47,3 +47,8 @@
 - Projects: the editor state (segments, extra clips, music/voice, filter, speed, crop, flips, rotation, text/sticker settings) is saved as JSON; the source video and extra files are COPIED into app storage because photo-picker URIs do not survive restarts. The JSON codec has a JVM round-trip test (needs `org.json:json` as a test dependency).
 - Not built: transitions between clips (Media3 1.3.1 has no transition API; a custom compositor would be needed).
 - Untested risks: MediaRecorder on specific devices, copying large videos (time/space), reopening a project whose files were deleted.
+
+## Section 3 (r10): per-track volume and HSL - NOT compiled, NOT run on a device
+- Volume tool: three gains (original audio, music/effect, voice recording), 0-200 %. Implemented as a small `VolumeProcessor` on Media3's BaseAudioProcessor (16-bit PCM only; hard clipping). Sample maths unit-tested (`GainTest`). If an input is not 16-bit PCM the processor throws UnhandledAudioFormatException and the export fails with an error message - unverified on real files.
+- Photo HSL: seven colour bands (red..purple), hue/saturation/luminance each. Maths checked with a Python port of the unit tests (zero = identity, grey untouched, band isolation, blue +hue moves toward purple). Neighbouring bands blend, so a single band never acts completely alone.
+- Not built in this section: transitions (no API in Media3 1.3.1), photo project saving, UI screenshots review (needs real screenshots of the running app).

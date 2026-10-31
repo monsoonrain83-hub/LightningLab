@@ -194,4 +194,19 @@ Rough type guess: %5$s</string>
     <string name="saving_project">Saving project...</string>
     <string name="project_saved">Project saved</string>
     <string name="close_dialog">Close</string>
+    <string name="tool_volume">Volume</string>
+    <string name="vol_original">Original audio</string>
+    <string name="vol_music">Music / effect</string>
+    <string name="vol_voice">Voice recording</string>
+    <string name="vol_note">100 % = unchanged. Values above 100 % can distort. At a changed speed the original audio is removed.</string>
+    <string name="tab_hsl">HSL</string>
+    <string name="hsl_red">Red</string>
+    <string name="hsl_orange">Orange</string>
+    <string name="hsl_yellow">Yellow</string>
+    <string name="hsl_green">Green</string>
+    <string name="hsl_aqua">Aqua</string>
+    <string name="hsl_blue">Blue</string>
+    <string name="hsl_purple">Purple</string>
+    <string name="hsl_hue">Hue</string>
+    <string name="hsl_lum">Luminance</string>
 </resources>

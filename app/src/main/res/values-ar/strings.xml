@@ -194,4 +194,19 @@
     <string name="saving_project">جارٍ حفظ المشروع...</string>
     <string name="project_saved">تم حفظ المشروع</string>
     <string name="close_dialog">إغلاق</string>
+    <string name="tool_volume">مستوى الصوت</string>
+    <string name="vol_original">الصوت الأصلي</string>
+    <string name="vol_music">موسيقى / مؤثر</string>
+    <string name="vol_voice">التسجيل الصوتي</string>
+    <string name="vol_note">100% = بدون تغيير. قد تسبب القيم فوق 100% تشويهاً. عند تغيير السرعة يُحذف الصوت الأصلي.</string>
+    <string name="tab_hsl">HSL</string>
+    <string name="hsl_red">أحمر</string>
+    <string name="hsl_orange">برتقالي</string>
+    <string name="hsl_yellow">أصفر</string>
+    <string name="hsl_green">أخضر</string>
+    <string name="hsl_aqua">سماوي</string>
+    <string name="hsl_blue">أزرق</string>
+    <string name="hsl_purple">بنفسجي</string>
+    <string name="hsl_hue">الصبغة</string>
+    <string name="hsl_lum">السطوع</string>
 </resources>

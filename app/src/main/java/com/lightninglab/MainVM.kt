@@ -16,6 +16,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Effect
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
@@ -100,6 +101,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var vContrast by mutableStateOf(0f)
     var vRotate by mutableStateOf(0)
     var overlayText by mutableStateOf("")
+    var volOrig by mutableStateOf(1f)
+    var volMusic by mutableStateOf(1f)
+    var volVoice by mutableStateOf(1f)
     var videoW by mutableStateOf(0)
     var videoH by mutableStateOf(0)
     var vFilter by mutableStateOf(0)
@@ -530,7 +534,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     File(dir, "project.json").writeText(ProjectCodec.encode(ProjectData(
                         name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
                         vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
-                        sticker, stickerSize, stickerPos)))
+                        sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice)))
                 }
                 info(R.string.project_saved)
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "save") } finally { busy = false }
@@ -551,6 +555,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
             overlayText = p.text; textColor = p.textColor; textSize = p.textSize; textPos = p.textPos; textBg = p.textBg
             sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
+            volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
             screen = Screen.VIDEO
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
     }
@@ -596,16 +601,17 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         MediaItem.ClippingConfiguration.Builder()
                             .setStartPositionMs(s.startMs).setEndPositionMs(s.endMs).build()).build()
                     EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
-                        .setEffects(Effects(emptyList(), fx)).build()
+                        .setEffects(Effects(if (volOrig != 1f) listOf<AudioProcessor>(VolumeProcessor(volOrig)) else emptyList(), fx)).build()
                 }
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
                 val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
-                for (au in listOfNotNull(music, voice)) {
+                for ((au, vol) in listOfNotNull(music?.let { it to volMusic }, voice?.let { it to volVoice })) {
                     val end = min(total, audioDur(au, total))
                     val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
-                    seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true).build()))
+                    seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true)
+                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()))
                 }
                 val done = CompletableDeferred<Throwable?>()
                 val t = Transformer.Builder(app)

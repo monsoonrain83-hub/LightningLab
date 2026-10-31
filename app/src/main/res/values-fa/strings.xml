@@ -194,4 +194,19 @@
     <string name="saving_project">در حال ذخیره‌ی پروژه...</string>
     <string name="project_saved">پروژه ذخیره شد</string>
     <string name="close_dialog">بستن</string>
+    <string name="tool_volume">بلندی صدا</string>
+    <string name="vol_original">صدای اصلی</string>
+    <string name="vol_music">موسیقی / افکت</string>
+    <string name="vol_voice">صدای ضبط‌شده</string>
+    <string name="vol_note">۱۰۰٪ یعنی بدون تغییر. مقدار بالای ۱۰۰٪ ممکن است اعوجاج بدهد. با تغییر سرعت، صدای اصلی حذف می‌شود.</string>
+    <string name="tab_hsl">HSL</string>
+    <string name="hsl_red">قرمز</string>
+    <string name="hsl_orange">نارنجی</string>
+    <string name="hsl_yellow">زرد</string>
+    <string name="hsl_green">سبز</string>
+    <string name="hsl_aqua">فیروزه‌ای</string>
+    <string name="hsl_blue">آبی</string>
+    <string name="hsl_purple">بنفش</string>
+    <string name="hsl_hue">رنگ‌مایه</string>
+    <string name="hsl_lum">روشنایی</string>
 </resources>

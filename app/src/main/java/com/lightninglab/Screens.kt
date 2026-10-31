@@ -185,7 +185,7 @@ fun Results(vm: MainVM) {
 private val aspects = listOf("Original" to 0f, "1:1" to 1f, "4:5" to 0.8f, "4:3" to 4f / 3f,
     "3:2" to 1.5f, "16:9" to 16f / 9f, "9:16" to 9f / 16f)
 
-private enum class PTab { LIGHT, COLOR, DETAIL, CROP, REMOVE, EXPORT }
+private enum class PTab { LIGHT, COLOR, HSL, DETAIL, CROP, REMOVE, EXPORT }
 
 @Composable
 fun PhotoEditor(vm: MainVM) {
@@ -237,7 +237,7 @@ fun PhotoEditor(vm: MainVM) {
             shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
             border = BorderStroke(1.dp, Storm.hairline)) {
             Column(Modifier.padding(top = 8.dp)) {
-                Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_detail, R.string.tab_crop,
+                Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_hsl, R.string.tab_detail, R.string.tab_crop,
                     R.string.tab_remove, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())
@@ -258,6 +258,20 @@ fun PhotoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.saturation), p.saturation, -1f..1f, vm::commit) { vm.params = p.copy(saturation = it) }
                                     Param(stringResource(R.string.vibrance), p.vibrance, -1f..1f, vm::commit) { vm.params = p.copy(vibrance = it) }
                                     Param(stringResource(R.string.warmth), p.warmth, -1f..1f, vm::commit) { vm.params = p.copy(warmth = it) }
+                                }
+                                PTab.HSL -> {
+                                    var band by remember { mutableStateOf(0) }
+                                    ChoiceRow(listOf(R.string.hsl_red, R.string.hsl_orange, R.string.hsl_yellow, R.string.hsl_green,
+                                        R.string.hsl_aqua, R.string.hsl_blue, R.string.hsl_purple).map { stringResource(it) }, band) { band = it }
+                                    Param(stringResource(R.string.hsl_hue), p.hsl[band], -1f..1f, vm::commit) {
+                                        vm.params = p.copy(hsl = p.hsl.toMutableList().also { l -> l[band] = it })
+                                    }
+                                    Param(stringResource(R.string.saturation), p.hsl[Hsl.BANDS + band], -1f..1f, vm::commit) {
+                                        vm.params = p.copy(hsl = p.hsl.toMutableList().also { l -> l[Hsl.BANDS + band] = it })
+                                    }
+                                    Param(stringResource(R.string.hsl_lum), p.hsl[2 * Hsl.BANDS + band], -1f..1f, vm::commit) {
+                                        vm.params = p.copy(hsl = p.hsl.toMutableList().also { l -> l[2 * Hsl.BANDS + band] = it })
+                                    }
                                 }
                                 PTab.DETAIL -> {
                                     Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }
@@ -309,7 +323,7 @@ fun PhotoEditor(vm: MainVM) {
     }
 }
 
-private enum class VTool { TRIM, MUSIC, FILTER, TEXT, STICKER, SPEED, CROP, ROTATE, FLIP, ADJUST, EXPORT }
+private enum class VTool { TRIM, MUSIC, VOLUME, FILTER, TEXT, STICKER, SPEED, CROP, ROTATE, FLIP, ADJUST, EXPORT }
 
 private val fxItems = listOf(
     SoundFx.Kind.RUMBLE to R.string.fx_thunder_rumble, SoundFx.Kind.CRACK to R.string.fx_thunder_crack,
@@ -474,6 +488,12 @@ fun VideoEditor(vm: MainVM) {
                                         }
                                     }
                                 }
+                                VTool.VOLUME -> {
+                                    Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f) { vm.volOrig = it }
+                                    Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f) { vm.volMusic = it }
+                                    Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f) { vm.volVoice = it }
+                                    Text(stringResource(R.string.vol_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                }
                                 VTool.FILTER -> {
                                     ChoiceRow(VideoFx.filters.map { stringResource(it.nameRes) }, vm.vFilter) { vm.vFilter = it }
                                     Text(stringResource(R.string.filter_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
@@ -555,7 +575,7 @@ fun VideoEditor(vm: MainVM) {
                     horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     val tools = listOf(
                         Triple(VTool.TRIM, Ic.SCISSORS, R.string.tool_trim), Triple(VTool.MUSIC, Ic.MUSIC, R.string.tool_music),
-                        Triple(VTool.FILTER, Ic.FILTER, R.string.tool_filter), Triple(VTool.TEXT, Ic.TEXT, R.string.tool_text),
+                        Triple(VTool.VOLUME, Ic.VOLUME, R.string.tool_volume), Triple(VTool.FILTER, Ic.FILTER, R.string.tool_filter), Triple(VTool.TEXT, Ic.TEXT, R.string.tool_text),
                         Triple(VTool.STICKER, Ic.STICKER, R.string.tool_sticker), Triple(VTool.SPEED, Ic.SPEED, R.string.tool_speed),
                         Triple(VTool.CROP, Ic.CROP, R.string.tool_crop), Triple(VTool.ROTATE, Ic.ROTATE, R.string.tool_rotate),
                         Triple(VTool.FLIP, Ic.FLIP, R.string.tool_flip), Triple(VTool.ADJUST, Ic.ADJUST, R.string.tool_adjust),

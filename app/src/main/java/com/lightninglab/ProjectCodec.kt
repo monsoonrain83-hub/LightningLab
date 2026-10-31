@@ -12,7 +12,8 @@ data class ProjectData(
     val filter: Int, val speed: Float, val brightness: Float, val contrast: Float,
     val rotate: Int, val flipH: Boolean, val flipV: Boolean, val crop: Float,
     val text: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
-    val sticker: String?, val stickerSize: Int, val stickerPos: Int
+    val sticker: String?, val stickerSize: Int, val stickerPos: Int,
+    val volOrig: Float = 1f, val volMusic: Float = 1f, val volVoice: Float = 1f
 )
 
 object ProjectCodec {
@@ -30,6 +31,7 @@ object ProjectCodec {
         o.put("crop", p.crop.toDouble())
         o.put("text", p.text).put("tc", p.textColor).put("ts", p.textSize).put("tp", p.textPos).put("tb", p.textBg)
         o.put("stk", p.sticker ?: "").put("ss", p.stickerSize).put("sp", p.stickerPos)
+        o.put("vo", p.volOrig.toDouble()).put("vm", p.volMusic.toDouble()).put("vv", p.volVoice.toDouble())
         return o.toString()
     }
 
@@ -49,7 +51,8 @@ object ProjectCodec {
                 o.optDouble("con", 0.0).toFloat(), o.optInt("rot", 0), o.optBoolean("fh", false), o.optBoolean("fv", false),
                 o.optDouble("crop", 0.0).toFloat(), o.optString("text", ""), o.optInt("tc", -1), o.optInt("ts", 1),
                 o.optInt("tp", 1), o.optBoolean("tb", false), o.optString("stk", "").ifEmpty { null },
-                o.optInt("ss", 1), o.optInt("sp", 1))
+                o.optInt("ss", 1), o.optInt("sp", 1),
+                o.optDouble("vo", 1.0).toFloat(), o.optDouble("vm", 1.0).toFloat(), o.optDouble("vv", 1.0).toFloat())
         }
     } catch (e: Exception) { null }
 }
