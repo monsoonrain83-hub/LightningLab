@@ -33,6 +33,7 @@ fun App(vm: MainVM = viewModel()) {
                     Crossfade(targetState = vm.screen, animationSpec = tween(200), label = "screen") { sc ->
                         when (sc) {
                             Screen.HOME -> Home(vm)
+                            Screen.DETECT -> DetectionScreen(vm)
                             Screen.RESULTS -> Results(vm)
                             Screen.ABOUT -> About(vm)
                             Screen.PHOTO -> PhotoEditor(vm)
@@ -42,7 +43,7 @@ fun App(vm: MainVM = viewModel()) {
                         }
                     }
                 }
-                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
+                // Navigation is centralized on the home dashboard.
             }
         }
     }

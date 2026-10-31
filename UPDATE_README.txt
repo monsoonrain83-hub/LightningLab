@@ -1,14 +1,15 @@
-LightningLab update package
+LightningLab update - 2026-10-31
 
-Upload this file's companion update.zip to the repository root using the existing GitHub workflow.
-The workflow in .github/workflows/build.yml extracts update.zip, copies the project files into their normal paths, commits the applied update, and builds the debug APK.
+Implemented in this update:
+- Replaced the four-item bottom navigation with a centered 2x2 home dashboard:
+  تشخیص صاعقه / ادیت عکس / ادیت ویدئو / تشخیص ابر و پدیده
+- Added a dedicated lightning-detection entry screen, retaining the existing detector workflow.
+- Reduced the home hero height and replaced the static drawn lightning hero with a muted, looping video header made by crossfading the two supplied clips.
+- Added Android Picture-in-Picture entry control to the video editor and enabled PiP support in the manifest.
 
-This package is a complete project snapshot rooted at LightningLab-update/. It is designed for the existing update.zip workflow.
+Important implementation status:
+- The supplied project already has basic photo and video editing, cropping presets, text overlays, music, filters, trim segments and Media3 export.
+- This update does NOT yet implement a draggable freeform crop UI, user-imported fonts, a full multi-track timeline, per-segment keyframes/effects/audio automation, comprehensive export presets, or an embedded trained cloud model. These require additional engineering and validation; they must not be represented as complete.
+- The header is a pre-rendered silent MP4 asset. Both source videos are retained outside the APK; the composed header asset is app/src/main/res/raw/lightning_header.mp4.
 
-After upload:
-1. Open the repository's Actions tab.
-2. Open the newest Build APK run.
-3. Wait for the run to finish successfully.
-4. Download the LightningLab-debug-apk artifact.
-
-If the build fails, share the first Kotlin/Gradle error beginning with 'e:' or the first 'What went wrong' section.
+Build: GitHub Actions workflow builds the debug APK with Gradle 8.7 and Java 17.
