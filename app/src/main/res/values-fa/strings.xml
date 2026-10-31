@@ -86,7 +86,7 @@
 شاخص بافت: %3$s
 روشنایی ابر: %4$d از ۲۵۵
 حدس تقریبی نوع: %5$s</string>
-    <string name="wx_disclaimer">برآورد قانون‌محور و اعتبارسنجی‌نشده. پوشش ابر با نسبت قرمز به آبی محاسبه می‌شود؛ نوع ابر فقط حدس تقریبی است و طبقه‌بندی WMO نیست.</string>
+    <string name="wx_disclaimer">برآورد تصویری ابتکاری و اعتبارسنجی‌نشده است. برچسب نوع ظاهری، طبقه‌بندی جنس ابر بر اساس WMO نیست. امتیاز مدل نیز اطمینان کالیبره‌شده محسوب نمی‌شود.</string>
     <string name="kind_clear">آسمان صاف</string>
     <string name="kind_thin">ابر نازک و رگه‌ای (شبیه Ci/Cc)</string>
     <string name="kind_cumuliform">ابر توده‌ای (شبیه Cu)</string>
@@ -108,7 +108,7 @@
     <string name="add_clip">افزودن ویدئوی دیگر</string>
     <string name="overlay_text">متن روی ویدئو (اختیاری)</string>
     <string name="save_infographic">ذخیره‌ی اینفوگرافی</string>
-    <string name="wx_model_top">پیش‌بینی مدل (۳ مورد اول):</string>
+    <string name="wx_model_top">امتیازهای مدل (۳ مورد اول):</string>
     <string name="wx_genus_pick">جنس ابر (برای اصلاح لمس کنید):</string>
     <string name="wx_features_pick">برچسب‌های ناظر: ویژگی‌ها، گونه‌ها و گوناگونی‌ها (خودکار تشخیص داده نمی‌شوند):</string>
     <string name="wx_genus">جنس: %1$s</string>
@@ -209,4 +209,12 @@
     <string name="hsl_purple">بنفش</string>
     <string name="hsl_hue">رنگ‌مایه</string>
     <string name="hsl_lum">روشنایی</string>
+    <string name="wx_frame_good">بررسی تصویر: هشدار مهمی درباره سهم آسمان دیده نشد.</string>
+    <string name="wx_frame_check">هشدار کیفیت تصویر: ته‌رنگ شدید یا وجود بخش‌های غیرآسمانی ممکن است بر برآورد اثر بگذارد.</string>
+    <string name="wx_frame_low_sky">سهم آسمان در تصویر کم است. تصویر را طوری برش دهید که بیشتر آن آسمان باشد و دوباره تحلیل کنید.</string>
+    <string name="wx_sky_fraction">سهم پیکسل‌های آسمان‌مانند (ابتکاری): %1$d%%</string>
+    <string name="wx_model_score_note">امتیازها خروجی نرمال‌شده مدل هستند؛ احتمال کالیبره‌شده یا اطمینان تأییدشده نیستند.</string>
+    <string name="wx_model_ready">مدل ابر روی گوشی بارگذاری شده و به‌صورت آفلاین اجرا می‌شود.</string>
+    <string name="wx_model_not_ready">مدل آموزش‌دیده‌ای نصب نشده است؛ تخمین نوع ابر فعلی صرفاً ابتکاری است.</string>
+
 </resources>

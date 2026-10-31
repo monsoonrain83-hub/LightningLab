@@ -86,7 +86,7 @@ All processing happens on this device. The app does not request the internet per
 Texture index: %3$s
 Cloud brightness: %4$d/255
 Rough type guess: %5$s</string>
-    <string name="wx_disclaimer">Rule-based estimate, not validated. Cover uses a red/blue ratio; the type is only a rough guess, not a WMO classification.</string>
+    <string name="wx_disclaimer">Heuristic image estimate, not validated. The visual type label is not a WMO cloud-genus classification. Model scores are not calibrated confidence.</string>
     <string name="kind_clear">clear sky</string>
     <string name="kind_thin">thin streaky cloud (Ci/Cc-like)</string>
     <string name="kind_cumuliform">heaped cloud (Cu-like)</string>
@@ -108,7 +108,7 @@ Rough type guess: %5$s</string>
     <string name="add_clip">Add another video</string>
     <string name="overlay_text">Text on video (optional)</string>
     <string name="save_infographic">Save infographic</string>
-    <string name="wx_model_top">Model prediction (top 3):</string>
+    <string name="wx_model_top">Model scores (top 3):</string>
     <string name="wx_genus_pick">Cloud genus (tap to correct):</string>
     <string name="wx_features_pick">Observer tags - features, species, varieties (not auto-detected):</string>
     <string name="wx_genus">Genus: %1$s</string>
@@ -209,4 +209,12 @@ Rough type guess: %5$s</string>
     <string name="hsl_purple">Purple</string>
     <string name="hsl_hue">Hue</string>
     <string name="hsl_lum">Luminance</string>
+    <string name="wx_frame_good">Image quality check: no major sky-content warning.</string>
+    <string name="wx_frame_check">Image quality warning: colour cast or possible non-sky content may affect the estimate.</string>
+    <string name="wx_frame_low_sky">Low apparent sky content. Crop the image to include mostly sky and analyze again.</string>
+    <string name="wx_sky_fraction">Sky-like pixel share (heuristic): %1$d%%</string>
+    <string name="wx_model_score_note">Scores are raw normalized model outputs, not calibrated probabilities or verified confidence.</string>
+    <string name="wx_model_ready">On-device cloud model is loaded and runs offline.</string>
+    <string name="wx_model_not_ready">No trained cloud model is installed. Current cloud-type estimate is heuristic only.</string>
+
 </resources>
