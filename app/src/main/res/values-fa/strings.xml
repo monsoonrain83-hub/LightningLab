@@ -179,4 +179,19 @@
     <string name="copy_segment">کپی</string>
     <string name="delete_segment">حذف</string>
     <string name="crop_unknown_size">اندازه‌ی ویدئو نامشخص است؛ ممکن است کراپ اعمال نشود.</string>
+    <string name="rec_start">ضبط صدا</string>
+    <string name="rec_stop">توقف</string>
+    <string name="rec_running">در حال ضبط...</string>
+    <string name="rec_remove">حذف صدا</string>
+    <string name="rec_denied">دسترسی میکروفون رد شد</string>
+    <string name="rec_added">صدای ضبط‌شده اضافه شد</string>
+    <string name="rec_too_short">ضبط خیلی کوتاه بود یا شکست خورد</string>
+    <string name="projects_title">پروژه‌ها</string>
+    <string name="save_project">ذخیره‌ی پروژه‌ی فعلی</string>
+    <string name="project_copy_note">ذخیره، فایل‌های ویدئو را داخل اپ کپی می‌کند، پس به فضای خالی نیاز دارد.</string>
+    <string name="no_projects">هنوز پروژه‌ای ذخیره نشده</string>
+    <string name="open_project">باز کردن</string>
+    <string name="saving_project">در حال ذخیره‌ی پروژه...</string>
+    <string name="project_saved">پروژه ذخیره شد</string>
+    <string name="close_dialog">بستن</string>
 </resources>

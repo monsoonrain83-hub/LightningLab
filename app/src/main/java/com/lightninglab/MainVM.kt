@@ -4,7 +4,9 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
+import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.text.SpannableString
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -43,6 +45,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.min
 
 enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
@@ -447,6 +450,122 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
+    // ---- voice-over recording ----
+    var voice by mutableStateOf<Uri?>(null)
+    var recording by mutableStateOf(false)
+    private var recorder: MediaRecorder? = null
+    private var recFile: File? = null
+    fun micDenied() = info(R.string.rec_denied)
+    fun startRecording() {
+        if (recording) return
+        try {
+            val f = File(app.cacheDir, "voice_" + System.currentTimeMillis() + ".m4a")
+            @Suppress("DEPRECATION")
+            val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(app) else MediaRecorder()
+            r.setAudioSource(MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setAudioEncodingBitRate(128000); r.setAudioSamplingRate(44100)
+            r.setOutputFile(f.absolutePath)
+            r.prepare(); r.start()
+            recorder = r; recFile = f; recording = true
+        } catch (e: Exception) {
+            try { recorder?.release() } catch (x: Exception) { }
+            recorder = null; recording = false
+            info(R.string.error_generic, e.message ?: "mic")
+        }
+    }
+    fun stopRecording() {
+        val r = recorder ?: return
+        var ok = true
+        try { r.stop() } catch (e: RuntimeException) { ok = false }
+        try { r.release() } catch (e: Exception) { }
+        recorder = null; recording = false
+        val f = recFile; recFile = null
+        if (ok && f != null && f.exists() && f.length() > 1000) { voice = Uri.fromFile(f); info(R.string.rec_added) }
+        else { f?.delete(); info(R.string.rec_too_short) }
+    }
+    override fun onCleared() {
+        try { recorder?.release() } catch (e: Exception) { }
+        super.onCleared()
+    }
+
+    // ---- video projects (the source files are COPIED into app storage: picker URIs do not survive restarts) ----
+    class ProjectInfo(val id: String, val name: String, val modified: Long)
+    private val projectsDir get() = File(app.filesDir, "projects")
+
+    fun listProjects(): List<ProjectInfo> =
+        projectsDir.listFiles()?.filter { it.isDirectory && File(it, "project.json").exists() }?.mapNotNull { d ->
+            ProjectCodec.decode(File(d, "project.json").readText())?.let { ProjectInfo(d.name, it.name, File(d, "project.json").lastModified()) }
+        }?.sortedByDescending { it.modified } ?: emptyList()
+
+    private fun copyTo(u: Uri, dest: File) {
+        if (u.scheme == "file") File(u.path!!).copyTo(dest, overwrite = true)
+        else (app.contentResolver.openInputStream(u) ?: throw java.io.IOException("cannot open")).use { i ->
+            dest.outputStream().use { o -> i.copyTo(o) }
+        }
+    }
+
+    fun saveProject() {
+        val main = videoUri ?: return
+        if (busy) return
+        busy = true; stage = R.string.saving_project; progress = 0f
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val dir = File(projectsDir, "p" + System.currentTimeMillis()); dir.mkdirs()
+                    copyTo(main, File(dir, "main.mp4"))
+                    val clips = LinkedHashMap<String, String>()
+                    val segs = segments.map { sg ->
+                        val c = sg.uri?.let { cu ->
+                            clips.getOrPut(cu.toString()) { val n = "clip_" + (clips.size + 1) + ".mp4"; copyTo(cu, File(dir, n)); n }
+                        }
+                        SegData(sg.startMs, sg.endMs, c)
+                    }
+                    val mu = music?.let { m ->
+                        val n = if (m.path?.endsWith(".wav") == true) "music.wav" else "music.audio"; copyTo(m, File(dir, n)); n
+                    }
+                    val vo = voice?.let { copyTo(it, File(dir, "voice.m4a")); "voice.m4a" }
+                    val name = "Project " + java.text.SimpleDateFormat("MM-dd HH:mm", Locale.US).format(java.util.Date())
+                    File(dir, "project.json").writeText(ProjectCodec.encode(ProjectData(
+                        name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
+                        vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
+                        sticker, stickerSize, stickerPos)))
+                }
+                info(R.string.project_saved)
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "save") } finally { busy = false }
+        }
+    }
+
+    fun loadProject(id: String) {
+        try {
+            val dir = File(projectsDir, id)
+            val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
+            loadVideo(Uri.fromFile(File(dir, p.video)))
+            if (videoUri == null) return
+            for (sg in p.segs) segments.add(Seg(sg.startMs, sg.endMs, sg.clip?.let { Uri.fromFile(File(dir, it)) }))
+            segReset(); segPush(); selSeg = -1
+            music = p.music?.let { Uri.fromFile(File(dir, it)) }; musicName = null
+            voice = p.voice?.let { Uri.fromFile(File(dir, it)) }
+            muteOriginal = p.mute; vFilter = p.filter; vSpeed = p.speed; vBrightness = p.brightness; vContrast = p.contrast
+            vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
+            overlayText = p.text; textColor = p.textColor; textSize = p.textSize; textPos = p.textPos; textBg = p.textBg
+            sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
+            screen = Screen.VIDEO
+        } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
+    }
+
+    fun deleteProject(id: String) { File(projectsDir, id).deleteRecursively() }
+
+    /** Duration of an audio file in ms, or `fallback` if unreadable. */
+    private fun audioDur(u: Uri, fallback: Long): Long {
+        val r = MediaMetadataRetriever()
+        return try {
+            r.setDataSource(app, u)
+            r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 } ?: fallback
+        } catch (e: Exception) { fallback } finally { r.release() }
+    }
+
     /** Multi-segment trim, optional mute, optional music (mixed with or replacing original), H.264/AAC MP4. */
     fun exportVideo() {
         val u = videoUri ?: return
@@ -482,9 +601,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
                 val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
-                music?.let { mu ->
-                    val mi = MediaItem.Builder().setUri(mu).setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(total).build()).build()
+                for (au in listOfNotNull(music, voice)) {
+                    val end = min(total, audioDur(au, total))
+                    val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
                     seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true).build()))
                 }
                 val done = CompletableDeferred<Throwable?>()

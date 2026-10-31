@@ -340,12 +340,19 @@ fun VideoEditor(vm: MainVM) {
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) { vm.music = u; vm.musicName = null }
     }
+    val micCtx = androidx.compose.ui.platform.LocalContext.current
+    val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.startRecording() else vm.micDenied()
+    }
+    var showProjects by remember { mutableStateOf(false) }
+    if (showProjects) ProjectsDialog(vm) { showProjects = false }
     var vv by remember { mutableStateOf<android.widget.VideoView?>(null) }
     var range by remember(vm.videoDur) { mutableStateOf(0f..vm.videoDur.toFloat().coerceAtLeast(1f)) }
     var tool by remember { mutableStateOf(VTool.TRIM) }
     val pickReq = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_video), onBack = { vm.screen = Screen.HOME }) {
+            TextButton(onClick = { showProjects = true }) { Text(stringResource(R.string.projects_title)) }
             IconAction(Ic.VIDEO, stringResource(R.string.pick_video), true) { pickReq() }
         }
         val u = vm.videoUri
@@ -449,6 +456,23 @@ fun VideoEditor(vm: MainVM) {
                                         if (vm.music != null) TextButton(onClick = { vm.music = null; vm.musicName = null }) { Text(stringResource(R.string.remove_music)) }
                                     }
                                     vm.musicName?.let { Text(stringResource(R.string.fx_selected, stringResource(it)), style = MaterialTheme.typography.bodySmall, color = Storm.muted) }
+                                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        if (vm.recording) {
+                                            Button(onClick = { vm.stopRecording() },
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                                                Text(stringResource(R.string.rec_stop))
+                                            }
+                                            Text(stringResource(R.string.rec_running), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
+                                        } else {
+                                            OutlinedButton(onClick = {
+                                                if (androidx.core.content.ContextCompat.checkSelfPermission(micCtx, android.Manifest.permission.RECORD_AUDIO) ==
+                                                    android.content.pm.PackageManager.PERMISSION_GRANTED) vm.startRecording()
+                                                else micPerm.launch(android.Manifest.permission.RECORD_AUDIO)
+                                            }) { Text(stringResource(R.string.rec_start)) }
+                                            if (vm.voice != null) TextButton(onClick = { vm.voice = null }) { Text(stringResource(R.string.rec_remove)) }
+                                        }
+                                    }
                                 }
                                 VTool.FILTER -> {
                                     ChoiceRow(VideoFx.filters.map { stringResource(it.nameRes) }, vm.vFilter) { vm.vFilter = it }
@@ -615,4 +639,28 @@ fun PrepareScreen(vm: MainVM) {
             }
         }
     }
+}
+
+
+@Composable
+fun ProjectsDialog(vm: MainVM, onDismiss: () -> Unit) {
+    var list by remember { mutableStateOf(vm.listProjects()) }
+    AlertDialog(onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close_dialog)) } },
+        title = { Text(stringResource(R.string.projects_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.saveProject(); onDismiss() }, enabled = vm.videoUri != null && !vm.busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.save_project)) }
+                Text(stringResource(R.string.project_copy_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                if (list.isEmpty()) Text(stringResource(R.string.no_projects), style = MaterialTheme.typography.bodyMedium)
+                list.forEach { p ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(p.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.loadProject(p.id); onDismiss() }) { Text(stringResource(R.string.open_project)) }
+                        TextButton(onClick = { vm.deleteProject(p.id); list = vm.listProjects() }) { Text(stringResource(R.string.delete_segment)) }
+                    }
+                }
+            }
+        })
 }

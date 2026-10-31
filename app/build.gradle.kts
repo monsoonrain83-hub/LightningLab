@@ -10,8 +10,8 @@ android {
         applicationId = "com.lightninglab"
         minSdk = 29
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.0-r8"
+        versionCode = 9
+        versionName = "1.0-r9"
         resourceConfigurations += listOf("en", "fa", "ar")
     }
     buildTypes {
@@ -43,4 +43,5 @@ dependencies {
     implementation("com.google.guava:guava:33.2.1-android")
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

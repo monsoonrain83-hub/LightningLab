@@ -179,4 +179,19 @@ Rough type guess: %5$s</string>
     <string name="copy_segment">Copy</string>
     <string name="delete_segment">Delete</string>
     <string name="crop_unknown_size">Video size unknown; crop may not apply.</string>
+    <string name="rec_start">Record voice</string>
+    <string name="rec_stop">Stop</string>
+    <string name="rec_running">Recording...</string>
+    <string name="rec_remove">Remove voice</string>
+    <string name="rec_denied">Microphone permission was denied</string>
+    <string name="rec_added">Voice recording added</string>
+    <string name="rec_too_short">Recording too short or failed</string>
+    <string name="projects_title">Projects</string>
+    <string name="save_project">Save current project</string>
+    <string name="project_copy_note">Saving copies the video files into the app, so it needs free storage.</string>
+    <string name="no_projects">No saved projects yet</string>
+    <string name="open_project">Open</string>
+    <string name="saving_project">Saving project...</string>
+    <string name="project_saved">Project saved</string>
+    <string name="close_dialog">Close</string>
 </resources>

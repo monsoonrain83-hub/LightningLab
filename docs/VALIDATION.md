@@ -41,3 +41,9 @@
 - API names checked against developer.android.com reference pages: RgbAdjustment.Builder (setRed/Green/BlueScale), Crop(left,right,bottom,top), TextOverlay.createStaticTextOverlay. The project pins Media3 1.3.1; older-version availability of Crop/RgbAdjustment is believed but not proven until the CI build.
 - Text/sticker TOP/BOTTOM placement uses blank-line padding (library centres overlays); look at it on a device. Emoji rendering depends on the phone's emoji font.
 - NOT built (needs custom GL shaders, ML models, or large subsystems): glitch/VHS/film/beat/VFX effects, PiP, templates, AI enhance, auto captions, text-to-speech, AI trim, cutout, voice changer, reverse, freeze frame, curve speed, keyframe animation, opacity, background blur, GIF stickers (network), voice recording.
+
+## Section 2 (r9): voice recording and video projects - NOT compiled, NOT run on a device
+- Voice-over: MediaRecorder (AAC/M4A, mic) behind the RECORD_AUDIO runtime permission; becomes an extra audio track next to the music track. Audio tracks are now clipped to their REAL duration (previously the clip end was set to the video length even when the audio was shorter).
+- Projects: the editor state (segments, extra clips, music/voice, filter, speed, crop, flips, rotation, text/sticker settings) is saved as JSON; the source video and extra files are COPIED into app storage because photo-picker URIs do not survive restarts. The JSON codec has a JVM round-trip test (needs `org.json:json` as a test dependency).
+- Not built: transitions between clips (Media3 1.3.1 has no transition API; a custom compositor would be needed).
+- Untested risks: MediaRecorder on specific devices, copying large videos (time/space), reopening a project whose files were deleted.

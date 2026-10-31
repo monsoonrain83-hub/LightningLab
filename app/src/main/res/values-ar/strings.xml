@@ -179,4 +179,19 @@
     <string name="copy_segment">نسخ</string>
     <string name="delete_segment">حذف</string>
     <string name="crop_unknown_size">حجم الفيديو غير معروف؛ قد لا يُطبَّق الاقتصاص.</string>
+    <string name="rec_start">تسجيل الصوت</string>
+    <string name="rec_stop">إيقاف</string>
+    <string name="rec_running">جارٍ التسجيل...</string>
+    <string name="rec_remove">إزالة الصوت</string>
+    <string name="rec_denied">تم رفض إذن الميكروفون</string>
+    <string name="rec_added">تمت إضافة التسجيل الصوتي</string>
+    <string name="rec_too_short">التسجيل قصير جداً أو فشل</string>
+    <string name="projects_title">المشاريع</string>
+    <string name="save_project">حفظ المشروع الحالي</string>
+    <string name="project_copy_note">يؤدي الحفظ إلى نسخ ملفات الفيديو داخل التطبيق، لذا يحتاج مساحة تخزين.</string>
+    <string name="no_projects">لا توجد مشاريع محفوظة بعد</string>
+    <string name="open_project">فتح</string>
+    <string name="saving_project">جارٍ حفظ المشروع...</string>
+    <string name="project_saved">تم حفظ المشروع</string>
+    <string name="close_dialog">إغلاق</string>
 </resources>
