@@ -47,8 +47,9 @@ object FlashAnalyzer {
     fun strongThreshold(sens: Float) = 6f + 14f * (1f - sens.coerceIn(0f, 1f))
     fun weakThreshold(sens: Float) = 0.45f * strongThreshold(sens)
     /** Day-line thresholds: longest unpaired thin structure (px at 320 wide) or unpaired pixel count. */
-    fun dayLongest(sens: Float) = 16f + 24f * (1f - sens.coerceIn(0f, 1f))
-    fun dayUnpaired(sens: Float) = 120f + 300f * (1f - sens.coerceIn(0f, 1f))
+    private const val DAY_L_BASE = 9f; private const val DAY_L_SLOPE = 14f; private const val DAY_U_BASE = 120f; private const val DAY_U_SLOPE = 300f
+    fun dayLongest(sens: Float) = DAY_L_BASE + DAY_L_SLOPE * (1f - sens.coerceIn(0f, 1f))
+    fun dayUnpaired(sens: Float) = DAY_U_BASE + DAY_U_SLOPE * (1f - sens.coerceIn(0f, 1f))
 
     class Frames(val flagged: BooleanArray, val best: FloatArray, val energy: FloatArray)
 
@@ -170,7 +171,8 @@ object FlashAnalyzer {
             val ln = dayLongest(sens); val un = dayUnpaired(sens)
             val di = (0 until n).filter { i ->
                 val s = day!![i]; val t = ms[i].tMs
-                (s.longest >= ln || s.unpaired >= un) &&
+                val k = if (s.sides < 2) 1.5f else 1f   // a frame with only one neighbour side is less reliable
+                (s.longest >= ln * k || s.unpaired >= un * k) &&
                     covered.none { r -> t >= r[0] - DUP_MARGIN_MS && t <= r[1] + DUP_MARGIN_MS }
             }
             var k = 0

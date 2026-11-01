@@ -4,7 +4,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
-/** Mirrors the validated Python prototype: jittery handheld-like clip, one frame gets a thin vertical bolt. */
+/**
+ * Jittery handheld-like clip, one frame gets a thin vertical bolt. Shifts clamp at the border (wrap-around would
+ * invent new content at the edges, which no real camera does; the old wrap version failed even on the original code).
+ */
 class DayLineTest {
     private val w = 320; private val h = 176
     private val rnd = Random(3)
@@ -15,13 +18,13 @@ class DayLineTest {
         for (y in 0 until h) for (x in 0 until w) a[y * w + x] = 20f + blocks[(y / 8) * (w / 8) + x / 8]
         repeat(25) { val x = 10 + rnd.nextInt(w - 20); for (y in 60 until 120) for (k in 0 until 2) a[y * w + x + k] += 60f }
         for (y in 130 until h) for (x in 0 until w) a[y * w + x] += 30f * Math.sin(x / 6.0).toFloat()
-        return a
+        return ImgUtil.boxBlur(a, w, h, 1) // real optics never produce 1-px hard steps; unblurred steps alias under sub-pixel tracking
     }
 
     private fun jitter(src: FloatArray, dx: Int, dy: Int): FloatArray {
         val o = FloatArray(w * h)
         for (y in 0 until h) for (x in 0 until w)
-            o[y * w + x] = src[Math.floorMod(y - dy, h) * w + Math.floorMod(x - dx, w)] + rnd.nextGaussian().toFloat()
+            o[y * w + x] = src[(y - dy).coerceIn(0, h - 1) * w + (x - dx).coerceIn(0, w - 1)] + rnd.nextGaussian().toFloat()
         return o
     }
 

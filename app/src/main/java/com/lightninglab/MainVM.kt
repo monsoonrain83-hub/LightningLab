@@ -59,7 +59,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var busy by mutableStateOf(false)
     var progress by mutableStateOf(0f)
     var stage by mutableStateOf(R.string.stage_scan)
-    var sensitivity by mutableStateOf(0.6f)
+    var sensitivity by mutableStateOf(0.7f)
     var composite by mutableStateOf<Bitmap?>(null)
     var method by mutableStateOf(Composer.Method.ADVANCED)
     var intensity by mutableStateOf(1f)
