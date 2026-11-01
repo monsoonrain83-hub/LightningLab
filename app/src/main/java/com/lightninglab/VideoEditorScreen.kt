@@ -327,7 +327,7 @@ private fun Timeline(vm: MainVM, player: ExoPlayer, dpPerSec: Float, playing: Bo
                         segs.forEachIndexed { i, sg ->
                             val w = ((sg.endMs - sg.startMs) / vm.vSpeed * dpPerMs).dp
                             val sel = vm.selSeg == i && vm.selKind == 0
-                            Box(Modifier.width(max(6.dp, w - 2.dp)).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(cVideo)
+                            Box(Modifier.width(maxOf(6.dp, w - 2.dp)).fillMaxHeight().clip(RoundedCornerShape(6.dp)).background(cVideo)
                                 .border(if (sel) 2.dp else 0.dp, if (sel) Color.White else Color.Transparent, RoundedCornerShape(6.dp))
                                 .clickable { vm.selSeg = i; vm.selKind = 0 }, contentAlignment = Alignment.CenterStart) {
                                 Text((i + 1).toString() + (if (sg.uri != null) "+" else "") + "  " + fmt(sg.endMs - sg.startMs).substringBefore('.') + "s",
@@ -350,14 +350,14 @@ private fun PillRow(vm: MainVM, lane: List<Pill>, dpPerMs: Float) {
         lane.forEach { p ->
             val sel = vm.selKind == p.kind && vm.selId == p.id
             var rem by remember(p.id) { mutableStateOf(0f) }
-            Box(Modifier.offset(x = (p.startMs * dpPerMs).dp).width(max(14.dp, (p.lenMs * dpPerMs).dp)).fillMaxHeight()
+            Box(Modifier.offset(x = (p.startMs * dpPerMs).dp).width(maxOf(14.dp, (p.lenMs * dpPerMs).dp)).fillMaxHeight()
                 .clip(RoundedCornerShape(7.dp)).background(p.color)
                 .border(if (sel) 2.dp else 0.dp, if (sel) Color.White else Color.Transparent, RoundedCornerShape(7.dp))
                 .clickable { vm.select(p.kind, p.id) }
                 .pointerInput(p.id, dpPerMs) {
                     detectDragGestures(onDragStart = { vm.select(p.kind, p.id) }) { change, drag ->
                         change.consume()
-                        rem += drag.x / density / dpPerMs
+                        rem += drag.x / this.density / dpPerMs
                         val whole = rem.toLong(); if (whole != 0L) { vm.moveSelected(whole); rem -= whole }
                     }
                 }, contentAlignment = Alignment.CenterStart) {

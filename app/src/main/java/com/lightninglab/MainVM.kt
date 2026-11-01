@@ -750,9 +750,15 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val vol = c.vol * (if (c.kind == 2) volVoice else volMusic)
                     val ei = EditedMediaItem.Builder(mi).setRemoveVideo(true)
                         .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()
-                    val sb = EditedMediaItemSequence.Builder()
-                    if (c.startMs > 0) sb.addGap(c.startMs * 1000)
-                    seqs += sb.addItem(ei).build()
+                    // Media3 1.3.1 has no sequence gaps: delay the clip with a generated silent WAV (44.1 kHz mono, 16-bit)
+                    val items2 = ArrayList<EditedMediaItem>()
+                    if (c.startMs > 0) {
+                        val sil = File(app.cacheDir, "silence_${c.startMs}.wav")
+                        if (!sil.exists()) SoundFx.writeWav(sil, ShortArray((c.startMs * SoundFx.RATE / 1000).toInt()))
+                        items2 += EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(sil))).setRemoveVideo(true).build()
+                    }
+                    items2 += ei
+                    seqs += EditedMediaItemSequence(items2)
                 }
                 // composition-level effects run on the OUTPUT timeline: zoom markers, then timed text/stickers on top
                 val cfx = ArrayList<Effect>()
