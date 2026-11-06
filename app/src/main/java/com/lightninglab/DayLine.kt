@@ -17,17 +17,14 @@ import kotlin.math.sqrt
  *     "background", and d = cur - max(minBefore, minAfter): only pixels brighter than BOTH sides survive.
  *     A short window (100 ms) is deliberate: a moving object (truck, bird) is present in at least one side's window
  *     at the same pixels, so it cancels out, whereas a flash exists only in the current frame(s);
- *  3. d > threshold marks "positive" pixels. The threshold is ADAPTIVE: a few robust sigmas of the frame's own aligned
- *     residual (floor depends on sensitivity, ceiling = legacy [T1]) PLUS an alignment-error budget of ERR_PX times the
- *     background gradient, so edge fringes caused by residual shake cannot pass while faint thin bolts (which do not
- *     depend on background gradient) can. Unpaired pixels are bridged by [BRIDGE] px before measuring length. Misaligned edges produce positive pixels right next to NEGATIVE ones, so
+ *  3. d > [T1] marks "positive" pixels. Misaligned edges produce positive pixels right next to NEGATIVE ones, so
  *     positive pixels within 3 px of a negative pixel (cur - mean of neighbours < -T1) are discarded. What remains
  *     ("unpaired") is lightning: thin bolts and rolling-shutter glow bands.
  * Per frame we report: area of positive pixels, unpaired count (normalised to 320x180) and the longest side of the
  * largest connected unpaired component.
  */
-class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 100L, private val sens: Float = 0.6f) {
-    class Stat(val tMs: Long, val areaFrac: Float, val unpaired: Float, val longest: Int, val negFrac: Float = 0f, val sides: Int = 2, val compArea: Int = 0)
+class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 100L) {
+    class Stat(val tMs: Long, val areaFrac: Float, val unpaired: Float, val longest: Int)
 
     private class Fr(val t: Long, val l: FloatArray, val g: FloatArray) { var px = 0f; var py = 0f }
 
@@ -45,26 +42,11 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
     private val posM = BooleanArray(n); private val negM = BooleanArray(n); private val negD = BooleanArray(n)
     private val tmpD = BooleanArray(n)
     private val stack = IntArray(n)
-    private val hist = IntArray(HBINS)
-    private val refArr = FloatArray(n)
-    private val bridgeSrc = BooleanArray(n)
 
     companion object {
-        /** Legacy fixed threshold (luma units); kept for reference/tests. The live threshold is adaptive, see [t1For]. */
         const val T1 = 20f
-        /** Unpaired pixels are dilated by this radius before labelling so a faint bolt that breaks into fragments is one structure. */
-        const val BRIDGE = 1
-        /** Residual alignment error (px) assumed when budgeting edge fringes; see [evaluate]. */
-        const val ERR_PX = 1.2f
-        private const val K_SIG = 5.0f      // threshold = max(floor, K_SIG(sens) * robust noise sigma of the aligned residual)
-        private const val FLOOR = 6.0f
-        fun kSig(sens: Float) = K_SIG - 1.5f * sens.coerceIn(0f, 1f)
-        fun floorFor(sens: Float) = FLOOR + 6f * (1f - sens.coerceIn(0f, 1f))
-        /** Adaptive pixel threshold: a few robust-sigma above the frame's own noise, never below a sensitivity floor, never above the legacy 20. */
-        fun t1For(sens: Float, sigma: Float) = (kSig(sens) * sigma).coerceAtLeast(floorFor(sens)).coerceAtMost(T1)
         const val MAX_SIDE = 6
         const val BORDER = 8
-        private const val HBINS = 128
     }
 
     private fun halfGrad(l: FloatArray): FloatArray {
@@ -183,66 +165,25 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
         if (b.isNotEmpty()) side(b, c, 0, minB, medB)
         if (a.isNotEmpty()) side(a, c, MAX_SIDE, minA, medA)
         val both = b.isNotEmpty() && a.isNotEmpty()
-        val l = c.l
-        // Robust noise estimate of the aligned residual (median |cur - ref| via histogram, 0.5-unit bins).
-        java.util.Arrays.fill(hist, 0)
-        for (p in 0 until n) {
-            val ref = if (both) 0.5f * (medB[p] + medA[p]) else if (b.isNotEmpty()) medB[p] else medA[p]
-            refArr[p] = ref
-            hist[min(HBINS - 1, (abs(l[p] - ref) * 2f).toInt())]++
-        }
-        var acc = 0; var mb = 0
-        while (mb < HBINS - 1 && acc + hist[mb] < n / 2) { acc += hist[mb]; mb++ }
-        val sigma = 1.4826f * (mb + 0.5f) * 0.5f
-        val t1 = t1For(sens, sigma)
         var posCount = 0
+        val l = c.l
         for (y in 0 until h) for (x in 0 until w) {
             val p = y * w + x
             val base = if (both) max(minB[p], minA[p]) else if (b.isNotEmpty()) minB[p] else minA[p]
             val ref = if (both) 0.5f * (medB[p] + medA[p]) else if (b.isNotEmpty()) medB[p] else medA[p]
             val inside = x >= BORDER && x < w - BORDER && y >= BORDER && y < h - BORDER
-            // Alignment-error budget: a residual misalignment of ERR_PX can fake a bright fringe of ERR_PX * gradient
-            // along any background edge, so a "new" pixel must beat that on top of the noise threshold.
-            var need = t1
-            if (ERR_PX > 0f && inside) {
-                val gx = refArr[p + 1] - refArr[p - 1]; val gy = refArr[p + w] - refArr[p - w]
-                need += ERR_PX * 0.5f * sqrt(gx * gx + gy * gy)
-            }
-            val pos = inside && (l[p] - base) > need
+            val pos = inside && (l[p] - base) > T1
             posM[p] = pos; if (pos) posCount++
-            negM[p] = (l[p] - ref) < -t1
+            negM[p] = (l[p] - ref) < -T1
         }
         val area = posCount.toFloat() / n
-        var negCount = 0
-        for (p in 0 until n) if (negM[p]) negCount++
-        val negF = negCount.toFloat() / n
-        val nSides = (if (b.isNotEmpty()) 1 else 0) + (if (a.isNotEmpty()) 1 else 0)
-        if (posCount < 12) { stats.add(Stat(c.t, area, 0f, 0, negF, nSides)); return }
+        if (posCount < 12) { stats.add(Stat(c.t, area, 0f, 0)); return }
         dilate7(negM, negD)
         var unp = 0
         for (p in 0 until n) { val u = posM[p] && !negD[p]; tmpD[p] = u; if (u) unp++ }
-        if (BRIDGE > 0) { System.arraycopy(tmpD, 0, bridgeSrc, 0, n); dilateR(bridgeSrc, tmpD, BRIDGE) }
         var longest = 0
         if (unp >= 12) longest = longestComponent(tmpD)
-        stats.add(Stat(c.t, area, unp * 57600f / n, longest, negF, nSides, lastCompArea))
-    }
-
-    private val tmp2 = BooleanArray(n)
-    /** (2r+1)x(2r+1) binary dilation (separable); src and dst must differ. */
-    private fun dilateR(src: BooleanArray, dst: BooleanArray, r: Int) {
-        for (y in 0 until h) {
-            val o = y * w
-            for (x in 0 until w) {
-                var v = false; var xx = max(0, x - r); val xe = min(w - 1, x + r)
-                while (xx <= xe) { if (src[o + xx]) { v = true; break }; xx++ }
-                tmp2[o + x] = v
-            }
-        }
-        for (x in 0 until w) for (y in 0 until h) {
-            var v = false; var yy = max(0, y - r); val ye = min(h - 1, y + r)
-            while (yy <= ye) { if (tmp2[yy * w + x]) { v = true; break }; yy++ }
-            dst[y * w + x] = v
-        }
+        stats.add(Stat(c.t, area, unp * 57600f / n, longest))
     }
 
     /** 7x7 binary dilation (separable). */
@@ -271,9 +212,8 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
     }
 
     /** Longest bounding-box side among 8-connected components with >= 6 pixels. Consumes (clears) the mask. */
-    private var lastCompArea = 0
     private fun longestComponent(mask: BooleanArray): Int {
-        var longest = 0; lastCompArea = 0
+        var longest = 0
         for (s in 0 until n) {
             if (!mask[s]) continue
             var sp = 0; stack[sp++] = s; mask[s] = false
@@ -289,7 +229,7 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
                     if (mask[pp]) { mask[pp] = false; stack[sp++] = pp }
                 }
             }
-            if (area >= 6) { val ln = max(maxX - minX + 1, maxY - minY + 1); if (ln > longest) { longest = ln; lastCompArea = area } }
+            if (area >= 6) longest = max(longest, max(maxX - minX + 1, maxY - minY + 1))
         }
         return longest
     }

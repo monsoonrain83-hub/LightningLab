@@ -13,9 +13,7 @@ data class ProjectData(
     val rotate: Int, val flipH: Boolean, val flipV: Boolean, val crop: Float,
     val text: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
     val sticker: String?, val stickerSize: Int, val stickerPos: Int,
-    val volOrig: Float = 1f, val volMusic: Float = 1f, val volVoice: Float = 1f,
-    val texts: List<TextClip> = emptyList(), val stickers: List<StickerClip> = emptyList(),
-    val audios: List<AudioClip> = emptyList(), val zooms: List<ZoomKey> = emptyList()
+    val volOrig: Float = 1f, val volMusic: Float = 1f, val volVoice: Float = 1f
 )
 
 object ProjectCodec {
@@ -34,22 +32,7 @@ object ProjectCodec {
         o.put("text", p.text).put("tc", p.textColor).put("ts", p.textSize).put("tp", p.textPos).put("tb", p.textBg)
         o.put("stk", p.sticker ?: "").put("ss", p.stickerSize).put("sp", p.stickerPos)
         o.put("vo", p.volOrig.toDouble()).put("vm", p.volMusic.toDouble()).put("vv", p.volVoice.toDouble())
-        o.put("texts", JSONArray().also { a -> p.texts.forEach { t ->
-            a.put(JSONObject().put("id", t.id).put("t", t.text).put("c", t.color).put("z", t.size).put("p", t.pos).put("b", t.bg)
-                .put("s", t.startMs).put("e", t.endMs).put("f", t.font ?: "")) } })
-        o.put("stickers", JSONArray().also { a -> p.stickers.forEach { t ->
-            a.put(JSONObject().put("id", t.id).put("t", t.emoji).put("z", t.size).put("p", t.pos).put("s", t.startMs).put("e", t.endMs)) } })
-        o.put("audios", JSONArray().also { a -> p.audios.forEach { t ->
-            a.put(JSONObject().put("id", t.id).put("u", t.uri).put("l", t.label).put("k", t.kind).put("s", t.startMs)
-                .put("d", t.durMs).put("v", t.vol.toDouble())) } })
-        o.put("zooms", JSONArray().also { a -> p.zooms.forEach { t ->
-            a.put(JSONObject().put("id", t.id).put("t", t.timeMs).put("z", t.scale.toDouble())) } })
         return o.toString()
-    }
-
-    private fun <T> arr(o: JSONObject, key: String, f: (JSONObject) -> T): List<T> {
-        val a = o.optJSONArray(key) ?: return emptyList()
-        return (0 until a.length()).map { f(a.getJSONObject(it)) }
     }
 
     /** Returns null for corrupt data or a newer, unknown format. */
@@ -69,13 +52,7 @@ object ProjectCodec {
                 o.optDouble("crop", 0.0).toFloat(), o.optString("text", ""), o.optInt("tc", -1), o.optInt("ts", 1),
                 o.optInt("tp", 1), o.optBoolean("tb", false), o.optString("stk", "").ifEmpty { null },
                 o.optInt("ss", 1), o.optInt("sp", 1),
-                o.optDouble("vo", 1.0).toFloat(), o.optDouble("vm", 1.0).toFloat(), o.optDouble("vv", 1.0).toFloat(),
-                arr(o, "texts") { j -> TextClip(j.getInt("id"), j.getString("t"), j.getInt("c"), j.getInt("z"), j.getInt("p"),
-                    j.getBoolean("b"), j.getLong("s"), j.getLong("e"), j.optString("f", "").ifEmpty { null }) },
-                arr(o, "stickers") { j -> StickerClip(j.getInt("id"), j.getString("t"), j.getInt("z"), j.getInt("p"), j.getLong("s"), j.getLong("e")) },
-                arr(o, "audios") { j -> AudioClip(j.getInt("id"), j.getString("u"), j.getString("l"), j.getInt("k"), j.getLong("s"),
-                    j.getLong("d"), j.optDouble("v", 1.0).toFloat()) },
-                arr(o, "zooms") { j -> ZoomKey(j.getInt("id"), j.getLong("t"), j.getDouble("z").toFloat()) })
+                o.optDouble("vo", 1.0).toFloat(), o.optDouble("vm", 1.0).toFloat(), o.optDouble("vv", 1.0).toFloat())
         }
     } catch (e: Exception) { null }
 }

@@ -72,7 +72,7 @@ class Detector(private val ctx: Context) {
     private class Scan(val s: ArrayList<Sample>, val day: List<DayLine.Stat>?)
 
     /** startMs/endMs restrict the analysed range (seek to the previous key frame, decode, skip frames before startMs). */
-    private fun scanCodec(uri: Uri, sensitivity: Float, startMs: Long, endMs: Long, onProgress: (Float) -> Unit, cancelled: () -> Boolean): Scan? {
+    private fun scanCodec(uri: Uri, startMs: Long, endMs: Long, onProgress: (Float) -> Unit, cancelled: () -> Boolean): Scan? {
         val ex = MediaExtractor(); var codec: MediaCodec? = null
         try {
             ex.setDataSource(ctx, uri, null)
@@ -111,7 +111,7 @@ class Detector(private val ctx: Context) {
                         val img = c.getOutputImage(oi) ?: return null
                         val tw = min(TW, img.width); val th = max(2, tw * img.height / img.width)
                         val luma = lumaGrid(img, tw, th)
-                        if (day == null) day = DayLine(tw, th, sens = sensitivity)
+                        if (day == null) day = DayLine(tw, th)
                         day.push(tMs, luma)
                         out += sampleFromLuma(tMs, luma, tw, th)
                         img.close(); lastT = tMs
@@ -167,7 +167,7 @@ class Detector(private val ctx: Context) {
         uri: Uri, sensitivity: Float, minSepMs: Long = 250L, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE,
         onProgress: (Float) -> Unit, onStage: (Int) -> Unit, cancelled: () -> Boolean
     ): List<LightningEvent> {
-        var sc = scanCodec(uri, sensitivity, startMs, endMs, onProgress, cancelled)
+        var sc = scanCodec(uri, startMs, endMs, onProgress, cancelled)
         if (cancelled()) return emptyList()
         if (sc == null || sc.s.size < 5) sc = Scan(scanRetriever(uri, startMs, endMs, onProgress, cancelled), null)
         if (cancelled()) return emptyList()

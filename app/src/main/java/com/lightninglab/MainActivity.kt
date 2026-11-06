@@ -42,6 +42,7 @@ fun App(vm: MainVM = viewModel()) {
                         }
                     }
                 }
+                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
             }
         }
     }

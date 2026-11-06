@@ -10,8 +10,8 @@ android {
         applicationId = "com.lightninglab"
         minSdk = 29
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.0-r12"
+        versionCode = 11
+        versionName = "1.0-r10.1"
         resourceConfigurations += listOf("en", "fa", "ar")
     }
     buildTypes {
@@ -40,9 +40,9 @@ dependencies {
     implementation("androidx.media3:media3-common:1.3.1")
     implementation("androidx.media3:media3-transformer:1.3.1")
     implementation("androidx.media3:media3-effect:1.3.1")
-    implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("com.google.guava:guava:33.2.1-android")
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

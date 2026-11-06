@@ -3,8 +3,3 @@ build/
 local.properties
 .idea/
 *.iml
-
-# Local AI training artifacts (do not commit datasets or large model checkpoints)
-tools/cloud_ai/out/
-**/*.keras
-**/*.tflite

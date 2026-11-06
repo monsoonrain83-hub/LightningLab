@@ -24,7 +24,12 @@ object Exporter {
     }
 
     fun saveImage(ctx: Context, bmp: Bitmap, png: Boolean, quality: Int, withWatermark: Boolean, name: String): Uri? {
-        val b = if (withWatermark) watermark(bmp) else bmp
+        val marked = if (withWatermark) watermark(bmp) else bmp
+        // JPEG has no alpha: transparent pixels (e.g. after background removal) would turn black, so flatten onto white
+        val b = if (!png && marked.hasAlpha()) {
+            val o = Bitmap.createBitmap(marked.width, marked.height, Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(o); c.drawColor(android.graphics.Color.WHITE); c.drawBitmap(marked, 0f, 0f, null); o
+        } else marked
         val ext = if (png) "png" else "jpg"
         val cv = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, "$name.$ext")

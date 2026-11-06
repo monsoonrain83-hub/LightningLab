@@ -28,3 +28,9 @@ The transient-flash analyzer (`FlashAnalyzer.kt`) is original code written for t
 | UI/UX Pro Max skill (user-supplied zip) | Used only as a checklist/reference for the accessibility and contrast review (non-text contrast 3:1, accessible names on icon buttons, 48 dp targets, reduced motion). No code or assets copied. Its LICENSE file is in the zip; check it before copying anything. |
 | Built-in sound effects (`SoundFx.kt`) | Original synthesis code; no recordings or samples. |
 | DayLine / FlashAnalyzer / Aligner | Original code (algorithm ideas: sub-pixel NCC tracking, background subtraction with min/median windows). |
+
+## Step 4a (r10.1)
+| Item | Status |
+|---|---|
+| ML Kit Subject Segmentation (`play-services-mlkit-subject-segmentation:16.0.0-beta1`) | Google ML Kit terms (free, on-device; model delivered by Google Play services, not bundled; BETA). Requires Google Play services. Check ML Kit terms before commercial release. |
+| Concat (jub0t) | AGPL-3.0-or-later (+ plugin exception, commercial licence available). NO code used - reference for ideas only (Rust, different stack). |

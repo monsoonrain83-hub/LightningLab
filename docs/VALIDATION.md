@@ -52,3 +52,9 @@
 - Volume tool: three gains (original audio, music/effect, voice recording), 0-200 %. Implemented as a small `VolumeProcessor` on Media3's BaseAudioProcessor (16-bit PCM only; hard clipping). Sample maths unit-tested (`GainTest`). If an input is not 16-bit PCM the processor throws UnhandledAudioFormatException and the export fails with an error message - unverified on real files.
 - Photo HSL: seven colour bands (red..purple), hue/saturation/luminance each. Maths checked with a Python port of the unit tests (zero = identity, grey untouched, band isolation, blue +hue moves toward purple). Neighbouring bands blend, so a single band never acts completely alone.
 - Not built in this section: transitions (no API in Media3 1.3.1), photo project saving, UI screenshots review (needs real screenshots of the running app).
+
+## Step 4a (r10.1): background removal - NOT compiled, NOT run on a device
+- Photo editor -> "Remove" tab -> "Remove background (AI)": ML Kit Subject Segmentation (API names confirmed on developers.google.com/ml-kit: SubjectSegmenterOptions.Builder().enableForegroundBitmap(), InputImage.fromBitmap, foregroundBitmap, dependency 16.0.0-beta1).
+- Limits: needs Google Play services and a one-time model download over the internet (a sideloaded APK does not get the install-time download; the first request may return nothing until the download finishes). Result <= 2048 px long side. Undo via "Undo removal". Not suited to night-sky photos without an obvious subject (it segments people/objects, not "sky").
+- JPEG export now flattens transparency onto white (previously transparent pixels would have turned black).
+- Based on MY r10 source: the other session's r12 source was not available to me, so merging later may conflict in Screens.kt/MainVM.kt.

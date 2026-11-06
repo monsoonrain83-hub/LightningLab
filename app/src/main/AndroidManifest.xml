@@ -11,7 +11,8 @@
         android:largeHeap="true"
         android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.LightningLab">
-        <activity android:name=".MainActivity" android:exported="true" android:supportsPictureInPicture="true" android:resizeableActivity="true" android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment" />
+        <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
