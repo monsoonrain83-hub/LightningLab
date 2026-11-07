@@ -48,8 +48,25 @@ fun Home(vm: MainVM) {
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box {
-            LightningHero(Modifier.fillMaxWidth().height(280.dp))
-            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) { LangMenu() }
+            LightningHero(Modifier.fillMaxWidth().height(264.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xAA101B2A),
+                    border = BorderStroke(1.dp, Color(0x557EC8FF))
+                ) {
+                    Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF65D6A5)))
+                        Text(stringResource(R.string.on_device), color = Color(0xFFE1F7EE), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                LangMenu()
+            }
             Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 18.dp)) {
                 Text(buildAnnotatedString {
                     withStyle(SpanStyle(color = Storm.text)) { append("Lightning") }
@@ -58,7 +75,35 @@ fun Home(vm: MainVM) {
                 Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.bodyMedium, color = Storm.muted)
             }
         }
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.quick_access), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.no_cloud_upload), style = MaterialTheme.typography.labelSmall, color = Color(0xFF79DDB2))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassQuickAction(
+                    modifier = Modifier.weight(1f), icon = Ic.BOLT, title = stringResource(R.string.nav_lightning),
+                    subtitle = stringResource(R.string.detect_sub), accent = Storm.bolt, enabled = !vm.busy,
+                    onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
+                )
+                GlassQuickAction(
+                    modifier = Modifier.weight(1f), icon = Ic.PHOTO, title = stringResource(R.string.edit_photo),
+                    subtitle = stringResource(R.string.photo_short), accent = Storm.arc,
+                    onClick = { vm.screen = Screen.PHOTO }
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                GlassQuickAction(
+                    modifier = Modifier.weight(1f), icon = Ic.VIDEO, title = stringResource(R.string.edit_video),
+                    subtitle = stringResource(R.string.video_short), accent = Color(0xFF9D9BFF),
+                    onClick = { vm.screen = Screen.VIDEO }
+                )
+                GlassQuickAction(
+                    modifier = Modifier.weight(1f), icon = Ic.CLOUD, title = stringResource(R.string.weather_title),
+                    subtitle = stringResource(R.string.weather_short), accent = Color(0xFF69C9D7),
+                    onClick = { vm.screen = Screen.WEATHER }
+                )
+            }
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.sensitivity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
@@ -80,9 +125,43 @@ fun Home(vm: MainVM) {
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
             }
-            Text(stringResource(R.string.detect_sub), style = MaterialTheme.typography.bodySmall, color = Storm.muted,
-                modifier = Modifier.fillMaxWidth())
-            TextButton(onClick = { vm.screen = Screen.ABOUT }) { Text(stringResource(R.string.about), color = Storm.muted) }
+            TextButton(onClick = { vm.screen = Screen.ABOUT }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text(stringResource(R.string.about), color = Storm.muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassQuickAction(
+    modifier: Modifier = Modifier,
+    icon: Ic,
+    title: String,
+    subtitle: String,
+    accent: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(22.dp)
+    Surface(
+        modifier = modifier.heightIn(min = 116.dp).clip(shape).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        shape = shape,
+        color = Color(0xB91A293B),
+        shadowElevation = 12.dp,
+        border = BorderStroke(1.dp, Brush.linearGradient(listOf(accent.copy(alpha = 0.65f), Color(0x223D5B7A), Color(0x5577A9D8))))
+    ) {
+        Column(
+            Modifier.background(Brush.verticalGradient(listOf(Color(0x22FFFFFF), Color.Transparent, Color(0x11000000))))
+                .padding(horizontal = 13.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Box(
+                Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
+                    .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f)))),
+                contentAlignment = Alignment.Center
+            ) { AppIcon(icon, accent, Modifier.size(21.dp), filled = true) }
+            Text(title, style = MaterialTheme.typography.titleSmall, color = Storm.text, maxLines = 1)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = Storm.muted, maxLines = 2)
         }
     }
 }
@@ -198,8 +277,28 @@ fun PhotoEditor(vm: MainVM) {
     val healMode = tab == PTab.REMOVE
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     LaunchedEffect(vm.params, prev) {
-        if (prev != null) shown = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            PhotoEdit.apply(prev, vm.params)
+        shown = null
+        if (prev != null) {
+            // Render from the already downscaled editor preview, never the full-resolution export source.
+            val paramsSnapshot = vm.params
+            var rendered: android.graphics.Bitmap? = null
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    PhotoEdit.apply(prev, paramsSnapshot).also { rendered = it }
+                }
+                val result = rendered
+                if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) shown = result
+                else if (result != null && !result.isRecycled) result.recycle()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                rendered?.let { if (!it.isRecycled) it.recycle() }
+                throw cancelled
+            }
+        }
+    }
+    DisposableEffect(shown, prev) {
+        val ownedPreview = shown
+        onDispose {
+            if (ownedPreview != null && ownedPreview !== prev && !ownedPreview.isRecycled) ownedPreview.recycle()
         }
     }
     val pickReq = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
@@ -218,29 +317,42 @@ fun PhotoEditor(vm: MainVM) {
             }
             return@Column
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Brush.verticalGradient(listOf(Color(0xFF17283B), Color(0xFF0B1420), Color(0xFF101A29))))
+                .border(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))), RoundedCornerShape(26.dp)),
+            contentAlignment = Alignment.Center
+        ) {
             (if (vm.showOriginal || healMode) prev else shown)?.let { bmp ->
-                Box(Modifier.aspectRatio(bmp.width.toFloat() / bmp.height).clip(MaterialTheme.shapes.small)
+                Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp)
+                    .aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(17.dp))
                     .then(if (!healMode) Modifier.pointerInput(Unit) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
-                    Image(bmp.asImageBitmap(), null, Modifier.matchParentSize())
+                    Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
                     if (healMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
                 }
             }
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                shape = RoundedCornerShape(50), color = Color(0xAA101B2A),
+                border = BorderStroke(1.dp, Color(0x557EC8FF))
+            ) {
+                Text(stringResource(if (vm.showOriginal) R.string.original_view else R.string.live_preview), color = Color(0xFFE1F2FF),
+                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+            }
             Text(stringResource(if (healMode) R.string.heal_hint else R.string.hold_compare),
                 style = MaterialTheme.typography.labelSmall, color = Storm.text,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(6.dp)
-                    .background(Color(0x99000000), RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 4.dp))
+                modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp)
+                    .background(Color(0xCC101B2A), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp))
         }
-        Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
-            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-            border = BorderStroke(1.dp, Storm.hairline)) {
-            Column(Modifier.padding(top = 8.dp)) {
+        GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Column(Modifier.padding(top = 5.dp)) {
                 Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_hsl, R.string.tab_detail, R.string.tab_crop,
                     R.string.tab_remove, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
-                Column(Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState())
+                Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 6.dp)) {
                     val p = vm.params
                     Crossfade(targetState = tab, animationSpec = tween(180), label = "ptab") { t ->
@@ -383,26 +495,33 @@ fun VideoEditor(vm: MainVM) {
             return@Column
         }
         key(u) {
-            androidx.compose.ui.viewinterop.AndroidView(
-                factory = { c ->
-                    android.widget.VideoView(c).apply { setVideoURI(u); setOnPreparedListener { seekTo(1) }; vv = this }
-                },
-                modifier = Modifier.weight(1f).heightIn(min = 150.dp).fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-                    .clip(MaterialTheme.shapes.medium))
+            Box(
+                Modifier.weight(1f).fillMaxWidth().heightIn(min = 150.dp)
+                    .padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(25.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF17283B), Color(0xFF080F19))))
+                    .border(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))), RoundedCornerShape(25.dp))
+            ) {
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { c ->
+                        android.widget.VideoView(c).apply { setVideoURI(u); setOnPreparedListener { seekTo(1) }; vv = this }
+                    },
+                    modifier = Modifier.fillMaxSize().padding(5.dp).clip(RoundedCornerShape(19.dp)))
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { vv?.start() }) { Text(stringResource(R.string.play)) }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { vv?.pause() }) { Text(stringResource(R.string.pause)) }
+        GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { vv?.start() }) { Text("▶"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play)) }
+                Spacer(Modifier.width(10.dp))
+                OutlinedButton(onClick = { vv?.pause() }) { Text("Ⅱ"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pause)) }
+            }
         }
-        Surface(Modifier.fillMaxWidth(), color = Storm.surfaceHi,
-            shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp), border = BorderStroke(1.dp, Storm.hairline)) {
-            Column(Modifier.padding(top = 6.dp)) {
+        GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp)) {
+            Column(Modifier.padding(top = 5.dp)) {
                 if (vm.busy) {
                     LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 }
-                Column(Modifier.heightIn(max = 210.dp).verticalScroll(rememberScrollState())
+                Column(Modifier.heightIn(max = 230.dp).verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 4.dp)) {
                     Crossfade(targetState = tool, animationSpec = tween(180), label = "vtool") { t ->
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -430,7 +549,8 @@ fun VideoEditor(vm: MainVM) {
                                     if (vm.segments.isEmpty()) {
                                         Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                     } else {
-                                        Row(Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(10.dp)),
+                                        Row(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(13.dp))
+                                            .border(1.dp, Color(0x557EC8FF), RoundedCornerShape(13.dp)),
                                             horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                             vm.segments.forEachIndexed { i, sg ->
                                                 val w = (sg.endMs - sg.startMs).toFloat().coerceAtLeast(1f)

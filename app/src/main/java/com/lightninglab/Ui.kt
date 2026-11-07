@@ -209,8 +209,7 @@ fun IconAction(ic: Ic, description: String, enabled: Boolean = true, onClick: ()
 /** Grouped content block: hairline border, no heavy shadow, animates its height when content changes. */
 @Composable
 fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Surface(modifier.fillMaxWidth().animateContentSize(), shape = MaterialTheme.shapes.medium, color = Storm.surfaceHi,
-        border = BorderStroke(1.dp, Storm.hairline)) {
+    GlassPanel(modifier.fillMaxWidth().animateContentSize()) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
@@ -269,17 +268,31 @@ fun NavBar(vm: MainVM) {
         Triple(Screen.HOME, Ic.BOLT, R.string.nav_lightning),
         Triple(Screen.PHOTO, Ic.PHOTO, R.string.nav_photo),
         Triple(Screen.VIDEO, Ic.VIDEO, R.string.nav_video),
-        Triple(Screen.WEATHER, Ic.CLOUD, R.string.nav_weather))
-    Column {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Storm.hairline))
-        NavigationBar(containerColor = Storm.surface, tonalElevation = 0.dp) {
+        Triple(Screen.WEATHER, Ic.CLOUD, R.string.nav_weather)
+    )
+    val shape = RoundedCornerShape(26.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        shape = shape,
+        color = Storm.surface.copy(alpha = 0.92f),
+        shadowElevation = 18.dp,
+        border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))))
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             items.forEach { (sc, ic, lb) ->
                 val sel = vm.screen == sc
-                NavigationBarItem(selected = sel, onClick = { vm.screen = sc },
-                    icon = { AppIcon(ic, if (sel) Storm.bolt else Storm.muted, filled = sel) },
-                    label = { Text(stringResource(lb), style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Storm.bolt, selectedTextColor = Storm.bolt,
-                        indicatorColor = Storm.boltDim, unselectedIconColor = Storm.muted, unselectedTextColor = Storm.muted))
+                val fg by animateColorAsState(if (sel) Storm.bolt else Storm.muted, tween(180), label = "navFg")
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(19.dp))
+                        .clickable(role = Role.Tab) { vm.screen = sc }
+                        .background(if (sel) Brush.verticalGradient(listOf(Color(0x443B83C8), Color(0x22233D5B))) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                        .padding(vertical = 7.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    AppIcon(ic, fg, filled = sel)
+                    Text(stringResource(lb), color = fg, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
             }
         }
     }

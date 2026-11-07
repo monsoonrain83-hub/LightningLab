@@ -26,23 +26,26 @@ class MainActivity : AppCompatActivity() {
 @Composable
 fun App(vm: MainVM = viewModel()) {
     LightningTheme {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.systemBarsPadding()) {
-                BackHandler(enabled = vm.screen != Screen.HOME) { vm.screen = Screen.HOME }
-                Box(Modifier.weight(1f)) {
-                    Crossfade(targetState = vm.screen, animationSpec = tween(200), label = "screen") { sc ->
-                        when (sc) {
-                            Screen.HOME -> Home(vm)
-                            Screen.RESULTS -> Results(vm)
-                            Screen.ABOUT -> About(vm)
-                            Screen.PHOTO -> PhotoEditor(vm)
-                            Screen.VIDEO -> VideoEditor(vm)
-                            Screen.WEATHER -> WeatherScreen(vm)
-                            Screen.PREPARE -> PrepareScreen(vm)
+        Surface(Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Transparent) {
+            Box(Modifier.fillMaxSize()) {
+                GlassAtmosphereBackground()
+                Column(Modifier.systemBarsPadding()) {
+                    BackHandler(enabled = vm.screen != Screen.HOME) { vm.screen = Screen.HOME }
+                    Box(Modifier.weight(1f)) {
+                        Crossfade(targetState = vm.screen, animationSpec = tween(200), label = "screen") { sc ->
+                            when (sc) {
+                                Screen.HOME -> Home(vm)
+                                Screen.RESULTS -> Results(vm)
+                                Screen.ABOUT -> About(vm)
+                                Screen.PHOTO -> PhotoEditor(vm)
+                                Screen.VIDEO -> VideoEditor(vm)
+                                Screen.WEATHER -> WeatherScreen(vm)
+                                Screen.PREPARE -> PrepareScreen(vm)
+                            }
                         }
                     }
+                    if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
                 }
-                if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
             }
         }
     }

@@ -2,6 +2,7 @@ package com.lightninglab
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
 import android.media.MediaRecorder
@@ -26,6 +27,13 @@ import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import com.google.common.collect.ImmutableList
+import com.lightninglab.atmospheric.knowledge.AtmosphericEngine
+import com.lightninglab.atmospheric.knowledge.CloudVisualEvidence
+import com.lightninglab.atmospheric.knowledge.CloudFrameObservation
+import com.lightninglab.atmospheric.knowledge.CloudEvolutionAnalyzer
+import com.lightninglab.atmospheric.knowledge.CloudEvolutionReport
+import com.lightninglab.atmospheric.knowledge.CloudVideoSamplingPlan
+import com.lightninglab.atmospheric.knowledge.MorphologyAssessment
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.Composition
@@ -41,6 +49,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -52,6 +61,22 @@ enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
 data class Seg(val startMs: Long, val endMs: Long, val uri: Uri? = null)
+data class CloudVideoFrameResult(
+    val elapsedMillis: Long,
+    val genusCode: String?,
+    val score: Float?,
+    val coverPercent: Int,
+    val oktas: Int,
+    val texture: Float,
+    val kindLabel: String
+)
+data class CloudVideoReport(
+    val durationMillis: Long,
+    val sampledFrames: Int,
+    val frameResults: List<CloudVideoFrameResult>,
+    val evolution: CloudEvolutionReport,
+    val modelWasAvailable: Boolean
+)
 
 class MainVM(private val app: Application) : AndroidViewModel(app) {
     var screen by mutableStateOf(Screen.HOME)
@@ -261,26 +286,201 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---- optional TFLite cloud model + observer tags ----
     private val cloudModel by lazy { CloudClassifier(File(app.filesDir, "cloud_model.tflite")) }
+    private val cloudFeatureModel by lazy { CloudFeatureClassifier(File(app.filesDir, "cloud_features.tflite")) }
+    private val cloudSegmentationModel by lazy { CloudSegmentationModel(File(app.filesDir, "cloud_segmentation.tflite")) }
+    private val atmosphericSegmentationModel by lazy { AtmosphericSegmentationModel(File(app.filesDir, "atmosphere_multiclass.tflite")) }
     var modelReady by mutableStateOf(false)
+    var featureModelReady by mutableStateOf(false)
+    var segmentationModelReady by mutableStateOf(false)
+    var segmentationResult by mutableStateOf<CloudSegmentationResult?>(null)
+    var atmosphericSegmentationReady by mutableStateOf(false)
+    var atmosphericSegmentationResult by mutableStateOf<AtmosphericSegmentationResult?>(null)
+    var featurePredictions by mutableStateOf<List<Pair<String, Float>>>(emptyList())
+    var multiScaleReport by mutableStateOf<CloudMultiScaleReport?>(null)
     var topK by mutableStateOf<List<Pair<String, Float>>>(emptyList())
     var genus by mutableStateOf<String?>(null)
     val features = mutableStateListOf<String>()
-    fun initModel() { viewModelScope.launch { modelReady = withContext(Dispatchers.IO) { cloudModel.load() } } }
+    val morphologyCues = mutableStateListOf<String>()
+    var morphologyAssessment by mutableStateOf<MorphologyAssessment?>(null)
+
+    fun toggleMorphologyCue(code: String) {
+        if (code in morphologyCues) morphologyCues.remove(code) else morphologyCues.add(code)
+        morphologyAssessment = null
+    }
+
+    fun assessMorphology() {
+        val selectedGenus = genus ?: topK.firstOrNull()?.first ?: return
+        val selectedCues = morphologyCues.toSet()
+        viewModelScope.launch(Dispatchers.IO) {
+        fun has(code: String) = code in selectedCues
+        val evidence = CloudVisualEvidence(
+            genusCode = selectedGenus,
+            hookedOrCurvedFibres = has("hooked"), straightOrCurvedFilaments = has("filaments"), denseFibrousVeil = has("fibrous"),
+            distinctAnvil = has("anvil"), smoothRoundedTowerTops = has("smooth_tops"),
+            cauliflowerTowers = has("cauliflower"), shallowSmallPuffs = has("shallow"),
+            moderateVerticalGrowth = has("moderate_growth"), strongVerticalGrowth = has("strong_growth"),
+            raggedFragments = has("ragged"), lensShape = has("lens"), horizontalRoll = has("roll"),
+            layerOrSheet = has("layer"), smallDetachedTufts = has("tufts"), uniformHazyAppearance = has("hazy"),
+            hangingPouches = has("mamma"), precipitationStreaks = has("streaks"),
+            precipitationReachesGround = has("reaches_ground"), smoothCapAboveTower = has("pileus"),
+            horizontalBannerOrShelf = has("arcus"), funnelOrHangingColumn = has("funnel"),
+            waveLikeUnderside = has("asperitas"), wallCloudAppearance = has("murus"),
+            tailCloudBand = has("cauda"), holeInCloudLayer = has("cavum"), waveBreakingTop = has("fluctus"),
+            sunOrMoonVisibleThroughCloud = has("translucent"), clearGapsBetweenCloudElements = has("gaps"),
+            multipleCloudLayers = has("multiple_layers"), visibleWavePattern = has("waves"),
+            radiatingOrConvergingBands = has("radiating"), regularCloudHoles = has("regular_holes"),
+            vertebraLikeArrangement = has("vertebra"), sheetAroundTower = has("velum"),
+            raggedFragmentsUnderMainCloud = has("pannus"), inflowBandToStorm = has("flumen"),
+            intertwinedFibres = has("intortus")
+        )
+        val result = AtmosphericEngine(app).assessCloudMorphology(evidence)
+        withContext(Dispatchers.Main) { morphologyAssessment = result }
+        }
+    }
+    fun initModel() { viewModelScope.launch {
+        modelReady = withContext(Dispatchers.IO) { cloudModel.load() }
+        featureModelReady = withContext(Dispatchers.IO) { cloudFeatureModel.load() }
+        segmentationModelReady = withContext(Dispatchers.IO) { cloudSegmentationModel.load() }
+        atmosphericSegmentationReady = withContext(Dispatchers.IO) { atmosphericSegmentationModel.load() }
+    } }
     fun importModel(u: Uri) {
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 try {
                     val f = File(app.filesDir, "cloud_model.tflite")
-                    app.contentResolver.openInputStream(u)?.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
-                    val good = cloudModel.load()
-                    if (!good) f.delete()
-                    good
+                    val tmp = File(app.filesDir, "cloud_model.tflite.importing")
+                    val backup = File(app.filesDir, "cloud_model.tflite.previous")
+                    tmp.delete(); backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { i ->
+                        tmp.outputStream().use { o -> i.copyTo(o) }
+                        tmp.exists() && tmp.length() > 0L
+                    } ?: false
+                    if (!copied) { tmp.delete(); false }
+                    else {
+                        // Replace atomically so a failed import cannot destroy a previously working model.
+                        cloudModel.close()
+                        val hadPrevious = f.exists()
+                        if (hadPrevious && !f.renameTo(backup)) { tmp.delete(); cloudModel.load(); false }
+                        else if (!tmp.renameTo(f)) {
+                            tmp.delete()
+                            if (hadPrevious) backup.renameTo(f)
+                            cloudModel.load(); false
+                        } else {
+                            backup.delete()
+                            cloudModel.load()
+                        }
+                    }
                 } catch (e: Throwable) { false }
             }
             modelReady = ok
             if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
+    fun importFeatureModel(u: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "cloud_features.tflite")
+                val temp = File(app.filesDir, "cloud_features.tflite.importing")
+                val backup = File(app.filesDir, "cloud_features.tflite.previous")
+                try {
+                    temp.delete(); backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { input -> temp.outputStream().use { output -> input.copyTo(output) }; temp.length() > 0L } ?: false
+                    if (!copied) { temp.delete(); false } else {
+                        cloudFeatureModel.close()
+                        val hadOld = target.exists()
+                        if (hadOld && !target.renameTo(backup)) { temp.delete(); cloudFeatureModel.load(); false }
+                        else if (!temp.renameTo(target)) { temp.delete(); if (hadOld) backup.renameTo(target); cloudFeatureModel.load(); false }
+                        else { backup.delete(); cloudFeatureModel.load() }
+                    }
+                } catch (_: Throwable) { temp.delete(); if (backup.exists() && !target.exists()) backup.renameTo(target); cloudFeatureModel.load(); false }
+            }
+            featureModelReady = ok
+            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+        }
+    }
+
+    fun importSegmentationModel(u: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "cloud_segmentation.tflite")
+                val temp = File(app.filesDir, "cloud_segmentation.tflite.importing")
+                val backup = File(app.filesDir, "cloud_segmentation.tflite.previous")
+                try {
+                    temp.delete(); backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                        temp.length() > 0L
+                    } ?: false
+                    if (!copied) { temp.delete(); false } else {
+                        cloudSegmentationModel.close()
+                        val hadOld = target.exists()
+                        if (hadOld && !target.renameTo(backup)) { temp.delete(); cloudSegmentationModel.load(); false }
+                        else if (!temp.renameTo(target)) {
+                            temp.delete(); if (hadOld) backup.renameTo(target)
+                            cloudSegmentationModel.load(); false
+                        } else {
+                            val valid = cloudSegmentationModel.load()
+                            if (valid) backup.delete()
+                            else {
+                                target.delete()
+                                if (hadOld) backup.renameTo(target)
+                                cloudSegmentationModel.load()
+                            }
+                            valid
+                        }
+                    }
+                } catch (_: Throwable) {
+                    temp.delete()
+                    if (backup.exists() && !target.exists()) backup.renameTo(target)
+                    cloudSegmentationModel.load()
+                    false
+                }
+            }
+            segmentationModelReady = ok
+            segmentationResult = null
+            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+        }
+    }
+
+    fun importAtmosphericSegmentationModel(u: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "atmosphere_multiclass.tflite")
+                val temp = File(app.filesDir, "atmosphere_multiclass.tflite.importing")
+                val backup = File(app.filesDir, "atmosphere_multiclass.tflite.previous")
+                try {
+                    temp.delete(); backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                        temp.length() > 0L
+                    } ?: false
+                    if (!copied) { temp.delete(); false } else {
+                        atmosphericSegmentationModel.close()
+                        val hadOld = target.exists()
+                        if (hadOld && !target.renameTo(backup)) { temp.delete(); atmosphericSegmentationModel.load(); false }
+                        else if (!temp.renameTo(target)) {
+                            temp.delete(); if (hadOld) backup.renameTo(target)
+                            atmosphericSegmentationModel.load(); false
+                        } else {
+                            val valid = atmosphericSegmentationModel.load()
+                            if (valid) backup.delete() else {
+                                target.delete(); if (hadOld) backup.renameTo(target)
+                                atmosphericSegmentationModel.load()
+                            }
+                            valid
+                        }
+                    }
+                } catch (_: Throwable) {
+                    temp.delete(); if (backup.exists() && !target.exists()) backup.renameTo(target)
+                    atmosphericSegmentationModel.load(); false
+                }
+            }
+            atmosphericSegmentationReady = ok
+            atmosphericSegmentationResult = null
+            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+        }
+    }
+
     fun toggleFeature(f: String) { if (f in features) features.remove(f) else features.add(f) }
 
     var wxBitmap by mutableStateOf<Bitmap?>(null)
@@ -299,10 +499,111 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     b to CloudAnalysis.analyze(px, b.width, b.height)
                 }
                 val ranked = withContext(Dispatchers.Default) { cloudModel.classify(bmp) }
-                topK = ranked?.take(3) ?: emptyList(); genus = ranked?.firstOrNull()?.first
-                features.clear()
+                val featureRanked = withContext(Dispatchers.Default) { cloudFeatureModel.classify(bmp) }
+                val regional = withContext(Dispatchers.Default) { CloudMultiScaleAnalyzer(cloudModel, cloudFeatureModel).analyze(bmp) }
+                val segmented = if (segmentationModelReady) withContext(Dispatchers.Default) { cloudSegmentationModel.segment(bmp) } else null
+                val atmosphericSegmented = if (atmosphericSegmentationReady) withContext(Dispatchers.Default) { atmosphericSegmentationModel.segment(bmp) } else null
+                // Keep model output as candidate evidence only. Its scores are not calibrated,
+                // so never silently convert the highest score into a confirmed WMO genus.
+                topK = ranked?.take(3) ?: emptyList(); genus = null
+                featurePredictions = featureRanked?.filter { it.second >= 0.50f } ?: emptyList()
+                multiScaleReport = regional
+                segmentationResult = segmented
+                atmosphericSegmentationResult = atmosphericSegmented
+                features.clear(); morphologyCues.clear(); morphologyAssessment = null
                 wxBitmap = bmp; wx = res; infoRes = null
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "image") }
+        }
+    }
+
+    // ---------------- offline cloud video analysis ----------------
+    var cloudVideoBusy by mutableStateOf(false)
+    var cloudVideoProgress by mutableStateOf(0f)
+    var cloudVideoReport by mutableStateOf<CloudVideoReport?>(null)
+
+    fun analyzeCloudVideo(uri: Uri) {
+        if (cloudVideoBusy) return
+        cloudVideoBusy = true
+        cloudVideoProgress = 0f
+        cloudVideoReport = null
+        viewModelScope.launch {
+            try {
+                val report = withContext(Dispatchers.Default) {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(app, uri)
+                        val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                            ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                        require(duration >= 1000L) { "ویدئو باید حداقل یک ثانیه باشد." }
+                        val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                            ?.toIntOrNull() ?: 0
+                        val selectedTimes = CloudVideoSamplingPlan.timestamps(duration, maxFrames = 30)
+                        val results = mutableListOf<CloudVideoFrameResult>()
+                        val observations = mutableListOf<CloudFrameObservation>()
+                        selectedTimes.forEachIndexed { index, ms ->
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                            val extractedFrame = retriever.getScaledFrameAtTime(
+                                ms * 1000L,
+                                MediaMetadataRetriever.OPTION_CLOSEST,
+                                512,
+                                512
+                            )
+                            if (extractedFrame != null) {
+                                var frame: Bitmap = extractedFrame
+                                try {
+                                    if (rotation == 90 || rotation == 180 || rotation == 270) {
+                                        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+                                        val rotated = Bitmap.createBitmap(frame, 0, 0, frame.width, frame.height, matrix, true)
+                                        if (rotated !== frame) frame.recycle()
+                                        frame = rotated
+                                    }
+                                    val pixels = IntArray(frame.width * frame.height)
+                                    frame.getPixels(pixels, 0, frame.width, 0, 0, frame.width, frame.height)
+                                    val sky = CloudAnalysis.analyze(pixels, frame.width, frame.height)
+                                    val ranked = cloudModel.classify(frame)
+                                    val top = ranked?.firstOrNull()
+                                    val label = when (sky.kind) {
+                                        CloudAnalysis.Kind.CLEAR -> "آسمان صاف یا کم‌ابر"
+                                        CloudAnalysis.Kind.THIN_STREAKS -> "رگه‌های نازک احتمالی"
+                                        CloudAnalysis.Kind.CUMULIFORM -> "بافت کومه‌ای احتمالی"
+                                        CloudAnalysis.Kind.UNIFORM_LAYER -> "پوشش لایه‌ای احتمالی"
+                                        CloudAnalysis.Kind.DARK_OVERCAST -> "پوشش تیره و گسترده"
+                                        CloudAnalysis.Kind.MIXED -> "الگوی ترکیبی یا نامشخص"
+                                    }
+                                    results += CloudVideoFrameResult(
+                                        elapsedMillis = ms,
+                                        genusCode = top?.first,
+                                        score = top?.second,
+                                        coverPercent = (sky.cover * 100f).toInt().coerceIn(0, 100),
+                                        oktas = sky.oktas,
+                                        texture = sky.texture,
+                                        kindLabel = label
+                                    )
+                                    observations += CloudFrameObservation(
+                                        elapsedMillis = ms,
+                                        genusCode = top?.first,
+                                        genusLabelPersian = top?.first?.let { CloudInfo.genusName(it) },
+                                        genusScore = top?.second
+                                    )
+                                } finally { frame.recycle() }
+                            }
+                            withContext(Dispatchers.Main) {
+                                cloudVideoProgress = (index + 1).toFloat() / selectedTimes.size.coerceAtLeast(1)
+                            }
+                        }
+                        require(results.size >= 2) { "از این ویدئو دست‌کم دو فریم قابل استخراج نبود." }
+                        val evolution = CloudEvolutionAnalyzer().analyze(observations)
+                        CloudVideoReport(duration, results.size, results, evolution, results.any { it.genusCode != null })
+                    } finally { retriever.release() }
+                }
+                cloudVideoReport = report
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: "cloud video")
+            } finally {
+                cloudVideoBusy = false
+            }
         }
     }
 
@@ -508,6 +809,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     override fun onCleared() {
         try { recorder?.release() } catch (e: Exception) { }
+        try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close() } catch (_: Exception) { }
         super.onCleared()
     }
 

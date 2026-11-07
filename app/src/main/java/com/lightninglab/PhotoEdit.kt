@@ -39,34 +39,50 @@ data class Heal(val x: Float, val y: Float, val r: Float)
 
 object PhotoEdit {
     fun apply(src: Bitmap, p: PhotoParams): Bitmap {
-        var b = src
-        val m = Matrix()
-        if (p.rotate != 0) m.postRotate(p.rotate.toFloat())
-        if (p.flipH) m.postScale(-1f, 1f)
-        if (p.flipV) m.postScale(1f, -1f)
-        if (!m.isIdentity) b = Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
-        if (p.aspect > 0f) {
-            val cur = b.width.toFloat() / b.height
-            var cw = b.width; var ch = b.height
-            if (cur > p.aspect) cw = (b.height * p.aspect).toInt() else ch = (b.width / p.aspect).toInt()
-            cw = cw.coerceAtLeast(1); ch = ch.coerceAtLeast(1)
-            b = Bitmap.createBitmap(b, (b.width - cw) / 2, (b.height - ch) / 2, cw, ch)
+        var working = src
+        fun replaceWorking(next: Bitmap) {
+            if (working !== src && working !== next && !working.isRecycled) working.recycle()
+            working = next
         }
-        val gain = 2f.pow(p.exposure); val k = 1f + p.contrast
-        val tr = 128f - 128f * k + 255f * p.brightness
-        val rs = gain * k * (1f + 0.15f * p.warmth); val bs = gain * k * (1f - 0.15f * p.warmth); val gs = gain * k
-        val cm = ColorMatrix(floatArrayOf(
-            rs, 0f, 0f, 0f, tr,
-            0f, gs, 0f, 0f, tr,
-            0f, 0f, bs, 0f, tr,
-            0f, 0f, 0f, 1f, 0f))
-        cm.postConcat(ColorMatrix().apply { setSaturation(1f + p.saturation) })
-        val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
-        Canvas(out).drawBitmap(b, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(cm) })
-        if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f && p.hsl.all { it == 0f }) return out
-        val res = tonePass(out, p)
-        out.recycle()
-        return res
+        try {
+            val m = Matrix()
+            if (p.rotate != 0) m.postRotate(p.rotate.toFloat())
+            if (p.flipH) m.postScale(-1f, 1f)
+            if (p.flipV) m.postScale(1f, -1f)
+            if (!m.isIdentity) replaceWorking(Bitmap.createBitmap(working, 0, 0, working.width, working.height, m, true))
+            if (p.aspect > 0f) {
+                val cur = working.width.toFloat() / working.height
+                var cw = working.width; var ch = working.height
+                if (cur > p.aspect) cw = (working.height * p.aspect).toInt() else ch = (working.width / p.aspect).toInt()
+                cw = cw.coerceAtLeast(1); ch = ch.coerceAtLeast(1)
+                if (cw != working.width || ch != working.height) {
+                    replaceWorking(Bitmap.createBitmap(working, (working.width - cw) / 2, (working.height - ch) / 2, cw, ch))
+                }
+            }
+            val gain = 2f.pow(p.exposure); val k = 1f + p.contrast
+            val tr = 128f - 128f * k + 255f * p.brightness
+            val rs = gain * k * (1f + 0.15f * p.warmth); val bs = gain * k * (1f - 0.15f * p.warmth); val gs = gain * k
+            val cm = ColorMatrix(floatArrayOf(
+                rs, 0f, 0f, 0f, tr,
+                0f, gs, 0f, 0f, tr,
+                0f, 0f, bs, 0f, tr,
+                0f, 0f, 0f, 1f, 0f))
+            cm.postConcat(ColorMatrix().apply { setSaturation(1f + p.saturation) })
+            val out = Bitmap.createBitmap(working.width, working.height, Bitmap.Config.ARGB_8888)
+            try {
+                Canvas(out).drawBitmap(working, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = ColorMatrixColorFilter(cm) })
+            } catch (t: Throwable) {
+                if (!out.isRecycled) out.recycle()
+                throw t
+            } finally {
+                if (working !== src && !working.isRecycled) working.recycle()
+            }
+            if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f && p.hsl.all { it == 0f }) return out
+            return try { tonePass(out, p) } finally { if (!out.isRecycled) out.recycle() }
+        } catch (t: Throwable) {
+            if (working !== src && !working.isRecycled) working.recycle()
+            throw t
+        }
     }
 
     /**
