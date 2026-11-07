@@ -1,0 +1,22 @@
+﻿phenomenon_code,suggested_subject,asset_path,thumbnail_path,source_url,license,attribution,label_verified_by,status
+Ci,Cirrus / سیروس,,,,,,,needs_curated_image
+Cc,Cirrocumulus / سیروکومولوس,,,,,,,needs_curated_image
+Cs,Cirrostratus / سیروستراتوس,,,,,,,needs_curated_image
+Ac,Altocumulus / آلتوکومولوس,,,,,,,needs_curated_image
+As,Altostratus / آلتواستراتوس,,,,,,,needs_curated_image
+Ns,Nimbostratus / نیمبواستراتوس,,,,,,,needs_curated_image
+Sc,Stratocumulus / استراتوکومولوس,,,,,,,needs_curated_image
+St,Stratus / استراتوس,,,,,,,needs_curated_image
+Cu,Cumulus / کومولوس,,,,,,,needs_curated_image
+Cb,Cumulonimbus / کومولونیمبوس,,,,,,,needs_curated_image
+LIGHTNING,Lightning / آذرخش / رعدوبرق,,,,,,,needs_curated_image
+RAINBOW,Rainbow / رنگین‌کمان,,,,,,,needs_curated_image
+HALO,Halo / هاله,,,,,,,needs_curated_image
+FOG,Fog / مه,,,,,,,needs_curated_image
+RAIN,Rain / باران,,,,,,,needs_curated_image
+SNOW,Snow / برف,,,,,,,needs_curated_image
+HAIL,Hail / تگرگ,,,,,,,needs_curated_image
+DUST,Dust storm / طوفان گردوخاک,,,,,,,needs_curated_image
+TORNADO,Tornado / تورنادو / گردباد,,,,,,,needs_curated_image
+WATERSPOUT,Waterspout / گردباد دریایی,,,,,,,needs_curated_image
+VIRGA,Virga / ویرگا,,,,,,,needs_curated_image

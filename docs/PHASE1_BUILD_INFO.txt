@@ -1,0 +1,10 @@
+Lightning Lab Atmospheric Intelligence - Phase 1
+Dataset version: 2026.11.07-phase1
+SQLite database SHA-256: b0283ff3987ea9185dbb0bcb319decdeca15c761e90d6113e5360c4be1212cf1
+SQLite integrity_check: ok
+Cloud genera: 10
+Cloud species entries: 15
+Cloud varieties: 9
+Supplementary/accessory features: 15
+Phenomena total: 21
+Reference-image slots: 21 (all unverified placeholders; no photos bundled)
