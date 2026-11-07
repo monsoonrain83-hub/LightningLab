@@ -1,0 +1,4 @@
+clip_id,elapsed_ms,genus_code,genus_label_fa,genus_score,growth_stage,distinct_anvil,fibrous_or_icy_top,precipitation_streaks,precipitation_reaches_ground,ragged_fragments_under_cloud,annotator,notes
+sample_001,0,CU,کومولوس,,SHALLOW,false,false,false,false,false,,, 
+sample_001,5000,CU,کومولوس,,MODERATE,false,false,false,false,false,,,
+sample_001,10000,CB,کومولونیمبوس,,STRONG,true,true,true,false,false,,,
