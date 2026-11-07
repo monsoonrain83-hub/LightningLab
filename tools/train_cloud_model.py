@@ -1,97 +1,118 @@
+#!/usr/bin/env python3
+"""Train Lightning Lab's 10-WMO-genus image classifier and export TFLite.
+
+Expected folders: DATA/Ac, DATA/As, ... DATA/St (10 genera only).
+Run on a PC/Colab, never on the Android device:
+  pip install -r tools/cloud_ai/requirements.txt
+  python tools/cloud_ai/prepare_ccaim.py --out data/clouds/ccaim
+  python tools/train_cloud_model.py --data data/clouds/ccaim --out out/clouds
+
+Input contract matches CloudClassifier.kt: float32 RGB [1,224,224,3], 0..255.
+The model includes MobileNetV3 preprocessing. Test images are held out and not used
+for training/model selection. Exact duplicates are grouped before splitting.
 """
-Train the LightningLab cloud-genus classifier (run on a PC or free Google Colab GPU).  UNTESTED here - no TensorFlow/data
-was available in the authoring environment; run it and READ the printed test metrics before trusting the model.
-
-DATA: CCSN database (Zhang et al. 2018, CloudNet; 2543 images, 11 classes Ac As Cb Cc Ci Cs Ct Cu Ns Sc St).
-      Access: the authors' page github.com/upuil/CCSN-Database asks you to fill out a request form to receive download
-      instructions. The licence terms are NOT verified - read them (and cite the CloudNet paper) before any public release.
-      Arrange the images as
-          CCSN/Ac/*.jpg  CCSN/As/*.jpg ... CCSN/St/*.jpg
-      Optional: put YOUR OWN labelled sky photos in the same folders (best way to fit the model to phone images).
-
-RUN:  pip install tensorflow scikit-learn
-      python train_cloud_model.py --data CCSN --out out
-
-OUTPUT: out/cloud_model.tflite  (import in the app: Weather tab -> Import model)
-        out/metrics.txt  (test accuracy, per-class precision/recall, confusion matrix)
-Preprocessing is inside the model: the app feeds raw RGB 0..255 at 224x224.
-Splits are by FILE, 70/15/15 stratified, fixed seed; the test split is never used for training or model selection.
-"""
-import argparse, os, random, json
+import argparse, hashlib, json, os, random
+from pathlib import Path
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import classification_report, confusion_matrix
 
-LABELS = ["Ac", "As", "Cb", "Cc", "Ci", "Cs", "Ct", "Cu", "Ns", "Sc", "St"]   # MUST match CloudClassifier.LABELS
+LABELS = ['Ac','As','Cb','Cc','Ci','Cs','Cu','Ns','Sc','St']
 SIZE = 224
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--data", required=True); ap.add_argument("--out", default="out")
-ap.add_argument("--epochs_head", type=int, default=8); ap.add_argument("--epochs_ft", type=int, default=12)
-a = ap.parse_args()
-os.makedirs(a.out, exist_ok=True)
-random.seed(1); np.random.seed(1); tf.random.set_seed(1)
+def main():
+    ap=argparse.ArgumentParser(); ap.add_argument('--data',required=True); ap.add_argument('--out',default='out/clouds')
+    ap.add_argument('--epochs-head',type=int,default=12); ap.add_argument('--epochs-ft',type=int,default=15)
+    ap.add_argument('--batch-size',type=int,default=24); ap.add_argument('--seed',type=int,default=42)
+    a=ap.parse_args(); out=Path(a.out); out.mkdir(parents=True,exist_ok=True)
+    random.seed(a.seed); np.random.seed(a.seed); tf.random.set_seed(a.seed)
+    root=Path(a.data)
+    found=sorted(p.name for p in root.iterdir() if p.is_dir())
+    if found != sorted(LABELS): raise SystemExit(f'Expected exactly these class folders: {sorted(LABELS)}; found {found}')
 
-folders = sorted(d for d in os.listdir(a.data) if os.path.isdir(os.path.join(a.data, d)))
-assert folders == LABELS, f"class folders must be exactly {LABELS}, found {folders}"
+    paths=[]; ys=[]; hashes=[]
+    for yi, code in enumerate(LABELS):
+        for p in sorted((root/code).glob('*')):
+            if p.suffix.lower() not in {'.jpg','.jpeg','.png','.webp'}: continue
+            try:
+                raw=p.read_bytes(); digest=hashlib.sha256(raw).hexdigest()
+                # Validate decodability before adding it.
+                tf.io.decode_image(raw,channels=3,expand_animations=False)
+            except Exception as e:
+                print(f'SKIP unreadable: {p}: {e}'); continue
+            paths.append(str(p)); ys.append(yi); hashes.append(digest)
+    if not paths: raise SystemExit('No readable images found.')
+    ys=np.asarray(ys,dtype=np.int32)
+    # Keep byte-identical images in one split to reduce leakage.
+    unique_groups={}
+    for i,h in enumerate(hashes): unique_groups.setdefault(h,[]).append(i)
+    by_class={i:[] for i in range(len(LABELS))}
+    for group in unique_groups.values():
+        cls=int(ys[group[0]])
+        if any(int(ys[j]) != cls for j in group): raise SystemExit('Identical image bytes have conflicting labels; review dataset.')
+        by_class[cls].append(group)
+    train_idx=[]; val_idx=[]; test_idx=[]
+    for cls, groups in by_class.items():
+        random.shuffle(groups)
+        n=sum(len(g) for g in groups)
+        if n < 5 or len(groups) < 3:
+            raise SystemExit(f'Class {LABELS[cls]} needs at least 5 images across 3 unique image groups; found {n} images/{len(groups)} groups.')
+        # Split by duplicate group, approximately 70/15/15, forcing all three splits to exist.
+        n_groups=len(groups); n_tr=max(1,int(round(.70*n_groups))); n_va=max(1,int(round(.15*n_groups)))
+        if n_tr+n_va >= n_groups: n_tr=n_groups-2; n_va=1
+        for gi,g in enumerate(groups):
+            slot=0 if gi < n_tr else (1 if gi < n_tr+n_va else 2)
+            [train_idx,val_idx,test_idx][slot].extend(g)
+    train_idx=np.asarray(train_idx); val_idx=np.asarray(val_idx); test_idx=np.asarray(test_idx)
+    paths=np.asarray(paths)
+    def dataset(indices, training=False):
+        d=tf.data.Dataset.from_tensor_slices((paths[indices],ys[indices]))
+        if training: d=d.shuffle(len(indices),seed=a.seed,reshuffle_each_iteration=True)
+        def load(path,label):
+            image=tf.io.decode_image(tf.io.read_file(path),channels=3,expand_animations=False)
+            # Match Android inference: preserve aspect ratio and pad with neutral grey.
+            image=tf.image.resize_with_pad(image,SIZE,SIZE,method='bilinear',antialias=True,pad_value=127.5)
+            image.set_shape((SIZE,SIZE,3))
+            return tf.cast(image,tf.float32),label
+        return d.map(load,num_parallel_calls=tf.data.AUTOTUNE).batch(a.batch_size).prefetch(tf.data.AUTOTUNE)
+    dtr=dataset(train_idx,True); dva=dataset(val_idx); dte=dataset(test_idx)
+    counts=np.bincount(ys[train_idx],minlength=len(LABELS))
+    weights={i:float(len(train_idx)/(len(LABELS)*max(1,counts[i]))) for i in range(len(LABELS))}
+    aug=tf.keras.Sequential([
+        tf.keras.layers.RandomFlip('horizontal'),
+        tf.keras.layers.RandomRotation(0.035),
+        tf.keras.layers.RandomZoom(0.08),
+        tf.keras.layers.RandomBrightness(0.10,value_range=(0,255)),
+    ],name='training_augmentation')
+    base=tf.keras.applications.MobileNetV3Small(input_shape=(SIZE,SIZE,3),include_top=False,
+        weights='imagenet',include_preprocessing=True)
+    base.trainable=False
+    inp=tf.keras.Input((SIZE,SIZE,3),name='rgb_0_255')
+    x=aug(inp); x=base(x,training=False); x=tf.keras.layers.GlobalAveragePooling2D()(x)
+    x=tf.keras.layers.Dropout(.35)(x); out_layer=tf.keras.layers.Dense(len(LABELS),activation='softmax',name='genus_probabilities')(x)
+    model=tf.keras.Model(inp,out_layer)
+    best=str(out/'best.keras')
+    def callbacks(): return [tf.keras.callbacks.ModelCheckpoint(best,monitor='val_loss',save_best_only=True),
+        tf.keras.callbacks.EarlyStopping(monitor='val_loss',patience=5,restore_best_weights=True),
+        tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss',factor=.3,patience=2,min_lr=1e-6)]
+    model.compile(tf.keras.optimizers.Adam(1e-3),'sparse_categorical_crossentropy',['accuracy'])
+    model.fit(dtr,validation_data=dva,epochs=a.epochs_head,class_weight=weights,callbacks=callbacks())
+    base.trainable=True
+    for layer in base.layers[:-25]: layer.trainable=False
+    model.compile(tf.keras.optimizers.Adam(3e-5),'sparse_categorical_crossentropy',['accuracy'])
+    model.fit(dtr,validation_data=dva,epochs=a.epochs_ft,class_weight=weights,callbacks=callbacks())
+    model=tf.keras.models.load_model(best)
+    yt=np.concatenate([y.numpy() for _,y in dte]); probs=model.predict(dte,verbose=0); yp=probs.argmax(axis=1)
+    report=classification_report(yt,yp,labels=list(range(len(LABELS))),target_names=LABELS,zero_division=0,digits=4)
+    cm=confusion_matrix(yt,yp,labels=list(range(len(LABELS))))
+    metrics=f'TEST accuracy: {(yt==yp).mean():.4f} (n={len(yt)})\n\n{report}\nConfusion matrix (rows=true, cols=pred; order={LABELS}):\n{cm}\n'
+    (out/'metrics.txt').write_text(metrics,encoding='utf-8'); print(metrics)
+    converter=tf.lite.TFLiteConverter.from_keras_model(model); converter.optimizations=[tf.lite.Optimize.DEFAULT]
+    tflite=converter.convert(); (out/'cloud_model.tflite').write_bytes(tflite)
+    (out/'labels.json').write_text(json.dumps({'input':'float32 RGB [1,224,224,3], 0..255; aspect-preserving resize-with-pad, RGB pad=127.5','output_order':LABELS,
+      'model':'MobileNetV3Small transfer learning','test_count':int(len(yt))},indent=2),encoding='utf-8')
+    (out/'split_counts.json').write_text(json.dumps({'train':len(train_idx),'validation':len(val_idx),'test':len(test_idx),
+      'class_counts_train':{LABELS[i]:int(counts[i]) for i in range(len(LABELS))}},indent=2),encoding='utf-8')
+    print(f'Wrote {out}/cloud_model.tflite')
 
-files, labels = [], []
-for i, c in enumerate(LABELS):
-    for f in sorted(os.listdir(os.path.join(a.data, c))):
-        if f.lower().endswith((".jpg", ".jpeg", ".png")):
-            files.append(os.path.join(a.data, c, f)); labels.append(i)
-files = np.array(files); labels = np.array(labels)
-
-tr, va, te = [], [], []
-for i in range(len(LABELS)):
-    idx = np.where(labels == i)[0]; np.random.shuffle(idx)
-    n = len(idx); n_tr = int(.7 * n); n_va = int(.15 * n)
-    tr += list(idx[:n_tr]); va += list(idx[n_tr:n_tr + n_va]); te += list(idx[n_tr + n_va:])
-
-def load(path, y):
-    img = tf.io.decode_image(tf.io.read_file(path), channels=3, expand_animations=False)
-    img = tf.image.resize(img, (SIZE, SIZE)); img.set_shape((SIZE, SIZE, 3))
-    return img, y
-
-def ds(ix, train):
-    d = tf.data.Dataset.from_tensor_slices((files[ix], labels[ix]))
-    if train: d = d.shuffle(len(ix), seed=1)
-    d = d.map(load, num_parallel_calls=tf.data.AUTOTUNE).batch(32)
-    return d.prefetch(tf.data.AUTOTUNE)
-
-dtr, dva, dte = ds(tr, True), ds(va, False), ds(te, False)
-
-aug = tf.keras.Sequential([tf.keras.layers.RandomFlip("horizontal"), tf.keras.layers.RandomRotation(0.05),
-                           tf.keras.layers.RandomZoom(0.1), tf.keras.layers.RandomBrightness(0.15, value_range=(0, 255))])
-base = tf.keras.applications.MobileNetV3Small(input_shape=(SIZE, SIZE, 3), include_top=False, weights="imagenet",
-                                              include_preprocessing=True)   # expects raw 0..255
-base.trainable = False
-inp = tf.keras.Input((SIZE, SIZE, 3))
-x = aug(inp); x = base(x, training=False)
-x = tf.keras.layers.GlobalAveragePooling2D()(x); x = tf.keras.layers.Dropout(0.3)(x)
-out = tf.keras.layers.Dense(len(LABELS), activation="softmax")(x)
-model = tf.keras.Model(inp, out)
-
-best = os.path.join(a.out, "best.keras")
-cb = [tf.keras.callbacks.ModelCheckpoint(best, monitor="val_accuracy", save_best_only=True),
-      tf.keras.callbacks.EarlyStopping(monitor="val_accuracy", patience=5, restore_best_weights=True)]
-model.compile(tf.keras.optimizers.Adam(1e-3), "sparse_categorical_crossentropy", ["accuracy"])
-model.fit(dtr, validation_data=dva, epochs=a.epochs_head, callbacks=cb)
-base.trainable = True
-for l in base.layers[:-30]: l.trainable = False
-model.compile(tf.keras.optimizers.Adam(1e-4), "sparse_categorical_crossentropy", ["accuracy"])
-model.fit(dtr, validation_data=dva, epochs=a.epochs_ft, callbacks=cb)
-model = tf.keras.models.load_model(best)
-
-yt = np.concatenate([y.numpy() for _, y in dte]); yp = np.argmax(model.predict(dte), axis=1)
-acc = float((yt == yp).mean())
-rep = classification_report(yt, yp, target_names=LABELS, digits=3)
-cm = confusion_matrix(yt, yp)
-with open(os.path.join(a.out, "metrics.txt"), "w") as f:
-    f.write(f"TEST accuracy: {acc:.4f}  (n={len(yt)})\n\n{rep}\nConfusion matrix (rows=true, cols=pred, order {LABELS}):\n{cm}\n")
-print(open(os.path.join(a.out, "metrics.txt")).read())
-
-conv = tf.lite.TFLiteConverter.from_keras_model(model)
-conv.optimizations = [tf.lite.Optimize.DEFAULT]
-open(os.path.join(a.out, "cloud_model.tflite"), "wb").write(conv.convert())
-print("Wrote", os.path.join(a.out, "cloud_model.tflite"))
+if __name__=='__main__': main()
