@@ -1,0 +1,2 @@
+image,mask,group_id,split
+images/frame001.jpg,masks/frame001.png,video_001,
