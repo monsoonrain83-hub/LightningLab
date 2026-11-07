@@ -108,7 +108,8 @@
     <string name="add_clip">افزودن ویدئوی دیگر</string>
     <string name="overlay_text">متن روی ویدئو (اختیاری)</string>
     <string name="save_infographic">ذخیره‌ی اینفوگرافی</string>
-    <string name="wx_model_top">پیش‌بینی مدل (۳ مورد اول):</string>
+    <string name="wx_model_top">نامزدهای پیشنهادی مدل (۳ مورد اول؛ غیرقطعی):</string>
+    <string name="wx_model_score_note">درصدها امتیاز خام مدل هستند، نه احتمال کالیبره‌شده یا تأیید علمی. انتخاب نهایی جنس ابر را بررسی و تأیید کنید.</string>
     <string name="wx_genus_pick">جنس ابر (برای اصلاح لمس کنید):</string>
     <string name="wx_features_pick">برچسب‌های ناظر: ویژگی‌ها، گونه‌ها و گوناگونی‌ها (خودکار تشخیص داده نمی‌شوند):</string>
     <string name="wx_genus">جنس: %1$s</string>
@@ -212,4 +213,14 @@
     <string name="cutout_btn">حذف پس‌زمینه (هوش مصنوعی)</string>
     <string name="cutout_done">پس‌زمینه حذف شد. برای حفظ شفافیت به‌صورت PNG ذخیره کنید.</string>
     <string name="cutout_note">از Google ML Kit استفاده می‌کند: به Google Play services و یک‌بار دانلود مدل (اینترنت) نیاز دارد. نتیجه حداکثر ۲۰۴۸ پیکسل در ضلع بلند است؛ «بازگردانی حذف» تصویر اصلی را برمی‌گرداند.</string>
+    <string name="on_device">پردازش روی دستگاه</string>
+    <string name="quick_access">دسترسی سریع</string>
+    <string name="no_cloud_upload">بدون بارگذاری ابری</string>
+    <string name="photo_short">ویرایش و طراحی تصویر</string>
+    <string name="video_short">تدوین ویدئو و صدا</string>
+    <string name="weather_short">تحلیل آسمان و ابر</string>
+
+    <string name="live_preview">پیش‌نمایش زنده</string>
+    <string name="original_view">تصویر اصلی</string>
+
 </resources>
