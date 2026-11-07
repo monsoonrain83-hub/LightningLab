@@ -198,7 +198,7 @@ Rough type guess: %5$s</string>
     <string name="vol_original">Original audio</string>
     <string name="vol_music">Music / effect</string>
     <string name="vol_voice">Voice recording</string>
-    <string name="vol_note">100 % = unchanged. Values above 100 % can distort. At a changed speed the original audio is removed.</string>
+    <string name="vol_note" formatted="false">100 % = unchanged. Values above 100 % can distort. At a changed speed the original audio is removed.</string>
     <string name="tab_hsl">HSL</string>
     <string name="hsl_red">Red</string>
     <string name="hsl_orange">Orange</string>

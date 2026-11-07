@@ -198,7 +198,7 @@
     <string name="vol_original">صدای اصلی</string>
     <string name="vol_music">موسیقی / افکت</string>
     <string name="vol_voice">صدای ضبط‌شده</string>
-    <string name="vol_note">۱۰۰٪ یعنی بدون تغییر. مقدار بالای ۱۰۰٪ ممکن است اعوجاج بدهد. با تغییر سرعت، صدای اصلی حذف می‌شود.</string>
+    <string name="vol_note" formatted="false">۱۰۰٪ یعنی بدون تغییر. مقدار بالای ۱۰۰٪ ممکن است اعوجاج بدهد. با تغییر سرعت، صدای اصلی حذف می‌شود.</string>
     <string name="tab_hsl">HSL</string>
     <string name="hsl_red">قرمز</string>
     <string name="hsl_orange">نارنجی</string>
