@@ -108,7 +108,8 @@
     <string name="add_clip">إضافة فيديو آخر</string>
     <string name="overlay_text">نص على الفيديو (اختياري)</string>
     <string name="save_infographic">حفظ الإنفوغرافيك</string>
-    <string name="wx_model_top">توقع النموذج (أفضل 3):</string>
+    <string name="wx_model_top">مرشحات النموذج (أفضل 3؛ غير نهائية):</string>
+    <string name="wx_model_score_note">الدرجات مخرجات خام للنموذج وليست احتمالات معايرة أو تأكيداً علمياً. يرجى مراجعة جنس السحابة وتأكيده.</string>
     <string name="wx_genus_pick">جنس الغيوم (المس للتصحيح):</string>
     <string name="wx_features_pick">وسوم المراقب: السمات والأنواع والأصناف (لا تُكتشف تلقائياً):</string>
     <string name="wx_genus">الجنس: %1$s</string>
@@ -212,4 +213,14 @@
     <string name="cutout_btn">إزالة الخلفية (ذكاء اصطناعي)</string>
     <string name="cutout_done">تمت إزالة الخلفية. احفظ بصيغة PNG للحفاظ على الشفافية.</string>
     <string name="cutout_note">يستخدم Google ML Kit: يحتاج خدمات Google Play وتنزيل النموذج مرة واحدة (إنترنت). النتيجة بحد أقصى 2048 بكسل للضلع الأطول؛ «تراجع عن الإزالة» يستعيد الأصل.</string>
+    <string name="on_device">المعالجة على الجهاز</string>
+    <string name="quick_access">وصول سريع</string>
+    <string name="no_cloud_upload">دون رفع سحابي</string>
+    <string name="photo_short">تحرير الصور وتصميمها</string>
+    <string name="video_short">تحرير الفيديو والصوت</string>
+    <string name="weather_short">تحليل السماء والسحب</string>
+
+    <string name="live_preview">معاينة مباشرة</string>
+    <string name="original_view">الصورة الأصلية</string>
+
 </resources>
