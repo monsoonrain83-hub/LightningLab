@@ -25,3 +25,13 @@ Phase 2.16:
 - Photo editor preview bitmap lifecycle and intermediate bitmap cleanup.
 - GitHub Actions workflow for unit tests and debug APK build (not yet executed).
 - versionCode 26 / versionName 1.0-r10.16.
+
+------------------------------------------------------------
+UPDATE r10.17 / PHASE 2.17 — CLOUD AI TRAINING ALIGNMENT
+------------------------------------------------------------
+- Trainer class order now exactly matches Android CloudClassifier: Ac, As, Cb, Cc, Ci, Cs, Cu, Ns, Sc, St.
+- Trainer supports either prepared class folders (--data) or direct Hugging Face dataset (--dataset).
+- Added duplicate-image-group train/validation/test splitting and per-class metrics.
+- Android/training preprocessing contract aligned to RGB 224x224, aspect-preserving resize, neutral-grey padding.
+- Added metrics.json, confusion_matrix.csv, labels.txt and model_contract.json outputs.
+- No trained model weights are included; see tools/cloud_ai/PHASE2_17_TRAINING_FA.md.
