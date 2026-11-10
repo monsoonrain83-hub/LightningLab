@@ -768,7 +768,7 @@ fun VideoEditor(vm: MainVM) {
                     if (clip.kind == "IMAGE") {
                         vm.videoOverlayBitmap(clip.id)?.let { bitmap ->
                             Image(bitmap.asImageBitmap(), null, Modifier.align(alignment).fillMaxWidth(0.42f).alpha(activeAlpha)
-                                .clickable { vm.selectedOverlayClipId = clip.id }, contentScale = ContentScale.Fit)
+                                .clickable { vm.selectOverlayClip(clip.id) }, contentScale = ContentScale.Fit)
                         }
                     } else {
                         Text(clip.content, Modifier.align(alignment).padding(12.dp).clip(RoundedCornerShape(8.dp))
@@ -1367,14 +1367,16 @@ private fun VideoTimelineTracks(
                     val timelineWidthPx = with(LocalDensity.current) { totalWidth.toPx() }.coerceAtLeast(1f)
                     Box(Modifier.offset(x = totalWidth * startFraction).width((totalWidth * widthFraction).coerceAtLeast(18.dp))
                         .fillMaxHeight().clip(RoundedCornerShape(5.dp))
-                        .background(if (vm.selectedOverlayClipId == clip.id) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))) {
+                        .background(if (vm.selectedOverlayClipId == clip.id || clip.id in vm.selectedOverlayClipIds) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))) {
                         Box(Modifier.fillMaxSize().pointerInput(clip.id, durationMs) {
                             var dragTotal = 0f
                             detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
                                 onDrag = { change, amount ->
                                     change.consume(); dragTotal += amount.x
                                     val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
-                                    vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
+                                    if (clip.id in vm.selectedOverlayClipIds && vm.selectedOverlayClipIds.size > 1)
+                                        vm.moveOverlayGroup(clip.id, delta, recordHistory = false)
+                                    else vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
                                 }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
                         }.clickable { vm.selectedOverlayClipId = clip.id }, contentAlignment = Alignment.Center) {
                             Text(clip.content, Modifier.padding(horizontal = 8.dp), maxLines = 1, color = Color.White,
@@ -1416,6 +1418,17 @@ private fun VideoTimelineTracks(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("قفل کلیپ", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
                     Switch(checked = clip.locked, onCheckedChange = { vm.setOverlayClipLocked(clip.id, it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("انتخاب در گروه", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Checkbox(checked = clip.id in vm.selectedOverlayClipIds, onCheckedChange = { vm.toggleOverlaySelection(clip.id) })
+                }
+                if (vm.selectedOverlayClipIds.size > 1) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${vm.selectedOverlayClipIds.size} کلیپ انتخاب شده", Modifier.weight(1f), color = Storm.text, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { vm.removeSelectedOverlayClips() }) { Text("حذف گروه") }
+                        TextButton(onClick = { vm.clearOverlaySelection() }) { Text("لغو") }
+                    }
                 }
                 Text("شروع: ${fmt(safeStart)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd, recordHistory = false) },

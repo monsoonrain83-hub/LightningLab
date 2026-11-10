@@ -329,6 +329,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private var nextVideoEffectId = 1L
     var selectedVideoEffectId by mutableStateOf<Long?>(null)
     var selectedOverlayClipId by mutableStateOf<Long?>(null)
+    var selectedOverlayClipIds by mutableStateOf<Set<Long>>(emptySet())
     var timelineSnapEnabled by mutableStateOf(true)
     private var nextVideoOverlayId = 1L
     private val videoOverlayBitmaps = LinkedHashMap<Long, Bitmap>()
@@ -432,6 +433,51 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
         if (isVoice) voiceWaveformJob = task else musicWaveformJob = task
     }
+    fun selectOverlayClip(id: Long) { selectedOverlayClipId = id }
+
+    fun toggleOverlaySelection(id: Long) {
+        selectedOverlayClipIds = if (id in selectedOverlayClipIds) selectedOverlayClipIds - id else selectedOverlayClipIds + id
+        selectedOverlayClipId = id
+    }
+
+    fun clearOverlaySelection() { selectedOverlayClipIds = emptySet() }
+
+    fun removeSelectedOverlayClips() {
+        val ids = selectedOverlayClipIds
+        if (ids.size < 2 || videoOverlayClips.any { it.id in ids && it.locked }) return
+        videoOverlayClips.removeAll { it.id in ids }
+        selectedOverlayClipIds = emptySet()
+        selectedOverlayClipId = null
+        pushVideoHistory()
+    }
+
+    fun moveOverlayGroup(id: Long, deltaMs: Long, recordHistory: Boolean = true) {
+        val ids = if (id in selectedOverlayClipIds && selectedOverlayClipIds.size > 1) selectedOverlayClipIds else setOf(id)
+        val selected = videoOverlayClips.filter { it.id in ids }
+        if (selected.isEmpty() || selected.any { it.locked }) return
+        val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+        val minStart = selected.minOf { it.startMs }
+        val maxEnd = selected.maxOf { it.endMs }
+        val anchors = if (timelineSnapEnabled) buildList {
+            add(0L); add(total); addAll(videoMarkers)
+            var boundary = 0L
+            segments.forEach { segment ->
+                boundary += (segment.endMs - segment.startMs).coerceAtLeast(0L)
+                add((boundary / vSpeed.coerceAtLeast(0.05f)).toLong())
+            }
+            videoEffectClips.forEach { add(it.startMs); add(it.endMs) }
+            videoOverlayClips.filter { it.id !in ids }.forEach { add(it.startMs); add(it.endMs) }
+        } else emptyList()
+        val snappedStart = TimelineMath.snapTime(minStart + deltaMs, anchors)
+        val safeDelta = (snappedStart - minStart).coerceIn(-minStart, (total - maxEnd).coerceAtLeast(-minStart))
+        if (safeDelta == 0L) return
+        selected.forEach { clip ->
+            val index = videoOverlayClips.indexOfFirst { it.id == clip.id }
+            if (index >= 0) videoOverlayClips[index] = clip.copy(startMs = clip.startMs + safeDelta, endMs = clip.endMs + safeDelta)
+        }
+        if (recordHistory) pushVideoHistory() else timelineGestureDirty = true
+    }
+
     fun setOverlayClipLocked(id: Long, locked: Boolean) {
         val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0) return
         val old = videoOverlayClips[i]
