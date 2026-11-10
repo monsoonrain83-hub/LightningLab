@@ -14,8 +14,8 @@ import java.nio.ByteOrder
  * Optional on-device cloud-genus classifier (TensorFlow Lite, Apache-2.0 runtime).
  * The app ships WITHOUT a model: you train one with tools/train_cloud_model.py (CCAiM dataset, prepared with tools/cloud_ai/prepare_ccaim.py) and import the
  * resulting cloud_model.tflite from the Weather tab. If no valid model is loaded, callers use the rule-based
- * [CloudAnalysis] result instead. Contract: input 224x224x3 float32 RGB in 0..255 (preprocessing is INSIDE the model),
- * output 10 softmax scores in the order of [LABELS].
+ * [CloudAnalysis] result instead. Supports the 10-class in-app contract and the specifically identified CCSN 11-class
+ * export; each has its own resize/normalization contract.
  */
 class CloudClassifier(private val modelFile: File) {
     companion object {
@@ -31,7 +31,8 @@ class CloudClassifier(private val modelFile: File) {
             LEGACY_LABELS.size -> LEGACY_LABELS
             else -> null
         }
-        internal fun usesCcsnUnitInput(count: Int): Boolean = count == LEGACY_LABELS.size
+        internal fun usesCcsnUnitInput(count: Int, inputTensorName: String): Boolean =
+            count == LEGACY_LABELS.size && inputTensorName.contains("input_layer_6", ignoreCase = true)
     }
 
     private var interp: Interpreter? = null
@@ -56,12 +57,17 @@ class CloudClassifier(private val modelFile: File) {
             val labels = labelsForOutputCount(outputCount ?: -1)
             if (!inputOk || outputShape.size != 2 || outputShape[0] != 1 || labels == null || output.dataType() != DataType.FLOAT32) {
                 it.close(); false
-            } else { activeLabels = labels; activeCcsnInput = usesCcsnUnitInput(outputCount ?: -1); interp = it; true }
+            } else {
+                activeLabels = labels
+                activeCcsnInput = usesCcsnUnitInput(outputCount ?: -1, input.name())
+                interp = it
+                true
+            }
         } catch (e: Throwable) { interp = null; false }
     }
 
     @Synchronized
-    fun close() { interp?.close(); interp = null }
+    fun close() { interp?.close(); interp = null; activeLabels = LABELS; activeCcsnInput = false }
 
     /** Returns (genus code, probability) sorted descending, or null if no model is loaded or inference fails. */
     @Synchronized
