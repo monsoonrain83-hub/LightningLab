@@ -1307,14 +1307,18 @@ private fun VideoTimelineTracks(
                         }
                     }
                 }
-                TextButton(onClick = { vm.removeEffectClip(effect.id) }) { Text("×", color = Storm.muted) }
+                TextButton(onClick = { vm.removeEffectClip(effect.id) }, enabled = !effect.locked) { Text("×", color = Storm.muted) }
             }
             if (vm.selectedVideoEffectId == effect.id) {
                 val start = effect.startMs.coerceIn(0L, durationMs - 1L)
                 val end = effect.endMs.coerceIn(start + 1L, durationMs)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("قفل کلیپ افکت", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Switch(checked = effect.locked, onCheckedChange = { vm.setEffectClipLocked(effect.id, it) })
+                }
                 Text("بازه زمانی فیلتر: ${fmt(start)} تا ${fmt(end)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 RangeSlider(value = start.toFloat()..end.toFloat(), onValueChange = { vm.updateEffectClip(effect.id, it.start.toLong(), it.endInclusive.toLong(), recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..durationMs.toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..durationMs.toFloat(), enabled = !effect.locked)
             }
         }
         if (vm.overlayText.isNotBlank()) {
@@ -1390,17 +1394,21 @@ private fun VideoTimelineTracks(
                         }
                     }
                 }
-                TextButton(onClick = { vm.removeOverlayClip(clip.id) }) { Text("×", color = Storm.muted) }
+                TextButton(onClick = { vm.removeOverlayClip(clip.id) }, enabled = !clip.locked) { Text("×", color = Storm.muted) }
             }
             if (vm.selectedOverlayClipId == clip.id) {
                 val safeStart = clip.startMs.coerceIn(0L, durationMs - 1L)
                 val safeEnd = clip.endMs.coerceIn(safeStart + 1L, durationMs)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("قفل کلیپ", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Switch(checked = clip.locked, onCheckedChange = { vm.setOverlayClipLocked(clip.id, it) })
+                }
                 Text("شروع: ${fmt(safeStart)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd, recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..(durationMs - 1L).toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..(durationMs - 1L).toFloat(), enabled = !clip.locked)
                 Text("پایان: ${fmt(safeEnd)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = safeEnd.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, safeStart, it.toLong(), recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat(), enabled = !clip.locked)
                 Divider(color = Storm.hairline)
                 Text("فریم‌های کلیدی حرکت و شفافیت", style = MaterialTheme.typography.labelMedium, color = Storm.arc)
                 Text("زمان فریم: ${fmt(keyTime.toLong().coerceIn(safeStart, safeEnd))}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
@@ -1409,7 +1417,7 @@ private fun VideoTimelineTracks(
                 Text("شفافیت: ${(keyAlpha * 100).toInt()}٪", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = keyAlpha, onValueChange = { keyAlpha = it }, valueRange = 0f..1f)
                 ChoiceRow(listOf("بالا", "وسط", "پایین"), keyPosition) { keyPosition = it }
-                Button(onClick = { vm.addOverlayKeyframe(clip.id, keyTime.toLong(), keyAlpha, keyPosition) },
+                Button(onClick = { vm.addOverlayKeyframe(clip.id, keyTime.toLong(), keyAlpha, keyPosition) }, enabled = !clip.locked,
                     modifier = Modifier.fillMaxWidth()) { Text("ثبت فریم کلیدی") }
                 if (clip.keyframes.isNotEmpty()) {
                     Text("فریم‌های ثبت‌شده", style = MaterialTheme.typography.labelSmall, color = Storm.muted)

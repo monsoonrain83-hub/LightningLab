@@ -18,14 +18,15 @@
 - قرارداد طبقه‌بندی ابر: تفکیک ۱۰ جنس طبیعی WMO از کلاس دیتاستی Contrail (Ct)، تفکیک species و varieties، نام‌گذاری supplementary/accessory features.
 - سازگاری مدل CCSN کاربر: تشخیص مدل ۱۱کلاسه بر اساس امضای tensor، ترتیب برچسب‌ها و preprocessing مستقل، ارتقای TFLite runtime به ۲.۱۷.۰؛ فایل وزن به علت نامشخص‌بودن مجوز مخزن مبدأ در APK/GitHub bundle قرار نمی‌گیرد و از مسیر Import کاربر بارگذاری می‌شود.
 
-## وضعیت فعلی r10.50
+## وضعیت فعلی r10.51
 - [x] ورود و خروج فایل SRT در ابزار متن Video Editor؛ cueها به کلیپ‌های قابل‌ویرایش تبدیل می‌شوند و export دوباره SRT می‌سازد
 - [x] پشتیبانی parser از comma/dot، چندخطی، BOM، cue settings و entityهای پایه
 - [x] تست‌های parser و قرارداد مدل CCSN
 - [x] اجرای unit tests در CI و ذخیره گزارش شکست
 - [x] اصلاح هم‌ترازی سراسری DayLine؛ تست‌های jitter بدون صاعقه و صاعقه باریک در snapshot قبلی سبز شدند
 - [x] افزودن Fade-in/Fade-out مستقل موسیقی و صدای ضبط‌شده با envelope خطی
-- [ ] mute و solo مستقل برای ترک‌های اصلی، موسیقی و voice؛ ذخیره‌سازی پروژه و تست routing
+- [x] mute و solo مستقل برای ترک‌های اصلی، موسیقی و voice؛ ذخیره‌سازی پروژه و تست routing
+- [ ] قفل کلیپ‌های overlay و effect برای جلوگیری از جابه‌جایی/trim/حذف تصادفی؛ ذخیره در ProjectCodec v7
 - [x] ذخیره/بازیابی fadeها در Undo/Redo و ProjectCodec v5؛ پروژه‌های v1-v4 با مقدار پیش‌فرض صفر خوانده می‌شوند
 - [ ] سبزشدن تمام unit tests روی آخرین commit r10.49
 - [ ] سبزشدن assembleDebug با TFLite 2.17.0، SRT export و AudioProcessor جدید
