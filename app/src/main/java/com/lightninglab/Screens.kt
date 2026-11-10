@@ -1438,10 +1438,14 @@ private fun VideoTimelineTracks(
                     Text("انتخاب در گروه", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
                     Checkbox(checked = clip.id in vm.selectedOverlayClipIds, onCheckedChange = { vm.toggleOverlaySelection(clip.id) })
                 }
+                if (vm.selectedOverlayClipIds.size > 1 && vm.videoOverlayClips.any { it.id in vm.selectedOverlayClipIds && it.locked }) {
+                    Text("گروه شامل کلیپ قفل‌شده است؛ ابتدا قفل را بردارید.", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                }
                 if (vm.selectedOverlayClipIds.size > 1) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("${vm.selectedOverlayClipIds.size} کلیپ انتخاب شده", Modifier.weight(1f), color = Storm.text, style = MaterialTheme.typography.labelSmall)
-                        TextButton(onClick = { vm.removeSelectedOverlayClips() }) { Text("حذف گروه") }
+                        TextButton(onClick = { vm.removeSelectedOverlayClips() },
+                            enabled = vm.videoOverlayClips.none { it.id in vm.selectedOverlayClipIds && it.locked }) { Text("حذف گروه") }
                         TextButton(onClick = { vm.clearOverlaySelection() }) { Text("لغو") }
                     }
                 }
