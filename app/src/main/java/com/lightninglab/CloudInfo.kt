@@ -18,7 +18,35 @@ object CloudInfo {
     /** Accessory clouds are a separate WMO classification column, not supplementary features. */
     val accessoryClouds = listOf("pannus", "pileus", "velum", "flumen")
 
-    /** A selection of species and varieties that observers commonly tag. Observer-tagged, NOT detected. */
-    val speciesVarieties = listOf("fibratus", "uncinus", "castellanus", "floccus", "lenticularis", "volutus",
-        "undulatus", "radiatus", "lacunosus", "intortus", "translucidus", "opacus", "duplicatus")
+    /** WMO cloud species grouped by genus. These are observer vocabulary, not automatic predictions. */
+    val speciesByGenus: Map<String, List<String>> = mapOf(
+        "Ci" to listOf("fibratus", "uncinus", "spissatus", "castellanus", "floccus"),
+        "Cc" to listOf("stratiformis", "lenticularis", "castellanus", "floccus"),
+        "Cs" to listOf("fibratus", "nebulosus"),
+        "Ac" to listOf("stratiformis", "lenticularis", "castellanus", "floccus", "volutus"),
+        "As" to emptyList(),
+        "Ns" to emptyList(),
+        "Sc" to listOf("stratiformis", "lenticularis", "castellanus", "floccus", "volutus"),
+        "St" to listOf("nebulosus", "fractus"),
+        "Cu" to listOf("humilis", "mediocris", "congestus", "fractus"),
+        "Cb" to listOf("calvus", "capillatus")
+    )
+
+    /** WMO varieties are a separate classification axis from species. */
+    val varieties = listOf("intortus", "vertebratus", "radiatus", "duplicatus", "undulatus",
+        "lacunosus", "perlucidus", "translucidus", "opacus")
+
+    /** Combined observer vocabulary retained for older UI consumers. */
+    val speciesVarieties = (speciesByGenus.values.flatten() + varieties).distinct()
+
+    private val featureDisplayNames = mapOf(
+        "arcus" to "Arcus", "asperitas" to "Asperitas", "virga" to "Virga",
+        "praecipitatio" to "Praecipitatio", "tuba" to "Tuba",
+        "mamma" to "Mamma (Mammatus)", "incus" to "Incus", "murus" to "Murus",
+        "cauda" to "Cauda", "fluctus" to "Fluctus", "cavum" to "Cavum",
+        "pannus" to "Pannus", "pileus" to "Pileus", "velum" to "Velum", "flumen" to "Flumen"
+    )
+
+    fun displayFeature(code: String): String =
+        featureDisplayNames[code] ?: code.replaceFirstChar { it.uppercase() }
 }

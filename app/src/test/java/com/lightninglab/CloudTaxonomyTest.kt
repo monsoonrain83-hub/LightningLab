@@ -19,7 +19,8 @@ class CloudTaxonomyTest {
     }
 
     @Test fun supplementaryFeaturesIncludeImportantConvectiveStructures() {
-        assertTrue(CloudInfo.supplementary.containsAll(listOf("arcus", "asperitas", "virga", "incus", "mamma", "pileus", "tuba")))
+        assertTrue(CloudInfo.supplementary.containsAll(listOf("arcus", "asperitas", "virga", "incus", "mamma", "tuba")))
+        assertTrue(CloudInfo.accessoryClouds.contains("pileus"))
         assertEquals("Mamma (Mammatus)", CloudInfo.displayFeature("mamma"))
     }
 }
