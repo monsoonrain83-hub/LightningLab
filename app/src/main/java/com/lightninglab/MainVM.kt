@@ -497,7 +497,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 subtitleImportStatus = "${cues.size} زیرنویس در فایل SRT ذخیره شد."
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                subtitleImportStatus = "خطا در ذخیرهٔ SRT: ${e.message ?: "SRT"}"
+                val reason = e.message ?: "SRT"
+                subtitleImportStatus = "خطا در ذخیرهٔ SRT: $reason"
             }
         }
     }

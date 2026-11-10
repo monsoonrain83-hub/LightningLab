@@ -34,7 +34,8 @@ object SubRip {
         .filter { it.endMs > it.startMs && it.text.isNotBlank() }
         .sortedWith(compareBy<SubtitleCue> { it.startMs }.thenBy { it.endMs })
         .mapIndexed { index, cue ->
-            "${index + 1}\n${formatTimestamp(cue.startMs)} --> ${formatTimestamp(cue.endMs)}\n${cue.text.replace("\r\n", "\n").replace('\r', '\n')}"
+            val normalizedText = cue.text.replace("\r\n", "\n").replace('\r', '\n')
+            "${index + 1}\n${formatTimestamp(cue.startMs)} --> ${formatTimestamp(cue.endMs)}\n$normalizedText"
         }.joinToString("\n\n").let { if (it.isEmpty()) "" else "$it\n" }
 
     private fun formatTimestamp(value: Long): String {
