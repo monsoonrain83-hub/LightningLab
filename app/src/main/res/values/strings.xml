@@ -223,4 +223,17 @@ Rough type guess: %5$s</string>
     <string name="live_preview">Live preview</string>
     <string name="original_view">Original image</string>
 
+    <string name="tab_layers">Photo layers</string>
+
+    <!-- Home workspace polish -->
+    <string name="home_hero_title">Analyze and extract lightning moments</string>
+    <string name="home_hero_body">Choose a video and find bright lightning frames offline.</string>
+    <string name="home_tools">Main tools</string>
+    <string name="home_tool_count">4 workspaces</string>
+    <string name="home_cloud_atlas">Cloud atlas</string>
+    <string name="home_cloud_atlas_sub">WMO genera and cloud identification</string>
+    <string name="home_processing">Processing</string>
+    <string name="home_sensitivity">Detection sensitivity</string>
+    <string name="home_sensitivity_hint">Sensitivity for extracting bright frames</string>
+    <string name="home_offline_note">Processing stays on your device. Your files are analyzed without cloud upload.</string>
 </resources>

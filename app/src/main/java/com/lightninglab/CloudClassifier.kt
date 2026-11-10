@@ -11,115 +11,97 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Offline TFLite cloud-genus classifier.
- *
- * Supports:
- *  - 10-class LightningLab models: aspect-preserving letterbox, RGB float 0..255.
- *  - 11-class CCSN models: direct 224x224 resize, RGB float 0..1.
- *
- * CCSN class order follows Keras flow_from_directory's alphabetical folder order:
- * Ac, As, Cb, Cc, Ci, Cs, Ct, Cu, Ns, Sc, St.
+ * Optional on-device cloud-genus classifier (TensorFlow Lite, Apache-2.0 runtime).
+ * The app ships WITHOUT a model: you train one with tools/train_cloud_model.py (CCAiM dataset, prepared with tools/cloud_ai/prepare_ccaim.py) and import the
+ * resulting cloud_model.tflite from the Weather tab. If no valid model is loaded, callers use the rule-based
+ * [CloudAnalysis] result instead. Contract: input 224x224x3 float32 RGB in 0..255 (preprocessing is INSIDE the model),
+ * output 10 softmax scores in the order of [LABELS].
  */
 class CloudClassifier(private val modelFile: File) {
     companion object {
+        /** Ten WMO cloud genera in the exact order emitted by tools/train_cloud_model.py. */
         val LABELS = listOf("Ac", "As", "Cb", "Cc", "Ci", "Cs", "Cu", "Ns", "Sc", "St")
+        /** Backward compatibility for previously imported CCSN models that included contrails. */
         val LEGACY_LABELS = listOf("Ac", "As", "Cb", "Cc", "Ci", "Cs", "Ct", "Cu", "Ns", "Sc", "St")
         const val SIZE = 224
     }
 
     private var interp: Interpreter? = null
     private var activeLabels: List<String> = LABELS
-    private var ccsnInput = false
 
+    /** True when a supported ten-genus or legacy eleven-class model was loaded. */
     @Synchronized
     fun load(): Boolean {
         close()
         if (!modelFile.exists()) return false
         return try {
-            val options = Interpreter.Options().apply { setNumThreads(4) }
-            val it = Interpreter(modelFile, options)
+            val it = Interpreter(modelFile)
             val input = it.getInputTensor(0)
             val inputShape = input.shape()
-            val inputOk = inputShape.contentEquals(intArrayOf(1, SIZE, SIZE, 3)) &&
-                input.dataType() == DataType.FLOAT32
+            val inputOk = inputShape.contentEquals(intArrayOf(1, SIZE, SIZE, 3)) && input.dataType() == DataType.FLOAT32
             val output = it.getOutputTensor(0)
             val outputShape = output.shape()
+            // The training pipeline exports exactly one batch with one score per genus.
+            // Checking only the last dimension could accidentally accept [N], [1,1,N], etc.
             val outputCount = outputShape.getOrNull(1)
             val labels = when (outputCount) {
                 LABELS.size -> LABELS
                 LEGACY_LABELS.size -> LEGACY_LABELS
                 else -> null
             }
-            if (!inputOk || outputShape.size != 2 || outputShape[0] != 1 ||
-                labels == null || output.dataType() != DataType.FLOAT32) {
-                it.close()
-                false
-            } else {
-                activeLabels = labels
-                ccsnInput = outputCount == LEGACY_LABELS.size
-                interp = it
-                true
-            }
-        } catch (_: Throwable) {
-            interp = null
-            false
-        }
+            if (!inputOk || outputShape.size != 2 || outputShape[0] != 1 || labels == null || output.dataType() != DataType.FLOAT32) {
+                it.close(); false
+            } else { activeLabels = labels; interp = it; true }
+        } catch (e: Throwable) { interp = null; false }
     }
 
     @Synchronized
-    fun close() {
-        interp?.close()
-        interp = null
-    }
+    fun close() { interp?.close(); interp = null }
 
+    /** Returns (genus code, probability) sorted descending, or null if no model is loaded or inference fails. */
     @Synchronized
     fun classify(bmp: Bitmap): List<Pair<String, Float>>? {
-        val model = interp ?: return null
+        val m = interp ?: return null
+        if (bmp.width <= 0 || bmp.height <= 0) return null
+        var scaled: Bitmap? = null
+        var padded: Bitmap? = null
         return try {
-            // The published CCSN trainer uses Keras ImageDataGenerator:
-            // RGB, 224x224 stretch resize and rescale=1/255. LightningLab's
-            // 10-class pipeline instead uses aspect-preserving letterbox and 0..255.
-            val prepared = if (ccsnInput) {
-                Bitmap.createScaledBitmap(bmp, SIZE, SIZE, true)
-            } else {
-                val scale = minOf(SIZE.toFloat() / bmp.width, SIZE.toFloat() / bmp.height)
-                val dw = (bmp.width * scale).toInt().coerceAtLeast(1)
-                val dh = (bmp.height * scale).toInt().coerceAtLeast(1)
-                val scaled = Bitmap.createScaledBitmap(bmp, dw, dh, true)
-                val canvasBitmap = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
-                Canvas(canvasBitmap).apply {
-                    drawColor(Color.rgb(128, 128, 128))
-                    val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-                    drawBitmap(scaled, ((SIZE - dw) / 2).toFloat(), ((SIZE - dh) / 2).toFloat(), paint)
-                }
-                if (scaled !== bmp) scaled.recycle()
-                canvasBitmap
+            // Preserve aspect ratio: training and inference both use centered grey padding.
+            val scale = minOf(SIZE.toFloat() / bmp.width, SIZE.toFloat() / bmp.height)
+            val dw = (bmp.width * scale).toInt().coerceIn(1, SIZE)
+            val dh = (bmp.height * scale).toInt().coerceIn(1, SIZE)
+            scaled = Bitmap.createScaledBitmap(bmp, dw, dh, true)
+            padded = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(padded!!)
+            canvas.drawColor(Color.rgb(128, 128, 128))
+            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+            canvas.drawBitmap(scaled!!, ((SIZE - dw) / 2f), ((SIZE - dh) / 2f), paint)
+
+            val px = IntArray(SIZE * SIZE)
+            padded!!.getPixels(px, 0, SIZE, 0, 0, SIZE, SIZE)
+            val buf = ByteBuffer.allocateDirect(4 * SIZE * SIZE * 3).order(ByteOrder.nativeOrder())
+            for (p in px) {
+                buf.putFloat(((p shr 16) and 255).toFloat())
+                buf.putFloat(((p shr 8) and 255).toFloat())
+                buf.putFloat((p and 255).toFloat())
             }
-
-            val pixels = IntArray(SIZE * SIZE)
-            prepared.getPixels(pixels, 0, SIZE, 0, 0, SIZE, SIZE)
-            if (prepared !== bmp) prepared.recycle()
-
-            val buffer = ByteBuffer.allocateDirect(4 * SIZE * SIZE * 3).order(ByteOrder.nativeOrder())
-            val divisor = if (ccsnInput) 255f else 1f
-            for (pixel in pixels) {
-                buffer.putFloat(((pixel shr 16) and 255) / divisor)
-                buffer.putFloat(((pixel shr 8) and 255) / divisor)
-                buffer.putFloat((pixel and 255) / divisor)
-            }
-            buffer.rewind()
-
-            val output = Array(1) { FloatArray(activeLabels.size) }
-            model.run(buffer, output)
-            val scores = output[0]
-            if (scores.any { !it.isFinite() || it < 0f }) return null
-            val sum = scores.sum()
-            if (!sum.isFinite() || sum <= 0f) return null
-            activeLabels.indices
-                .map { activeLabels[it] to (scores[it] / sum) }
-                .sortedByDescending { it.second }
+            buf.rewind()
+            val out = Array(1) { FloatArray(activeLabels.size) }
+            m.run(buf, out)
+            val raw = out[0]
+            // The exported model contract is a softmax probability vector. Do not
+            // normalize arbitrary positive logits or malformed tensors into plausible
+            // looking percentages: that would conceal an incompatible model export.
+            if (raw.any { !it.isFinite() || it !in 0f..1f }) return null
+            val total = raw.sum()
+            if (!total.isFinite() || total !in 0.90f..1.10f) return null
+            activeLabels.indices.map { activeLabels[it] to raw[it] }.sortedByDescending { it.second }
         } catch (_: Throwable) {
             null
+        } finally {
+            // The source bitmap belongs to the caller; only temporary images are recycled.
+            if (scaled != null && scaled !== bmp && !scaled!!.isRecycled) scaled!!.recycle()
+            if (padded != null && !padded!!.isRecycled) padded!!.recycle()
         }
     }
 }

@@ -85,13 +85,48 @@ fun WeatherScreen(vm: MainVM) {
                     Text("مدت ویدئو: ${report.durationMillis / 1000} ثانیه | فریم‌های بررسی‌شده: ${report.sampledFrames}", style = MaterialTheme.typography.bodySmall)
                     Text(if (report.modelWasAvailable) "مدل TFLite فعال بوده است؛ خروجی‌ها نامزد تشخیص‌اند." else "مدل TFLite نصب نیست؛ فقط شاخص‌های سادهٔ پوشش و بافت گزارش شده‌اند.", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                     Text("روند زمانی: ${report.evolution.trendLabelPersian}", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text("روند پوشش ابری در ویدئو: ${report.cloudCoverTrend.labelPersian}", style = MaterialTheme.typography.titleSmall)
+                    Text("میانگین ابتدای ویدئو: ${report.cloudCoverTrend.firstMeanPercent}٪ | انتها: ${report.cloudCoverTrend.lastMeanPercent}٪ | تغییر: ${if (report.cloudCoverTrend.changePercentagePoints > 0) "+" else ""}${report.cloudCoverTrend.changePercentagePoints} واحد درصد", style = MaterialTheme.typography.bodySmall)
+                    Text("کمینه تا بیشینهٔ برآوردشده: ${report.cloudCoverTrend.minimumPercent} تا ${report.cloudCoverTrend.maximumPercent}٪", style = MaterialTheme.typography.bodySmall)
+                    Text(report.cloudCoverTrend.notePersian, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    if (report.temporalConsensus.framesWithModelOutput > 0) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("جمع‌بندی چندفریمی مدل", style = MaterialTheme.typography.titleSmall)
+                        Text("خروجی معتبر مدل در ${report.temporalConsensus.framesWithModelOutput} فریم از ${report.temporalConsensus.analyzedFrames} فریم | پایداری نامزد پرتکرار: ${report.temporalConsensus.stabilityPercent}٪", style = MaterialTheme.typography.bodySmall)
+                        report.temporalConsensus.candidates.forEachIndexed { index, candidate ->
+                            Text("${index + 1}. ${CloudInfo.genusName(candidate.genusCode)} — حضور در ${candidate.frameCount} فریم (${candidate.frameSharePercent}٪) | میانگین امتیاز خام ${String.format(Locale.US, "%.2f", candidate.meanRawScore)} | بیشینه ${String.format(Locale.US, "%.2f", candidate.peakRawScore)}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text(report.temporalConsensus.notePersian, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("پایش زمانی ویژگی‌های ساختاری", style = MaterialTheme.typography.titleSmall)
+                    if (report.structuralFeatureTrend.modelWasAvailable) {
+                        Text("مدل ویژگی‌ها در ${report.structuralFeatureTrend.modelOutputFrames} فریم از ${report.structuralFeatureTrend.sampledFrames} فریم خروجی داده است.", style = MaterialTheme.typography.bodySmall)
+                        if (report.structuralFeatureTrend.candidates.isEmpty()) {
+                            Text("در آستانهٔ امتیاز خام ۰٫۵۰، ویژگی ساختاری پایداری پیشنهاد نشد.", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                        } else {
+                            report.structuralFeatureTrend.candidates.forEachIndexed { index, candidate ->
+                                Text(
+                                    "${index + 1}. ${CloudFeatureTemporalAnalyzer.displayName(candidate.code)} — ${candidate.framesDetected} فریم (${candidate.frameSharePercent}٪) | میانگین امتیاز خام ${String.format(Locale.US, "%.2f", candidate.meanRawScore)} | اوج ${String.format(Locale.US, "%.2f", candidate.peakRawScore)} | ${candidate.trendPersian}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    } else {
+                        Text("برای پایش سندان، مامّا، ویرگا، آرکوس، قیف ابری و سایر ویژگی‌ها، مدل مستقل cloud_features.tflite را از بخش مدل‌ها وارد کنید.", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    }
+                    Text(report.structuralFeatureTrend.notePersian, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    OutlinedButton(onClick = { vm.shareCloudVideoReport() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("اشتراک‌گذاری گزارش تحلیل")
+                    }
                     report.evolution.genusSequence.takeIf { it.isNotEmpty() }?.let {
                         Text("جنس‌های پیشنهادی مدل: ${it.joinToString(" ← ")}", style = MaterialTheme.typography.bodySmall)
                     }
                     report.frameResults.forEach { frame ->
                         val time = String.format(Locale.US, "%02d:%02d", frame.elapsedMillis / 60000, (frame.elapsedMillis / 1000) % 60)
                         val genusText = frame.genusCode?.let { CloudInfo.genusName(it) } ?: "مدل جنس مشخصی پیشنهاد نکرد"
-                        val scoreText = frame.score?.let { " · امتیاز ${ (it * 100).roundToInt() }٪" } ?: ""
+                        val scoreText = frame.score?.let { " · امتیاز خام ${String.format(Locale.US, "%.2f", it)}" } ?: ""
                         Text("$time — $genusText$scoreText | پوشش ${frame.coverPercent}٪ (${frame.oktas}/8 اکتا) | ${frame.kindLabel}", style = MaterialTheme.typography.bodySmall)
                     }
                     if (report.evolution.events.isNotEmpty()) {
@@ -141,8 +176,8 @@ fun WeatherScreen(vm: MainVM) {
                 }
                 if (vm.topK.isNotEmpty()) {
                     Panel {
-                        Text("نامزدهای مدل (امتیاز نسبی؛ نه احتمال تأییدشده)", style = MaterialTheme.typography.titleSmall)
-                        vm.topK.forEach { (c, pr) -> Text(CloudInfo.genusName(c) + "  " + (pr * 100).roundToInt() + "%", style = MaterialTheme.typography.bodyMedium) }
+                        Text("نامزدهای مدل (امتیاز خام؛ نه درصد اطمینان)", style = MaterialTheme.typography.titleSmall)
+                        vm.topK.forEach { (c, pr) -> Text(CloudInfo.genusName(c) + "  " + String.format(Locale.US, "%.2f", pr), style = MaterialTheme.typography.bodyMedium) }
                     }
                 }
                 Panel {
@@ -167,12 +202,12 @@ fun WeatherScreen(vm: MainVM) {
                             Text(region.regionLabelPersian, style = MaterialTheme.typography.labelLarge)
                             if (region.genusCandidates.isNotEmpty()) {
                                 Text("جنس‌های پیشنهادی: " + region.genusCandidates.joinToString("، ") { (code, score) ->
-                                    "${CloudInfo.genusName(code)} ${(score * 100).roundToInt()}٪"
+                                    "${CloudInfo.genusName(code)} ${String.format(Locale.US, "%.2f", score)}"
                                 }, style = MaterialTheme.typography.bodySmall)
                             } else Text("مدل جنس مشخصی پیشنهاد نکرد", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                             if (region.featureCandidates.isNotEmpty()) {
                                 Text("ویژگی‌های پیشنهادی: " + region.featureCandidates.joinToString("، ") { (code, score) ->
-                                    "$code ${(score * 100).roundToInt()}٪"
+                                    "$code ${String.format(Locale.US, "%.2f", score)}"
                                 }, style = MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -189,7 +224,7 @@ fun WeatherScreen(vm: MainVM) {
                                 "asperitas" -> "Asperitas — ساختار موج‌دار"; "murus" -> "Murus — دیواره ابری"; "cauda" -> "Cauda — دنباله ابری"
                                 "fluctus" -> "Fluctus — موج شکسته"; "cavum" -> "Cavum — حفره ابری"; else -> code
                             }
-                            Text("$label · ${(score * 100).roundToInt()}٪", style = MaterialTheme.typography.bodySmall)
+                            Text("$label · امتیاز خام ${String.format(Locale.US, "%.2f", score)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }

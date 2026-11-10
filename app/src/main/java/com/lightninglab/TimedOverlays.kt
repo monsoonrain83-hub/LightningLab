@@ -1,5 +1,25 @@
 package com.lightninglab
 
-// PARKED: the r12 timeline editor needs the r12 MainVM, strings and the media3-exoplayer dependency, which were
-// overwritten by an unrelated update. The original source is kept in docs/parked_r12_editor/TimedOverlays.kt.txt
-// and the full r12 history is in git. Restore this file from there when the r12 ViewModel is restored.
+import android.graphics.Bitmap
+import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.OverlaySettings
+
+/** Static bitmap layer for one already time-sliced output interval. */
+class StaticBitmapOverlay(
+    private val bitmap: Bitmap,
+    position: Int,
+    alpha: Float = 1f
+) : BitmapOverlay() {
+    private val settings: OverlaySettings
+    init {
+        val backgroundY = when (position) { 0 -> 0.88f; 2 -> -0.88f; else -> 0f }
+        val overlayY = when (position) { 0 -> 1f; 2 -> -1f; else -> 0f }
+        settings = OverlaySettings.Builder()
+            .setBackgroundFrameAnchor(0f, backgroundY)
+            .setOverlayFrameAnchor(0f, overlayY)
+            .setAlphaScale(alpha.coerceIn(0f, 1f))
+            .build()
+    }
+    override fun getBitmap(presentationTimeUs: Long): Bitmap = bitmap
+    override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
+}

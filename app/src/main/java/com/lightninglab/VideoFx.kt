@@ -11,6 +11,7 @@ import androidx.media3.common.Effect
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.RgbAdjustment
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** Pure helpers for the video editor tools (crop maths, colour filters, styled overlay text). */
 object VideoFx {
@@ -45,17 +46,32 @@ object VideoFx {
      * with blank lines (pos: 0 = top, 1 = centre, 2 = bottom). base scales the whole thing (stickers use > 1).
      * Verify placement on a device: it is not unit-testable.
      */
-    fun styled(text: String, color: Int, sizeIdx: Int, pos: Int, bg: Boolean, base: Float = 1f): SpannableString {
+    fun styled(text: String, color: Int, sizeIdx: Int, pos: Int, bg: Boolean, base: Float = 1f, alpha: Float = 1f): SpannableString {
         val rel = base * when (sizeIdx) { 0 -> 0.6f; 2 -> 1.6f; else -> 1f }
         val pad = "\n".repeat(5)
         val prefix = if (pos == 2) pad else ""
         val suffix = if (pos == 0) pad else ""
         val sp = SpannableString(prefix + text + suffix)
         val a = prefix.length; val b = a + text.length
-        sp.setSpan(ForegroundColorSpan(color), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val opacity = (alpha.coerceIn(0f, 1f) * 255f).roundToInt()
+        val visibleColor = (color and 0x00FFFFFF) or ((((color ushr 24) and 0xFF) * opacity / 255) shl 24)
+        sp.setSpan(ForegroundColorSpan(visibleColor), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         sp.setSpan(RelativeSizeSpan(rel), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         sp.setSpan(StyleSpan(Typeface.BOLD), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (bg) sp.setSpan(BackgroundColorSpan(0x99000000.toInt()), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (bg) sp.setSpan(BackgroundColorSpan(((0x99 * opacity / 255) shl 24) or 0x000000), a, b, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         return sp
+    }
+
+    data class OverlayState(val alpha: Float, val position: Int)
+    /** Linear interpolation between clip keyframes; position snaps to the nearest anchor. */
+    fun overlayStateAt(clip: VideoOverlayClip, timeMs: Long): OverlayState {
+        val frames = clip.keyframes.sortedBy { it.timeMs }
+        if (frames.isEmpty()) return OverlayState(1f, clip.position)
+        if (timeMs <= frames.first().timeMs) return OverlayState(frames.first().alpha, frames.first().position)
+        if (timeMs >= frames.last().timeMs) return OverlayState(frames.last().alpha, frames.last().position)
+        val right = frames.indexOfFirst { it.timeMs >= timeMs }.coerceAtLeast(1)
+        val a = frames[right - 1]; val b = frames[right]
+        val f = ((timeMs - a.timeMs).toFloat() / (b.timeMs - a.timeMs).coerceAtLeast(1L)).coerceIn(0f, 1f)
+        return OverlayState(a.alpha + (b.alpha - a.alpha) * f, if (f < 0.5f) a.position else b.position)
     }
 }

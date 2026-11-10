@@ -1,37 +1,112 @@
-Lightning Lab — Atmospheric Intelligence + Glass UI (Phase 2.14)
+## r10.45 — تایم‌لاین تعاملی و ویرایش دقیق‌تر ویدئو
 
-This package contains the source project with Phase 1 offline atmospheric knowledge database and Phase 2 cloud-AI training pipeline, plus Phase 2.1 inference/training preprocessing corrections.
+- خط‌کش تایم‌لاین اکنون تعاملی است: لمس یا کشیدن روی خط‌کش، playhead را به همان موقعیت می‌برد و پیش‌نمایش ویدئو را seek می‌کند؛ این رفتار با زوم ۱× تا ۴× نیز هماهنگ است.
+- موقعیت فعلی و مدت کل پروژه به‌صورت زنده زیر خط‌کش نمایش داده می‌شود؛ playhead با خط تأکیدی مشخص است و نشانگرهای ذخیره‌شده روی خط‌کش tick جداگانه دارند.
+- دکمهٔ «تناسب» زوم تایم‌لاین را به ۱× برمی‌گرداند و پیمایش افقی را به ابتدای تایم‌لاین می‌آورد.
+- Magnetic snapping هنگام تنظیم بازهٔ لایه‌های متن/تصویر/استیکر و افکت‌ها، علاوه بر مرز کلیپ‌ها، به نشانگرهای کاربر و مرز قطعات ویدئو نیز متصل می‌شود.
+- تبدیل مختصات خط‌کش به زمان به تابع مستقل `TimelineMath.timeAtFraction` منتقل شد و برای ابتدا، انتها، مختصات خارج محدوده و مدت نامعتبر تست واحد اضافه شد.
+- نسخهٔ برنامه: `1.0-r10.45` / `versionCode 55`.
 
-Important: this is a source package, not a newly built APK. No trained cloud_model.tflite is included because the external image dataset could not be downloaded in this execution environment and no verified training run was possible. See docs/PHASE2_1_STATUS_FA.txt.
+### اعتبارسنجی
+- تست مستقل Kotlin برای `Timeline.kt` انجام می‌شود؛ این تست جایگزین Android Gradle build یا تست لمسی روی دستگاه نیست.
+- بیلد کامل Android باید پس از آپلود `update.zip` در GitHub Actions بررسی شود.
 
-Main documentation:
-- docs/ATMOSPHERIC_INTELLIGENCE_PHASE1.md
-- docs/ATMOSPHERIC_INTELLIGENCE_PHASE2.md
-- docs/PHASE2_1_STATUS_FA.txt
-- tools/cloud_ai/README.md
+---
+
+## r10.44 — بازطراحی تجربهٔ کاربری و چیدمان ابزارها
+
+- صفحهٔ خانه از چیدمان بلند و تکراری به داشبورد اولویت‌محور تبدیل شد: یک اقدام اصلی برای تشخیص، چهار فضای کاری در کارت‌های ثانویه، وضعیت پردازش و تنظیم حساسیت در بخش مستقل.
+- هدر خانه کوتاه‌تر شد تا فضای بیشتری برای محتوای اصلی باقی بماند؛ وضعیت پردازش روی دستگاه و انتخاب زبان در دسترس ماند.
+- کارت‌های ابزار، نوار ناوبری و دکمه‌های ابزار ادیتورها فشرده‌تر و یکدست‌تر شدند؛ حالت انتخاب‌شده با رنگ تأکیدی و سطح مشخص دیده می‌شود، بدون آنکه ابزارها حذف شوند.
+- ردیف دسته‌بندی ابزارهای عکس به سگمنت‌های جمع‌وجورتر تبدیل شد؛ نوار ابزار ویدئو نیز فضای افقی کمتری برای هر ابزار می‌گیرد تا گزینه‌های بیشتری هم‌زمان دیده شوند و باقی ابزارها همچنان با پیمایش افقی در دسترس‌اند.
+- متن‌های جدید صفحهٔ خانه برای فارسی، انگلیسی و عربی به منابع ترجمه منتقل شدند.
+- نسخهٔ برنامه به `1.0-r10.44` و `versionCode 54` ارتقا یافت.
+
+### کارهای مهم باقی‌مانده
+
+این انتشار بازطراحی تجربهٔ خانه و نوار ابزار است، نه تکمیل همهٔ قابلیت‌های حرفه‌ای. اولویت‌های بعدی همچنان عبارت‌اند از: autosave و crash recovery؛ تاریخچهٔ یکپارچهٔ تمام عملیات؛ drag/trim واقعی کلیپ‌ها، multi-select و گروه‌بندی؛ thumbnail cache و waveform چندسطحی؛ track controls؛ transition و speed ramp؛ keyframe کامل؛ subtitle/SRT؛ presetهای خروجی و صف export؛ و در ادیتور عکس، handles چندلمسی، ماسک شعاعی/خطی، RGB curves، histogram، before/after slider و خروجی قابل تنظیم. هر مورد باید به موتور پردازش، ذخیرهٔ پروژه و خروجی واقعی متصل شود، نه اینکه صرفاً کنترل UI اضافه شود.
+
+LightningLab update r10.41 (versionCode 51) — build repair and video clip editing
+
+Major photo/video editor continuation:
+
+PHOTO EDITOR
+- Added editable photo-project persistence: original image, adjustment parameters (including HSL), text/shape/image layers, mask strokes and mask inversion are saved to app-private project storage.
+- Imported image layers are copied into each project as PNG assets; loading restores editable layers rather than a flattened export.
+- Added a photo-project browser with save, open and delete actions.
+
+VIDEO EDITOR
+- Added real decoded audio waveforms for imported music and recorded voice tracks. Waveform peaks are extracted from decoded PCM on an IO worker and rendered as separate MUSIC and VOICE lanes.
+- Added editable timed IMAGE overlays with independent timeline clips, position/opacity keyframes and project-owned PNG assets.
+- Added timed effect clips: selected colour filters can now be applied to a chosen interval instead of the entire video; effect clips are separate from the base filter setting.
+- Export splits the timeline at image, effect and animation boundaries; opacity interpolates between keyframes and vertical anchor changes snap to the nearest keyframe.
+- Video project codec upgraded to v3 and persists image assets, effect clips and keyframes while continuing to read v1/v2 projects.
+
+VALIDATION
+- Added unit tests for photo-project round trips, video overlay keyframe interpolation and v1 project compatibility.
+- ZIP integrity can be checked after packaging. Android Gradle build and instrumentation/device playback tests were not run in this environment.
 
 
-PHASE 2.4: Added a pure-Kotlin video cloud evolution analyzer. See docs/PHASE2_4_VIDEO_GUIDE_FA.md and docs/PHASE2_4_CHANGELOG.md. This component analyzes caller-supplied frame observations; automatic frame extraction and visual inference are not yet connected.
+## r10.37 — تکمیل چرخش لایه‌ها و خروجی افکت‌ها
+- چرخش مستقل متن، شکل و تصویر واردشده در ادیتور عکس (۱۸۰- تا ۱۸۰+ درجه).
+- ذخیره چرخش در پروژه و بازیابی آن؛ پروژه‌های قدیمی با چرخش صفر باز می‌شوند.
+- ذخیره اتمیک پروژه عکس در پوشه موقت و انتشار فقط پس از تکمیل همه فایل‌ها و manifest.
+- در ادیتور ویدئو، افکت‌های زمان‌دار هم‌پوشان اکنون همگی به‌ترتیب شناسه اعمال می‌شوند؛ قبلاً فقط آخرین افکت فعال اعمال می‌شد.
+- نسخه 1.0-r10.37 / versionCode 47.
 
 
-PHASE 2.14: Integrated the Phase 2.13 Glassmorphism dashboard/UI with the atmospheric-intelligence source branch while preserving the seven-class atmospheric segmentation runner, model import/inference state, and its Weather screen UI. Added a glass-styled Photo Editor preview/control surface; existing adjustment, HSL, detail, crop/rotate/flip, healing, background cutout, presets, undo/redo and PNG/JPEG export actions remain wired to the existing ViewModel and PhotoEdit pipeline. Version: 1.0-r10.14 (versionCode 24).
+LightningLab update r10.38 (versionCode 48) — GitHub editor benchmark pass
 
-Verification: archive integrity, resource XML parsing, Python tool syntax and merge-presence checks were run. Android Gradle build/APK and device interaction tests were not run because this environment has no Gradle executable, Gradle wrapper or Android SDK. The ML Kit subject-cutout feature may require Google Play Services model delivery; the app should not yet be described as fully offline for every AI feature.
+PHOTO EDITOR
+- Added duplicate actions for text, shape, and imported-image layers. Duplicated image layers own a separate bitmap copy and are offset slightly for immediate visibility.
+
+VIDEO EDITOR
+- Restored the pure Kotlin TimelineMath implementation in active source (zoom interpolation, range clamping, source/output mapping, split validation).
+- Added magnetic snapping for timed overlay/effect start and end boundaries, including timeline start/end and neighboring clip edges.
+- Added a snap on/off control to the timeline header.
+
+RESEARCH / ROADMAP
+- Added docs/EDITOR_GITHUB_AUDIT_FA.md with a comparative audit of CapCraft, LightCraft, CheapShot/ClearCut, ActionCut and Allay Photo Editor; a feature-gap matrix for both editors; detailed UX patterns; license cautions; and a prioritized implementation roadmap.
+
+VALIDATION
+- Added unit tests for snap proximity and disabled snapping. Pure TimelineMath source compiled separately with kotlinc. Full Android Gradle build and device/UI tests were not run in this environment.
 
 
-PHASE 2.15: Extended the Glass UI treatment to Video Editor without changing playback, trim-range, segment selection/duplicate/delete, audio/music, recording, filters, text, stickers, speed, crop, rotation, flip, adjustment or export callbacks. The preview now sits in a framed glass stage; playback controls and the editor tool surface use the reusable GlassPanel. The existing proportional segment lane remains interactive and now has a clearer glass rim. Version: 1.0-r10.15 (versionCode 25).
+LightningLab update r10.39 (versionCode 49) — live preview and hands-on editing
 
-Phase 2.16:
-- Photo editor preview bitmap lifecycle and intermediate bitmap cleanup.
-- GitHub Actions workflow for unit tests and debug APK build (not yet executed).
-- versionCode 26 / versionName 1.0-r10.16.
+VIDEO EDITOR
+- Replaced the basic VideoView preview with Media3 ExoPlayer / TextureView so Compose overlays can be composited visibly above the video surface.
+- Timed text, sticker and image layers are displayed in the preview according to the playhead; opacity and vertical-position keyframes are evaluated for preview.
+- Added playhead polling, timeline seek, previous/next frame controls, playback-speed sync and segment-aware source seeking. Frame step uses source frame-rate metadata when available (30fps fallback).
+- Added horizontal timeline zoom (1x–4x), Split-at-playhead for selected segments, and insertion of new overlays at the current playhead with a five-second default duration.
 
-------------------------------------------------------------
-UPDATE r10.17 / PHASE 2.17 — CLOUD AI TRAINING ALIGNMENT
-------------------------------------------------------------
-- Trainer class order now exactly matches Android CloudClassifier: Ac, As, Cb, Cc, Ci, Cs, Cu, Ns, Sc, St.
-- Trainer supports either prepared class folders (--data) or direct Hugging Face dataset (--dataset).
-- Added duplicate-image-group train/validation/test splitting and per-class metrics.
-- Android/training preprocessing contract aligned to RGB 224x224, aspect-preserving resize, neutral-grey padding.
-- Added metrics.json, confusion_matrix.csv, labels.txt and model_contract.json outputs.
-- No trained model weights are included; see tools/cloud_ai/PHASE2_17_TRAINING_FA.md.
+PHOTO EDITOR
+- Selected text, shape and image layers can be moved directly on the canvas by dragging. Gesture updates are committed once at drag end, avoiding one undo entry per pointer event.
+- Duplicated shape/image layers become selected immediately.
+
+VALIDATION
+- Full Android Gradle build and on-device playback/gesture tests were not run in this environment. The Media3 preview and touch behavior must be checked by GitHub Actions and on a real device.
+
+r10.40 (versionCode 50)
+- Unified video undo/redo history across segments, timed overlays, effects, audio assignments and major transform/color settings.
+- Retain image-overlay bitmap references in history so deleting an overlay remains undoable.
+- Atomic video-project publication using a hidden staging directory and completed manifest; stale hidden staging folders are cleaned during project listing.
+- Drag-to-move timed overlay clips on the timeline; one undo checkpoint is committed when the gesture ends.
+- Export preflight checks segment/overlay/effect timing, missing local sources, dimensions and low free storage before rendering.
+- Top-bar undo/redo controls and settings-gesture history commits.
+
+
+r10.41 (versionCode 51)
+- Fixed missing mutableLongStateOf import.
+- Centralized image decoding through explicit ImageDecoder.OnHeaderDecodedListener to avoid Kotlin overload inference failures in CI.
+- Made model-import rollback branches explicitly Unit-valued.
+- Added video segment reorder controls and precise selected-segment In/Out trim with one history commit after gesture.
+- Added ripple delete that closes the removed output-time gap and shifts timed overlays, effects and markers consistently.
+- Added clickable timeline markers; marker state is included in undo/redo and persisted by ProjectCodec v4 while v1-v3 remain readable.
+- Full Android build must be verified by GitHub Actions; Android SDK is not installed in this environment.
+
+
+## r10.43 — GitHub Actions Kotlin compile fix
+- Fixed selected segment variable scope in the video trim editor: the selected `Seg?` is now declared in the enclosing `else` scope and is shared by the segment action row and precision trim controls.
+- This resolves the r181 compiler errors at `Screens.kt:856–860` (`Unresolved reference: sel` and cascading Compose delegate/type inference errors).
+- Version code: 52.

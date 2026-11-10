@@ -38,19 +38,21 @@ class CloudFeatureClassifier(private val modelFile: File) {
     /** Returns independent sigmoid scores, not mutually-exclusive classes. */
     @Synchronized fun classify(bitmap: Bitmap): List<Pair<String, Float>>? {
         val model = interpreter ?: return null
+        if (bitmap.width <= 0 || bitmap.height <= 0) return null
+        var scaled: Bitmap? = null
+        var padded: Bitmap? = null
         return try {
             val scale = minOf(SIZE.toFloat() / bitmap.width, SIZE.toFloat() / bitmap.height)
-            val width = (bitmap.width * scale).toInt().coerceAtLeast(1)
-            val height = (bitmap.height * scale).toInt().coerceAtLeast(1)
-            val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
-            val padded = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(padded)
+            val width = (bitmap.width * scale).toInt().coerceIn(1, SIZE)
+            val height = (bitmap.height * scale).toInt().coerceIn(1, SIZE)
+            scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+            padded = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(padded!!)
             canvas.drawColor(Color.rgb(128, 128, 128))
-            canvas.drawBitmap(scaled, ((SIZE - width) / 2f), ((SIZE - height) / 2f), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-            if (scaled !== bitmap) scaled.recycle()
+            canvas.drawBitmap(scaled!!, ((SIZE - width) / 2f), ((SIZE - height) / 2f), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+
             val pixels = IntArray(SIZE * SIZE)
-            padded.getPixels(pixels, 0, SIZE, 0, 0, SIZE, SIZE)
-            padded.recycle()
+            padded!!.getPixels(pixels, 0, SIZE, 0, 0, SIZE, SIZE)
             val input = ByteBuffer.allocateDirect(4 * SIZE * SIZE * 3).order(ByteOrder.nativeOrder())
             pixels.forEach { p ->
                 input.putFloat(((p shr 16) and 255).toFloat())
@@ -63,6 +65,11 @@ class CloudFeatureClassifier(private val modelFile: File) {
             val scores = output[0]
             if (scores.any { !it.isFinite() || it !in 0f..1f }) null
             else LABELS.indices.map { LABELS[it] to scores[it] }.sortedByDescending { it.second }
-        } catch (_: Throwable) { null }
+        } catch (_: Throwable) {
+            null
+        } finally {
+            if (scaled != null && scaled !== bitmap && !scaled!!.isRecycled) scaled!!.recycle()
+            if (padded != null && !padded!!.isRecycled) padded!!.recycle()
+        }
     }
 }

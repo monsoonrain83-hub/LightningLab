@@ -216,14 +216,19 @@ fun Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
 
 @Composable
 fun Tabs(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        labels.forEachIndexed { i, l ->
-            val sel = i == selected
-            val bg by animateColorAsState(if (sel) Storm.boltDim else Color.Transparent, tween(160), label = "tabBg")
-            val fg by animateColorAsState(if (sel) Storm.bolt else Storm.muted, tween(160), label = "tabFg")
-            Box(Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(24.dp)).background(bg)
-                .selectable(selected = sel, onClick = { onSelect(i) }, role = Role.Tab).padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-                Text(l, color = fg, style = MaterialTheme.typography.labelLarge)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        labels.forEachIndexed { i, label ->
+            val isSelected = i == selected
+            val bg by animateColorAsState(if (isSelected) Storm.boltDim else Color(0x221C2B3E), tween(160), label = "tabBg")
+            val fg by animateColorAsState(if (isSelected) Storm.bolt else Storm.muted, tween(160), label = "tabFg")
+            Surface(Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(13.dp))
+                .selectable(selected = isSelected, onClick = { onSelect(i) }, role = Role.Tab),
+                shape = RoundedCornerShape(13.dp), color = bg,
+                border = BorderStroke(1.dp, if (isSelected) Storm.bolt.copy(alpha = 0.55f) else Storm.hairline)) {
+                Box(Modifier.padding(horizontal = 13.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
+                    Text(label, color = fg, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                }
             }
         }
     }
@@ -270,72 +275,28 @@ fun NavBar(vm: MainVM) {
         Triple(Screen.VIDEO, Ic.VIDEO, R.string.nav_video),
         Triple(Screen.WEATHER, Ic.CLOUD, R.string.nav_weather)
     )
-    val shape = RoundedCornerShape(26.dp)
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = shape,
-        color = Storm.surface.copy(alpha = 0.92f),
-        shadowElevation = 18.dp,
-        border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))))
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(21.dp), color = Color(0xF20E1724), shadowElevation = 12.dp,
+        border = BorderStroke(1.dp, Color(0x444F759A))
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 5.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            items.forEach { (sc, ic, lb) ->
-                val sel = vm.screen == sc
-                val fg by animateColorAsState(if (sel) Storm.bolt else Storm.muted, tween(180), label = "navFg")
-                Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(19.dp))
-                        .clickable(role = Role.Tab) { vm.screen = sc }
-                        .background(if (sel) Brush.verticalGradient(listOf(Color(0x443B83C8), Color(0x22233D5B))) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
-                        .padding(vertical = 7.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    AppIcon(ic, fg, filled = sel)
-                    Text(stringResource(lb), color = fg, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            items.forEach { (screen, icon, label) ->
+                val selected = vm.screen == screen
+                val fg by animateColorAsState(if (selected) Storm.bolt else Storm.muted, tween(170), label = "navFg")
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+                    .background(if (selected) Brush.verticalGradient(listOf(Color(0x443B83C8), Color(0x22233D5B)))
+                        else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                    .clickable(role = Role.Tab) { vm.screen = screen }
+                    .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    AppIcon(icon, fg, Modifier.size(21.dp), filled = selected)
+                    Text(stringResource(label), color = fg, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Box(Modifier.width(if (selected) 14.dp else 4.dp).height(2.dp).clip(CircleShape)
+                        .background(if (selected) Storm.bolt else Color.Transparent))
                 }
             }
         }
-    }
-}
-
-/** Hero artwork drawn in code: storm-cloud mass, arc-blue glow and a branching bolt that flickers every few seconds. */
-@Composable
-fun LightningHero(modifier: Modifier = Modifier) {
-    val tr = rememberInfiniteTransition(label = "hero")
-    val ctx = LocalContext.current
-    val reduceMotion = remember {
-        android.provider.Settings.Global.getFloat(ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }
-    val flickAnim by tr.animateFloat(0f, 1f, infiniteRepeatable(keyframes<Float> {
-        durationMillis = 5200
-        0f at 0; 0f at 3400; 1f at 3460; 0.25f at 3560; 0.9f at 3640; 0f at 4100
-    }), label = "flick")
-    val flick = if (reduceMotion) 0.45f else flickAnim   // respect "remove animations": static glow, no flicker
-    Canvas(modifier) {
-        val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF0A0E16), Color(0xFF131C2E), Storm.bg)))
-        drawCircle(Brush.radialGradient(listOf(Color(0x55283853), Color.Transparent), center = Offset(w * 0.3f, 0f), radius = w * 0.8f),
-            radius = w * 0.8f, center = Offset(w * 0.3f, 0f))
-        drawCircle(Brush.radialGradient(listOf(Color(0x44202C45), Color.Transparent), center = Offset(w * 0.85f, h * 0.05f), radius = w * 0.6f),
-            radius = w * 0.6f, center = Offset(w * 0.85f, h * 0.05f))
-        val bx = w * 0.74f
-        drawCircle(Brush.radialGradient(listOf(Storm.arc.copy(alpha = 0.08f + 0.26f * flick), Color.Transparent),
-            center = Offset(bx, h * 0.55f), radius = h * 0.9f), radius = h * 0.9f, center = Offset(bx, h * 0.55f))
-        fun px(x: Float) = bx + (x - 0.5f) * h * 0.9f
-        val main = Path().apply {
-            val p = listOf(0.62f to 0f, 0.50f to 0.22f, 0.58f to 0.24f, 0.42f to 0.50f, 0.52f to 0.52f, 0.34f to 0.80f, 0.40f to 0.82f, 0.28f to 1f)
-            p.forEachIndexed { i, (x, y) -> if (i == 0) moveTo(px(x), y * h) else lineTo(px(x), y * h) }
-        }
-        val branch = Path().apply {
-            moveTo(px(0.46f), 0.38f * h); lineTo(px(0.60f), 0.55f * h); lineTo(px(0.57f), 0.62f * h); lineTo(px(0.66f), 0.80f * h)
-        }
-        val a = 0.25f + 0.75f * flick
-        listOf(26f to 0.06f, 14f to 0.12f, 7f to 0.25f).forEach { (wd, al) ->
-            drawPath(main, Storm.arc.copy(alpha = al * a), style = Stroke(wd.dp.toPx() / 2.2f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-        drawPath(branch, Storm.arc.copy(alpha = 0.5f * a), style = Stroke(1.6f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawPath(main, Storm.bolt.copy(alpha = 0.55f + 0.45f * flick), style = Stroke(2.6f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawPath(main, Color.White.copy(alpha = 0.35f + 0.6f * flick), style = Stroke(1.1f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -343,11 +304,15 @@ fun LightningHero(modifier: Modifier = Modifier) {
 @Composable
 fun ToolButton(ic: Ic, label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val fg by animateColorAsState(if (selected) Storm.bolt else Storm.muted, tween(160), label = "toolFg")
-    Column(Modifier.widthIn(min = 72.dp).heightIn(min = 56.dp).clip(MaterialTheme.shapes.small)
-        .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.Tab).padding(horizontal = 8.dp, vertical = 6.dp),
+    Column(Modifier.widthIn(min = 62.dp).heightIn(min = 54.dp).clip(RoundedCornerShape(12.dp))
+        .background(if (selected) Storm.boltDim.copy(alpha = 0.72f) else Color.Transparent)
+        .selectable(selected = selected, enabled = enabled, onClick = onClick, role = Role.Tab)
+        .padding(horizontal = 7.dp, vertical = 5.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        AppIcon(ic, fg, Modifier.size(24.dp), filled = false)
+        AppIcon(ic, if (enabled) fg else Storm.muted.copy(alpha = 0.4f), Modifier.size(21.dp), filled = selected)
         Spacer(Modifier.height(2.dp))
-        Text(label, color = fg, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Text(label, color = if (enabled) fg else Storm.muted.copy(alpha = 0.4f),
+            style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }
+

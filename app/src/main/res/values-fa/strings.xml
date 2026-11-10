@@ -223,4 +223,17 @@
     <string name="live_preview">پیش‌نمایش زنده</string>
     <string name="original_view">تصویر اصلی</string>
 
+    <string name="tab_layers">لایه‌ها</string>
+
+    <!-- Home workspace polish -->
+    <string name="home_hero_title">تحلیل و استخراج لحظه‌های رعدوبرق</string>
+    <string name="home_hero_body">ویدئو را انتخاب کن؛ فریم‌های درخشش را آفلاین پیدا کن.</string>
+    <string name="home_tools">ابزارهای اصلی</string>
+    <string name="home_tool_count">۴ بخش</string>
+    <string name="home_cloud_atlas">اطلس ابرها</string>
+    <string name="home_cloud_atlas_sub">رده‌بندی و شناسایی گونه‌های WMO</string>
+    <string name="home_processing">در حال پردازش</string>
+    <string name="home_sensitivity">دقت تشخیص</string>
+    <string name="home_sensitivity_hint">حساسیت استخراج فریم‌های روشن</string>
+    <string name="home_offline_note">پردازش روی دستگاه شما انجام می‌شود؛ فایل‌ها بدون نیاز به فضای ابری تحلیل می‌شوند.</string>
 </resources>

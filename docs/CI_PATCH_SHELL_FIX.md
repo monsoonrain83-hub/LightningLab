@@ -1,0 +1,1 @@
+The CI correction now uses a single-line Python command to avoid heredoc parsing issues in the GitHub Actions shell block.

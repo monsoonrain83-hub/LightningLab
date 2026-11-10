@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -39,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 @Composable
@@ -46,88 +49,97 @@ fun Home(vm: MainVM) {
     val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.prepare(u)
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Box {
-            LightningHero(Modifier.fillMaxWidth().height(264.dp))
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = Color(0xAA101B2A),
-                    border = BorderStroke(1.dp, Color(0x557EC8FF))
-                ) {
-                    Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF65D6A5)))
-                        Text(stringResource(R.string.on_device), color = Color(0xFFE1F7EE), style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                LangMenu()
-            }
-            Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 18.dp)) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 5.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(buildAnnotatedString {
                     withStyle(SpanStyle(color = Storm.text)) { append("Lightning") }
                     withStyle(SpanStyle(color = Storm.bolt)) { append("Lab") }
-                }, style = MaterialTheme.typography.displaySmall)
-                Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.bodyMedium, color = Storm.muted)
+                }, style = MaterialTheme.typography.titleLarge.copy(fontSize = 23.sp, fontWeight = FontWeight.Bold))
+                Text(stringResource(R.string.subtitle), style = MaterialTheme.typography.labelSmall, color = Storm.muted)
             }
+            Surface(shape = RoundedCornerShape(50), color = Color(0xAA10251F),
+                border = BorderStroke(1.dp, Color(0x5576D6AD))) {
+                Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF65D6A5)))
+                    Text(stringResource(R.string.on_device), color = Color(0xFFBCEED9), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            LangMenu()
         }
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 15.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            // Primary workflow: one clear action, with secondary tools kept visually quieter.
+            Box(Modifier.fillMaxWidth().height(178.dp).clip(RoundedCornerShape(25.dp))) {
+                LightningHero(Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+                    listOf(Color(0xD9081422), Color(0x77101D30), Color(0x11101D30)))))
+                Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.home_hero_title), color = Color.White,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    Text(stringResource(R.string.home_hero_body),
+                        color = Color(0xFFD5E1EE), style = MaterialTheme.typography.bodySmall)
+                    Button(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                        enabled = !vm.busy, contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.heightIn(min = 42.dp)) {
+                        AppIcon(Ic.BOLT, Storm.onBolt, Modifier.size(18.dp), filled = true)
+                        Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                Surface(Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(50),
+                    color = Color(0xAA0C1725), border = BorderStroke(1.dp, Color(0x557EC8FF))) {
+                    Text("AI  •  OFFLINE", Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = Color(0xFFB9D8F6), style = MaterialTheme.typography.labelSmall)
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.quick_access), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(stringResource(R.string.no_cloud_upload), style = MaterialTheme.typography.labelSmall, color = Color(0xFF79DDB2))
+                Text(stringResource(R.string.home_tools), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.home_tool_count), style = MaterialTheme.typography.labelSmall, color = Storm.muted)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(
-                    modifier = Modifier.weight(1f), icon = Ic.BOLT, title = stringResource(R.string.nav_lightning),
-                    subtitle = stringResource(R.string.detect_sub), accent = Storm.bolt, enabled = !vm.busy,
-                    onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
-                )
-                GlassQuickAction(
-                    modifier = Modifier.weight(1f), icon = Ic.PHOTO, title = stringResource(R.string.edit_photo),
-                    subtitle = stringResource(R.string.photo_short), accent = Storm.arc,
-                    onClick = { vm.screen = Screen.PHOTO }
-                )
+                GlassQuickAction(Modifier.weight(1f), Ic.PHOTO, stringResource(R.string.edit_photo),
+                    stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
+                GlassQuickAction(Modifier.weight(1f), Ic.VIDEO, stringResource(R.string.edit_video),
+                    stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(
-                    modifier = Modifier.weight(1f), icon = Ic.VIDEO, title = stringResource(R.string.edit_video),
-                    subtitle = stringResource(R.string.video_short), accent = Color(0xFF9D9BFF),
-                    onClick = { vm.screen = Screen.VIDEO }
-                )
-                GlassQuickAction(
-                    modifier = Modifier.weight(1f), icon = Ic.CLOUD, title = stringResource(R.string.weather_title),
-                    subtitle = stringResource(R.string.weather_short), accent = Color(0xFF69C9D7),
-                    onClick = { vm.screen = Screen.WEATHER }
-                )
+                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.weather_title),
+                    stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
+                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
+                    stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+            }
+            if (vm.busy) {
+                GlassPanel(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(stringResource(R.string.home_processing), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                            Text("${(vm.progress * 100).roundToInt()}%", color = Storm.bolt, style = MaterialTheme.typography.labelLarge)
+                        }
+                        LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
+                        Text(stringResource(vm.stage), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                        TextButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
+                    }
+                }
             }
             Panel {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.sensitivity), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    Text((vm.sensitivity * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.home_sensitivity), style = MaterialTheme.typography.titleSmall)
+                        Text(stringResource(R.string.home_sensitivity_hint), style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                    }
+                    Text((vm.sensitivity * 100).roundToInt().toString() + "%", style = MaterialTheme.typography.titleMedium, color = Storm.bolt)
                 }
                 Slider(value = vm.sensitivity, onValueChange = { vm.sensitivity = it }, enabled = !vm.busy)
             }
-            if (vm.busy) {
-                Panel {
-                    LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
-                    Text(stringResource(vm.stage), style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
-                }
-            }
             InfoText(vm)
-            Button(onClick = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
-                enabled = !vm.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                AppIcon(Ic.BOLT, Storm.onBolt, Modifier.size(20.dp), filled = true)
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.detect), style = MaterialTheme.typography.labelLarge)
-            }
-            TextButton(onClick = { vm.screen = Screen.ABOUT }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text(stringResource(R.string.about), color = Storm.muted)
-            }
+            Text(stringResource(R.string.home_offline_note),
+                style = MaterialTheme.typography.labelSmall, color = Storm.muted,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
         }
     }
 }
@@ -144,7 +156,7 @@ private fun GlassQuickAction(
 ) {
     val shape = RoundedCornerShape(22.dp)
     Surface(
-        modifier = modifier.heightIn(min = 116.dp).clip(shape).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        modifier = modifier.heightIn(min = 104.dp).clip(shape).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         shape = shape,
         color = Color(0xB91A293B),
         shadowElevation = 12.dp,
@@ -152,8 +164,8 @@ private fun GlassQuickAction(
     ) {
         Column(
             Modifier.background(Brush.verticalGradient(listOf(Color(0x22FFFFFF), Color.Transparent, Color(0x11000000))))
-                .padding(horizontal = 13.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Box(
                 Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
@@ -264,19 +276,36 @@ fun Results(vm: MainVM) {
 private val aspects = listOf("Original" to 0f, "1:1" to 1f, "4:5" to 0.8f, "4:3" to 4f / 3f,
     "3:2" to 1.5f, "16:9" to 16f / 9f, "9:16" to 9f / 16f)
 
-private enum class PTab { LIGHT, COLOR, HSL, DETAIL, CROP, REMOVE, EXPORT }
+private enum class PTab { LIGHT, COLOR, HSL, DETAIL, CROP, REMOVE, LAYERS, EXPORT }
 
 @Composable
 fun PhotoEditor(vm: MainVM) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.loadPhoto(u)
     }
+    val pickOverlay = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) vm.addPhotoImageLayer(u)
+    }
     val prev = vm.photoPrev
     var tab by remember { mutableStateOf(PTab.LIGHT) }
+    var showPhotoProjects by remember { mutableStateOf(false) }
+    if (showPhotoProjects) PhotoProjectsDialog(vm) { showPhotoProjects = false }
     var brush by remember { mutableStateOf(0.02f) }
+    var layerDraft by remember { mutableStateOf("") }
+    var selectedLayerId by remember { mutableStateOf<Long?>(null) }
+    var selectedLayerKind by remember { mutableStateOf("TEXT") }
+    var maskMode by remember { mutableStateOf(false) }
+    var maskRadius by remember { mutableStateOf(0.025f) }
+    var maskSoftness by remember { mutableStateOf(0.35f) }
+    var activeMaskPoints by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
+    val layerSnapshot = vm.photoLayers.toList()
+    val shapeSnapshot = vm.photoShapeLayers.toList()
+    val imageSnapshot = vm.photoImageLayers.toList()
+    val maskSnapshot = vm.photoMaskStrokes.toList()
+    val maskInverted = vm.photoMaskInverted
     val healMode = tab == PTab.REMOVE
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(vm.params, prev) {
+    LaunchedEffect(vm.params, prev, layerSnapshot, shapeSnapshot, imageSnapshot, maskSnapshot, maskInverted) {
         shown = null
         if (prev != null) {
             // Render from the already downscaled editor preview, never the full-resolution export source.
@@ -284,7 +313,10 @@ fun PhotoEditor(vm: MainVM) {
             var rendered: android.graphics.Bitmap? = null
             try {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    PhotoEdit.apply(prev, paramsSnapshot).also { rendered = it }
+                    val adjusted = PhotoEdit.apply(prev, paramsSnapshot)
+                    val composed = PhotoLayers.render(adjusted, layerSnapshot, shapeSnapshot, imageSnapshot, maskSnapshot, maskInverted)
+                    if (composed !== adjusted && !adjusted.isRecycled) adjusted.recycle()
+                    composed.also { rendered = it }
                 }
                 val result = rendered
                 if (kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]?.isActive == true) shown = result
@@ -304,6 +336,7 @@ fun PhotoEditor(vm: MainVM) {
     val pickReq = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_photo), onBack = { vm.screen = Screen.HOME }) {
+            TextButton(onClick = { showPhotoProjects = true }) { Text("پروژه‌ها") }
             IconAction(Ic.UNDO, stringResource(R.string.undo), vm.canUndo) { vm.undo() }
             IconAction(Ic.REDO, stringResource(R.string.redo), vm.canRedo) { vm.redo() }
             IconAction(Ic.PHOTO, stringResource(R.string.pick_image), true) { pickReq() }
@@ -324,14 +357,30 @@ fun PhotoEditor(vm: MainVM) {
                 .border(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))), RoundedCornerShape(26.dp)),
             contentAlignment = Alignment.Center
         ) {
-            (if (vm.showOriginal || healMode) prev else shown)?.let { bmp ->
+            (if (vm.showOriginal || (healMode && !maskMode)) prev else shown)?.let { bmp ->
                 Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 12.dp)
                     .aspectRatio(bmp.width.toFloat() / bmp.height).clip(RoundedCornerShape(17.dp))
-                    .then(if (!healMode) Modifier.pointerInput(Unit) {
+                    .then(if (maskMode && !vm.showOriginal) Modifier.pointerInput(maskMode, maskRadius) {
+                        detectDragGestures(
+                            onDragStart = { pos -> activeMaskPoints = listOf((pos.x / size.width).coerceIn(0f, 1f) to (pos.y / size.height).coerceIn(0f, 1f)) },
+                            onDrag = { change, _ -> activeMaskPoints = activeMaskPoints + ((change.position.x / size.width).coerceIn(0f, 1f) to (change.position.y / size.height).coerceIn(0f, 1f)); change.consume() },
+                            onDragEnd = { vm.addPhotoMaskStroke(PhotoMaskStroke(activeMaskPoints, maskRadius, maskSoftness)); activeMaskPoints = emptyList() },
+                            onDragCancel = { activeMaskPoints = emptyList() }
+                        )
+                    } else if (selectedLayerId != null && !healMode) Modifier.pointerInput(selectedLayerId, selectedLayerKind, bmp.width, bmp.height) {
+                        detectDragGestures(
+                            onDrag = { change, drag ->
+                                change.consume()
+                                selectedLayerId?.let { id -> vm.translatePhotoLayer(selectedLayerKind, id,
+                                    drag.x / size.width.toFloat().coerceAtLeast(1f), drag.y / size.height.toFloat().coerceAtLeast(1f)) }
+                            },
+                            onDragEnd = { vm.finishPhotoLayerGesture() }
+                        )
+                    } else if (!healMode) Modifier.pointerInput(Unit) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
                     Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
-                    if (healMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
+                    if (healMode && !maskMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
                 }
             }
             Surface(
@@ -350,7 +399,7 @@ fun PhotoEditor(vm: MainVM) {
         GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
             Column(Modifier.padding(top = 5.dp)) {
                 Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_hsl, R.string.tab_detail, R.string.tab_crop,
-                    R.string.tab_remove, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
+                    R.string.tab_remove, R.string.tab_layers, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -409,9 +458,148 @@ fun PhotoEditor(vm: MainVM) {
                                         OutlinedButton(onClick = { vm.healCircles.clear() }) { Text(stringResource(R.string.heal_clear)) }
                                         OutlinedButton(onClick = { vm.undoHeal() }, enabled = vm.canUndoHeal) { Text(stringResource(R.string.heal_undo)) }
                                     }
+                                    Divider(color = Color(0x335D83AE), modifier = Modifier.padding(vertical = 8.dp))
+                                    Text("ماسک پاک‌کن موضعی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Text("حالت قلم را روشن کن و روی تصویر بکش؛ قسمت‌های انتخاب‌شده در خروجی شفاف می‌شوند.", color = Storm.muted, style = MaterialTheme.typography.bodySmall)
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(selected = maskMode, onClick = { maskMode = !maskMode }, label = { Text(if (maskMode) "قلم روشن" else "فعال‌کردن قلم") })
+                                        FilterChip(selected = vm.photoMaskInverted, onClick = { vm.togglePhotoMaskInvert() }, label = { Text("ماسک معکوس") })
+                                        OutlinedButton(onClick = { vm.undoPhotoMaskStroke() }, enabled = vm.photoMaskStrokes.isNotEmpty()) { Text("واگرد") }
+                                        OutlinedButton(onClick = { vm.clearPhotoMask() }, enabled = vm.photoMaskStrokes.isNotEmpty()) { Text("پاک‌کردن") }
+                                    }
+                                    Text("اندازه قلم", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = maskRadius, onValueChange = { maskRadius = it }, valueRange = 0.005f..0.09f)
+                                    Text("لبه نرم", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                    Slider(value = maskSoftness, onValueChange = { maskSoftness = it }, valueRange = 0f..1f)
+                                    Text("تعداد حرکت‌ها: ${vm.photoMaskStrokes.size}", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
                                     Button(onClick = { vm.cutoutBackground() }, enabled = !vm.busy,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.cutout_btn)) }
                                     Text(stringResource(R.string.cutout_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                }
+                                PTab.LAYERS -> {
+                                    Text("لایه‌های ترکیبی و مستقل", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Text("ترتیب بالا و پایین، بین متن، شکل و تصویر مشترک است. لایه را انتخاب کن و مستقیماً روی تصویر بکش تا جابه‌جا شود.", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                    OutlinedTextField(
+                                        value = layerDraft, onValueChange = { layerDraft = it },
+                                        modifier = Modifier.fillMaxWidth(), minLines = 1, maxLines = 3,
+                                        label = { Text("متن جدید") }, placeholder = { Text("عنوان یا توضیح را وارد کنید") }
+                                    )
+                                    Button(onClick = {
+                                        vm.addPhotoTextLayer(layerDraft)
+                                        selectedLayerId = vm.photoLayers.lastOrNull()?.id
+                                        selectedLayerKind = "TEXT"
+                                        layerDraft = ""
+                                    }, enabled = layerDraft.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("افزودن لایه متن") }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        OutlinedButton(onClick = { vm.addPhotoShape(PhotoShapeLayer.Shape.RECTANGLE) }, modifier = Modifier.weight(1f)) { Text("＋ مستطیل") }
+                                        OutlinedButton(onClick = { vm.addPhotoShape(PhotoShapeLayer.Shape.ELLIPSE) }, modifier = Modifier.weight(1f)) { Text("＋ بیضی") }
+                                    }
+                                    OutlinedButton(onClick = { pickOverlay.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("＋ افزودن تصویر از گالری")
+                                    }
+                                    vm.photoImageLayers.forEachIndexed { imageIndex, imageLayer ->
+                                        Row(Modifier.fillMaxWidth().clickable { selectedLayerId = imageLayer.id; selectedLayerKind = "IMAGE" }, verticalAlignment = Alignment.CenterVertically) {
+                                            Checkbox(checked = imageLayer.visible, onCheckedChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(visible = v) } })
+                                            Text(imageLayer.name, Modifier.weight(1f), color = Storm.text)
+                                            TextButton(onClick = { vm.movePhotoLayerGlobal("IMAGE", imageLayer.id, -1) }) { Text("↑") }
+                                            TextButton(onClick = { vm.movePhotoLayerGlobal("IMAGE", imageLayer.id, 1) }) { Text("↓") }
+                                            TextButton(onClick = { selectedLayerId = vm.duplicatePhotoImageLayer(imageLayer.id); selectedLayerKind = "IMAGE" }) { Text("کپی") }
+                                            TextButton(onClick = { vm.removePhotoImage(imageLayer.id) }) { Text("حذف") }
+                                        }
+                                        Text("اندازه تصویر", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = imageLayer.width, onValueChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(width = v) } }, valueRange = 0.05f..0.95f)
+                                        Text("موقعیت افقی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = imageLayer.x, onValueChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(x = v) } }, valueRange = 0f..1f)
+                                        Text("موقعیت عمودی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = imageLayer.y, onValueChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(y = v) } }, valueRange = 0f..1f)
+                                        Text("شفافیت", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = imageLayer.opacity, onValueChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(opacity = v) } }, valueRange = 0f..1f)
+                                        Text("چرخش: ${imageLayer.rotationDegrees.toInt()}°", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = imageLayer.rotationDegrees, onValueChange = { v -> vm.updatePhotoImage(imageLayer.id) { it.copy(rotationDegrees = v) } }, valueRange = -180f..180f)
+                                    }
+                                    if (vm.photoShapeLayers.isNotEmpty()) {
+                                        Text("لایه‌های شکل", color = Storm.text, style = MaterialTheme.typography.titleSmall)
+                                        vm.photoShapeLayers.forEachIndexed { shapeIndex, shape ->
+                                            Row(Modifier.fillMaxWidth().clickable { selectedLayerId = shape.id; selectedLayerKind = "SHAPE" }, verticalAlignment = Alignment.CenterVertically) {
+                                                Checkbox(checked = shape.visible, onCheckedChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(visible = v) } })
+                                                Text(shape.name, Modifier.weight(1f), color = Storm.text)
+                                                TextButton(onClick = { vm.movePhotoLayerGlobal("SHAPE", shape.id, -1) }) { Text("↑") }
+                                                TextButton(onClick = { vm.movePhotoLayerGlobal("SHAPE", shape.id, 1) }) { Text("↓") }
+                                                TextButton(onClick = { selectedLayerId = vm.duplicatePhotoShapeLayer(shape.id); selectedLayerKind = "SHAPE" }) { Text("کپی") }
+                                                TextButton(onClick = { vm.removePhotoShape(shape.id) }) { Text("حذف") }
+                                            }
+                                            Text("عرض", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.width, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(width = v) } }, valueRange = 0.03f..0.95f)
+                                            Text("ارتفاع", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.height, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(height = v) } }, valueRange = 0.03f..0.95f)
+                                            Text("موقعیت افقی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.x, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(x = v) } }, valueRange = 0f..1f)
+                                            Text("موقعیت عمودی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.y, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(y = v) } }, valueRange = 0f..1f)
+                                            Text("شفافیت", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.opacity, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(opacity = v) } }, valueRange = 0f..1f)
+                                            Text("چرخش: ${shape.rotationDegrees.toInt()}°", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                            Slider(value = shape.rotationDegrees, onValueChange = { v -> vm.updatePhotoShape(shape.id) { it.copy(rotationDegrees = v) } }, valueRange = -180f..180f)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                FilterChip(selected = shape.color == 0xFFFFD43B.toInt(), onClick = { vm.updatePhotoShape(shape.id) { it.copy(color = 0xFFFFD43B.toInt()) } }, label = { Text("طلایی") })
+                                                FilterChip(selected = shape.color == 0xFFFFFFFF.toInt(), onClick = { vm.updatePhotoShape(shape.id) { it.copy(color = 0xFFFFFFFF.toInt()) } }, label = { Text("سفید") })
+                                                FilterChip(selected = shape.color == 0xFF6FB4FF.toInt(), onClick = { vm.updatePhotoShape(shape.id) { it.copy(color = 0xFF6FB4FF.toInt()) } }, label = { Text("آبی") })
+                                            }
+                                        }
+                                    }
+                                    if (vm.photoLayers.isEmpty() && vm.photoShapeLayers.isEmpty() && vm.photoImageLayers.isEmpty() && vm.photoMaskStrokes.isEmpty()) {
+                                        Text("هنوز لایه‌ای اضافه نشده است.", color = Storm.muted, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    vm.photoLayers.forEachIndexed { index, layer ->
+                                        val selected = selectedLayerId == layer.id
+                                        Surface(
+                                            color = if (selected) Color(0x334C9BD6) else Color(0x221A2C40),
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = BorderStroke(1.dp, if (selected) Color(0x887EC8FF) else Color(0x335D83AE)),
+                                            modifier = Modifier.fillMaxWidth().clickable { selectedLayerId = layer.id; selectedLayerKind = "TEXT" }
+                                        ) {
+                                            Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Checkbox(checked = layer.visible, onCheckedChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(visible = v) } })
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(layer.name, color = Storm.text, style = MaterialTheme.typography.labelMedium)
+                                                    Text(layer.text, color = Storm.muted, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                                }
+                                                TextButton(onClick = { vm.movePhotoLayerGlobal("TEXT", layer.id, -1) }) { Text("↑") }
+                                                TextButton(onClick = { vm.movePhotoLayerGlobal("TEXT", layer.id, 1) }) { Text("↓") }
+                                                TextButton(onClick = { selectedLayerId = vm.duplicatePhotoTextLayer(layer.id); selectedLayerKind = "TEXT" }) { Text("کپی") }
+                                                TextButton(onClick = { vm.removePhotoLayer(layer.id); if (selectedLayerId == layer.id) selectedLayerId = null }) { Text("حذف") }
+                                            }
+                                        }
+                                    }
+                                    vm.photoLayers.firstOrNull { it.id == selectedLayerId }?.let { layer ->
+                                        OutlinedTextField(
+                                            value = layer.text,
+                                            onValueChange = { value -> vm.updatePhotoLayer(layer.id) { it.copy(text = value) } },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            label = { Text("ویرایش متن لایه") },
+                                            minLines = 1,
+                                            maxLines = 3
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("ضخامت قلم", color = Storm.muted, modifier = Modifier.weight(1f))
+                                            FilterChip(selected = layer.bold, onClick = { vm.updatePhotoLayer(layer.id) { it.copy(bold = !it.bold) } }, label = { Text(if (layer.bold) "ضخیم" else "معمولی") })
+                                        }
+                                        Text("اندازه", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = layer.size, onValueChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(size = v) } }, valueRange = 0.025f..0.18f)
+                                        Text("موقعیت افقی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = layer.x, onValueChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(x = v) } }, valueRange = 0.05f..0.95f)
+                                        Text("موقعیت عمودی", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = layer.y, onValueChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(y = v) } }, valueRange = 0.05f..0.95f)
+                                        Text("شفافیت", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = layer.opacity, onValueChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(opacity = v) } }, valueRange = 0f..1f)
+                                        Text("چرخش: ${layer.rotationDegrees.toInt()}°", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                                        Slider(value = layer.rotationDegrees, onValueChange = { v -> vm.updatePhotoLayer(layer.id) { it.copy(rotationDegrees = v) } }, valueRange = -180f..180f)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            FilterChip(selected = layer.color == 0xFFFFFFFF.toInt(), onClick = { vm.updatePhotoLayer(layer.id) { it.copy(color = 0xFFFFFFFF.toInt()) } }, label = { Text("سفید") })
+                                            FilterChip(selected = layer.color == 0xFFFFD43B.toInt(), onClick = { vm.updatePhotoLayer(layer.id) { it.copy(color = 0xFFFFD43B.toInt()) } }, label = { Text("طلایی") })
+                                            FilterChip(selected = layer.color == 0xFF6FB4FF.toInt(), onClick = { vm.updatePhotoLayer(layer.id) { it.copy(color = 0xFF6FB4FF.toInt()) } }, label = { Text("آبی") })
+                                        }
+                                    }
                                 }
                                 PTab.EXPORT -> {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -467,7 +655,10 @@ fun VideoEditor(vm: MainVM) {
         if (u != null) vm.addClip(u)
     }
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
-        if (u != null) { vm.music = u; vm.musicName = null }
+        if (u != null) { vm.updateMusicSource(u); vm.musicName = null }
+    }
+    val pickVideoImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
+        if (u != null) vm.addVideoImageClip(u)
     }
     val micCtx = androidx.compose.ui.platform.LocalContext.current
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -475,16 +666,73 @@ fun VideoEditor(vm: MainVM) {
     }
     var showProjects by remember { mutableStateOf(false) }
     if (showProjects) ProjectsDialog(vm) { showProjects = false }
-    var vv by remember { mutableStateOf<android.widget.VideoView?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val u = vm.videoUri
+    val player = remember(u) {
+        u?.let { source -> androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(source)); prepare()
+        } }
+    }
+    DisposableEffect(player) { onDispose { player?.release() } }
     var range by remember(vm.videoDur) { mutableStateOf(0f..vm.videoDur.toFloat().coerceAtLeast(1f)) }
     var tool by remember { mutableStateOf(VTool.TRIM) }
+    var toolCategory by remember { mutableStateOf("edit") }
     val pickReq = { pickVideo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }
+    LaunchedEffect(player, vm.vSpeed) { player?.setPlaybackSpeed(vm.vSpeed.coerceIn(0.25f, 4f)) }
+    val seekToTimeline: (Long) -> Unit = { requested ->
+        val speed = vm.vSpeed.coerceAtLeast(0.05f)
+        val total = ((if (vm.segments.isEmpty()) vm.videoDur else vm.segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / speed).toLong().coerceAtLeast(1L)
+        val target = requested.coerceIn(0L, total)
+        vm.playheadMs = target
+        if (vm.segments.isEmpty()) {
+            if (player != null && u != null) {
+                if (player.currentMediaItem?.localConfiguration?.uri != u) {
+                    player.setMediaItem(androidx.media3.common.MediaItem.fromUri(u)); player.prepare()
+                }
+                player.seekTo((target * speed).toLong())
+            }
+        } else {
+            val lengths = vm.segments.map { (it.endMs - it.startMs).coerceAtLeast(0L) }
+            val (index, offset) = TimelineMath.locate(lengths, speed, target)
+            val segment = vm.segments.getOrNull(index)
+            if (segment != null) {
+                val source = segment.uri ?: u
+                if (source != null && player != null) {
+                    if (player.currentMediaItem?.localConfiguration?.uri != source) {
+                        player.setMediaItem(androidx.media3.common.MediaItem.fromUri(source)); player.prepare()
+                    }
+                    player.seekTo(segment.startMs + offset)
+                }
+            }
+        }
+    }
+    LaunchedEffect(player, u) {
+        while (player != null) {
+            val sourcePosition = runCatching { player.currentPosition }.getOrDefault(0L).coerceAtLeast(0L)
+            if (vm.segments.isEmpty()) {
+                vm.playheadMs = (sourcePosition / vm.vSpeed.coerceAtLeast(0.05f)).toLong()
+                    .coerceAtMost((vm.videoDur / vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L))
+            } else {
+                val currentUri = player.currentMediaItem?.localConfiguration?.uri
+                val index = vm.segments.indexOfFirst { segment ->
+                    (segment.uri ?: u) == currentUri && sourcePosition >= segment.startMs && sourcePosition <= segment.endMs
+                }
+                if (index >= 0) {
+                    val before = vm.segments.take(index).sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }
+                    val local = (sourcePosition - vm.segments[index].startMs).coerceAtLeast(0L)
+                    vm.playheadMs = ((before + local) / vm.vSpeed.coerceAtLeast(0.05f)).toLong()
+                }
+            }
+            kotlinx.coroutines.delay(100)
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_video), onBack = { vm.screen = Screen.HOME }) {
+            IconAction(Ic.UNDO, "Undo", vm.canUndoSeg) { vm.undoVideoEdit() }
+            IconAction(Ic.REDO, "Redo", vm.canRedoSeg) { vm.redoVideoEdit() }
             TextButton(onClick = { showProjects = true }) { Text(stringResource(R.string.projects_title)) }
             IconAction(Ic.VIDEO, stringResource(R.string.pick_video), true) { pickReq() }
         }
-        val u = vm.videoUri
         if (u == null) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally) {
@@ -502,18 +750,50 @@ fun VideoEditor(vm: MainVM) {
                     .border(1.dp, Brush.linearGradient(listOf(Color(0x887EC8FF), Color(0x225D83AE), Color(0x6677A9D8))), RoundedCornerShape(25.dp))
             ) {
                 androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { c ->
-                        android.widget.VideoView(c).apply { setVideoURI(u); setOnPreparedListener { seekTo(1) }; vv = this }
-                    },
+                    factory = { c -> (android.view.LayoutInflater.from(c).inflate(R.layout.video_player_texture, null, false)
+                        as androidx.media3.ui.PlayerView).apply { this.player = player } },
+                    update = { view -> view.player = player },
                     modifier = Modifier.fillMaxSize().padding(5.dp).clip(RoundedCornerShape(19.dp)))
+                vm.videoOverlayClips.filter { vm.playheadMs >= it.startMs && vm.playheadMs < it.endMs }.forEach { clip ->
+                    val state = VideoFx.overlayStateAt(clip, vm.playheadMs)
+                    val alignment = when (state.position) { 0 -> Alignment.TopCenter; 2 -> Alignment.BottomCenter; else -> Alignment.Center }
+                    val activeAlpha = state.alpha.coerceIn(0f, 1f)
+                    if (clip.kind == "IMAGE") {
+                        vm.videoOverlayBitmap(clip.id)?.let { bitmap ->
+                            Image(bitmap.asImageBitmap(), null, Modifier.align(alignment).fillMaxWidth(0.42f).alpha(activeAlpha)
+                                .clickable { vm.selectedOverlayClipId = clip.id }, contentScale = ContentScale.Fit)
+                        }
+                    } else {
+                        Text(clip.content, Modifier.align(alignment).padding(12.dp).clip(RoundedCornerShape(8.dp))
+                            .background(if (clip.background) Color(0x99000000) else Color.Transparent).padding(horizontal = 10.dp, vertical = 5.dp)
+                            .alpha(activeAlpha).clickable { vm.selectedOverlayClipId = clip.id },
+                            color = Color(clip.color), fontSize = when (clip.size) { 0 -> 17.sp; 2 -> 34.sp; else -> 25.sp },
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
         GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { vv?.start() }) { Text("▶"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play)) }
-                Spacer(Modifier.width(10.dp))
-                OutlinedButton(onClick = { vv?.pause() }) { Text("Ⅱ"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pause)) }
+                OutlinedButton(onClick = { seekToTimeline((vm.playheadMs - (vm.videoFrameDurationMs / vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)).coerceAtLeast(0L)) }) { Text("−1 فریم") }
+                Spacer(Modifier.width(6.dp))
+                OutlinedButton(onClick = { player?.play() }) { Text("▶"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.play)) }
+                Spacer(Modifier.width(6.dp))
+                OutlinedButton(onClick = { player?.pause() }) { Text("Ⅱ"); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.pause)) }
+                Spacer(Modifier.width(6.dp))
+                OutlinedButton(onClick = { seekToTimeline((vm.playheadMs + (vm.videoFrameDurationMs / vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)).coerceAtMost(vm.videoDur.coerceAtLeast(1L))) }) { Text("+1 فریم") }
+            }
+        }
+        GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(fmt(vm.playheadMs), color = Storm.bolt, style = MaterialTheme.typography.labelSmall)
+                    Text(fmt(vm.videoDur), color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                }
+                Slider(value = vm.playheadMs.toFloat().coerceIn(0f, vm.videoDur.toFloat().coerceAtLeast(1f)),
+                    onValueChange = { value -> seekToTimeline(value.toLong()) },
+                    valueRange = 0f..vm.videoDur.toFloat().coerceAtLeast(1f))
             }
         }
         GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp)) {
@@ -531,7 +811,7 @@ fun VideoEditor(vm: MainVM) {
                                         stringResource(R.string.video_end) + " " + fmt(range.endInclusive.toLong()),
                                         style = MaterialTheme.typography.labelLarge, color = Storm.bolt)
                                     RangeSlider(value = range, onValueChange = { r ->
-                                        if (r.start != range.start) vv?.seekTo(r.start.toInt()) else vv?.seekTo(r.endInclusive.toInt())
+                                        if (r.start != range.start) player?.seekTo(r.start.toLong()) else player?.seekTo(r.endInclusive.toLong())
                                         range = r
                                     }, valueRange = 0f..vm.videoDur.toFloat().coerceAtLeast(1f))
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -539,6 +819,9 @@ fun VideoEditor(vm: MainVM) {
                                         Button(onClick = {
                                             if (range.endInclusive - range.start >= 100f) vm.addSeg(Seg(range.start.toLong(), range.endInclusive.toLong()))
                                         }) { Text(stringResource(R.string.add_segment)) }
+                                        OutlinedButton(enabled = vm.selSeg in vm.segments.indices, onClick = {
+                                            if (!vm.splitSelectedSegmentAtPlayhead()) vm.info(R.string.error_generic, "برای Split باید Playhead حداقل ۲۰۰ میلی‌ثانیه از دو لبه فاصله داشته باشد")
+                                        }) { Text("Split در محل پخش") }
                                         OutlinedButton(onClick = { pickClip.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) }) {
                                             Text(stringResource(R.string.add_clip))
                                         }
@@ -549,6 +832,8 @@ fun VideoEditor(vm: MainVM) {
                                     if (vm.segments.isEmpty()) {
                                         Text(stringResource(R.string.whole_video), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                     } else {
+                                        // Keep the selected segment in the enclosing scope so the trim controls below can use it.
+                                        val sel = vm.segments.getOrNull(vm.selSeg)
                                         Row(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(13.dp))
                                             .border(1.dp, Color(0x557EC8FF), RoundedCornerShape(13.dp)),
                                             horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -565,17 +850,37 @@ fun VideoEditor(vm: MainVM) {
                                             }
                                         }
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            val sel = vm.segments.getOrNull(vm.selSeg)
                                             Text(if (sel != null) "${vm.selSeg + 1}.  ${fmt(sel.startMs)} – ${fmt(sel.endMs)}" else "",
                                                 style = MaterialTheme.typography.bodySmall, color = Storm.muted, modifier = Modifier.weight(1f))
                                             OutlinedButton(enabled = sel != null, onClick = { vm.duplicateSeg(vm.selSeg) }) { Text(stringResource(R.string.copy_segment)) }
+                                            OutlinedButton(enabled = sel != null && vm.selSeg > 0, onClick = { vm.moveSegment(vm.selSeg, vm.selSeg - 1) }) { Text("← جابه‌جایی") }
+                                            OutlinedButton(enabled = sel != null && vm.selSeg < vm.segments.lastIndex, onClick = { vm.moveSegment(vm.selSeg, vm.selSeg + 1) }) { Text("جابه‌جایی →") }
                                             OutlinedButton(enabled = sel != null, onClick = { vm.removeSeg(vm.selSeg); vm.selSeg = -1 }) { Text(stringResource(R.string.delete_segment)) }
+                                            OutlinedButton(enabled = sel != null, onClick = { vm.rippleDeleteSegment(vm.selSeg) }) { Text("حذف و بستن فاصله") }
+                                        }
+                                        if (sel != null) {
+                                            var selectedRange by remember(vm.selSeg, sel.startMs, sel.endMs) {
+                                                mutableStateOf(sel.startMs.toFloat()..sel.endMs.toFloat())
+                                            }
+                                            Text("برش دقیق قطعهٔ انتخاب‌شده · ${fmt(sel.startMs)} تا ${fmt(sel.endMs)}",
+                                                style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                                            RangeSlider(
+                                                value = selectedRange,
+                                                onValueChange = { r ->
+                                                    selectedRange = r
+                                                    vm.updateSegmentRange(vm.selSeg, r.start.toLong(), r.endInclusive.toLong())
+                                                },
+                                                onValueChangeFinished = { vm.finishVideoTimelineGesture() },
+                                                valueRange = 0f..(if (sel.uri == null) vm.videoDur else sel.endMs).toFloat().coerceAtLeast(200f)
+                                            )
+                                            Text("برای تغییر ترتیب از دکمه‌های جابه‌جایی استفاده کنید؛ برش فقط محدودهٔ منبع همین قطعه را تغییر می‌دهد.",
+                                                style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                                         }
                                     }
                                 }
                                 VTool.MUSIC -> {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Switch(vm.muteOriginal, { vm.muteOriginal = it })
+                                        Switch(vm.muteOriginal, { vm.muteOriginal = it; vm.commitVideoSettings() })
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.mute_original), style = MaterialTheme.typography.bodyMedium)
                                     }
                                     var fxOpen by remember { mutableStateOf(false) }
@@ -590,9 +895,12 @@ fun VideoEditor(vm: MainVM) {
                                             }
                                         }
                                         OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(stringResource(R.string.import_music)) }
-                                        if (vm.music != null) TextButton(onClick = { vm.music = null; vm.musicName = null }) { Text(stringResource(R.string.remove_music)) }
+                                        if (vm.music != null) TextButton(onClick = { vm.updateMusicSource(null) }) { Text(stringResource(R.string.remove_music)) }
                                     }
                                     vm.musicName?.let { Text(stringResource(R.string.fx_selected, stringResource(it)), style = MaterialTheme.typography.bodySmall, color = Storm.muted) }
+                                    if (vm.music != null) AudioWaveformView(vm.musicWaveform, "موج واقعی موسیقی", Color(0xFFFFC45C), Modifier.fillMaxWidth().height(42.dp))
+                                    if (vm.voice != null) AudioWaveformView(vm.voiceWaveform, "موج واقعی صدای ضبط‌شده", Color(0xFF77D7B0), Modifier.fillMaxWidth().height(42.dp))
+                                    if (vm.waveformBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
                                         if (vm.recording) {
@@ -607,19 +915,22 @@ fun VideoEditor(vm: MainVM) {
                                                     android.content.pm.PackageManager.PERMISSION_GRANTED) vm.startRecording()
                                                 else micPerm.launch(android.Manifest.permission.RECORD_AUDIO)
                                             }) { Text(stringResource(R.string.rec_start)) }
-                                            if (vm.voice != null) TextButton(onClick = { vm.voice = null }) { Text(stringResource(R.string.rec_remove)) }
+                                            if (vm.voice != null) TextButton(onClick = { vm.updateVoiceSource(null) }) { Text(stringResource(R.string.rec_remove)) }
                                         }
                                     }
                                 }
                                 VTool.VOLUME -> {
-                                    Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f) { vm.volOrig = it }
-                                    Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f) { vm.volMusic = it }
-                                    Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f) { vm.volVoice = it }
+                                    Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volOrig = it }
+                                    Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volMusic = it }
+                                    Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volVoice = it }
                                     Text(stringResource(R.string.vol_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                 }
                                 VTool.FILTER -> {
-                                    ChoiceRow(VideoFx.filters.map { stringResource(it.nameRes) }, vm.vFilter) { vm.vFilter = it }
+                                    ChoiceRow(VideoFx.filters.map { stringResource(it.nameRes) }, vm.vFilter) { vm.vFilter = it; vm.commitVideoSettings() }
                                     Text(stringResource(R.string.filter_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                    Button(onClick = { vm.addEffectClip() }, enabled = vm.videoDur > 0L) {
+                                        Text("افزودن فیلتر انتخابی به تایم‌لاین")
+                                    }
                                 }
                                 VTool.TEXT -> {
                                     OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
@@ -640,8 +951,14 @@ fun VideoEditor(vm: MainVM) {
                                         Switch(vm.textBg, { vm.textBg = it })
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.text_bg), style = MaterialTheme.typography.bodyMedium)
                                     }
+                                    Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addTextClip() },
+                                        enabled = (vm.selectedOverlayClipId != null || vm.overlayText.isNotBlank()) && vm.videoDur > 0L) {
+                                        Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن متن به تایم‌لاین")
+                                    }
                                 }
                                 VTool.STICKER -> {
+                                    OutlinedButton(onClick = { pickVideoImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                        enabled = vm.videoUri != null && !vm.busy, modifier = Modifier.fillMaxWidth()) { Text("افزودن تصویر به‌عنوان لایه ویدئو") }
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         stickers.forEach { e ->
                                             Box(Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))
@@ -654,35 +971,42 @@ fun VideoEditor(vm: MainVM) {
                                         vm.stickerSize) { vm.stickerSize = it }
                                     ChoiceRow(listOf(R.string.pos_top, R.string.pos_center, R.string.pos_bottom).map { stringResource(it) },
                                         vm.stickerPos) { vm.stickerPos = it }
+                                    Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addStickerClip() },
+                                        enabled = (vm.sticker != null || vm.selectedOverlayClipId != null) && vm.videoDur > 0L) {
+                                        Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن استیکر به تایم‌لاین")
+                                    }
                                 }
                                 VTool.SPEED -> {
                                     ChoiceRow(listOf("0.25×", "0.5×", "1×", "2×", "4×"),
-                                        listOf(0.25f, 0.5f, 1f, 2f, 4f).indexOf(vm.vSpeed)) { vm.vSpeed = listOf(0.25f, 0.5f, 1f, 2f, 4f)[it] }
+                                        listOf(0.25f, 0.5f, 1f, 2f, 4f).indexOf(vm.vSpeed)) { vm.vSpeed = listOf(0.25f, 0.5f, 1f, 2f, 4f)[it]; vm.commitVideoSettings() }
                                     if (vm.vSpeed != 1f) Text(stringResource(R.string.speed_audio_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                 }
                                 VTool.CROP -> {
                                     ChoiceRow(cropAspects.mapIndexed { i, (_, l) -> if (i == 0) stringResource(R.string.aspect_original) else l },
-                                        cropAspects.indexOfFirst { it.first == vm.vCrop }.coerceAtLeast(0)) { vm.vCrop = cropAspects[it].first }
+                                        cropAspects.indexOfFirst { it.first == vm.vCrop }.coerceAtLeast(0)) { vm.vCrop = cropAspects[it].first; vm.commitVideoSettings() }
                                     if (vm.videoW <= 0) Text(stringResource(R.string.crop_unknown_size), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                 }
                                 VTool.ROTATE -> {
-                                    OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360 }) {
+                                    OutlinedButton(onClick = { vm.vRotate = (vm.vRotate + 90) % 360; vm.commitVideoSettings() }) {
                                         Text(stringResource(R.string.rotate) + " " + vm.vRotate + "°")
                                     }
                                 }
                                 VTool.FLIP -> {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(vm.vFlipH, { vm.vFlipH = !vm.vFlipH }, { Text(stringResource(R.string.flip_h)) })
-                                        FilterChip(vm.vFlipV, { vm.vFlipV = !vm.vFlipV }, { Text(stringResource(R.string.flip_v)) })
+                                        FilterChip(vm.vFlipH, { vm.vFlipH = !vm.vFlipH; vm.commitVideoSettings() }, { Text(stringResource(R.string.flip_h)) })
+                                        FilterChip(vm.vFlipV, { vm.vFlipV = !vm.vFlipV; vm.commitVideoSettings() }, { Text(stringResource(R.string.flip_v)) })
                                     }
                                 }
                                 VTool.ADJUST -> {
-                                    Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f) { vm.vBrightness = it }
-                                    Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f) { vm.vContrast = it }
+                                    Param(stringResource(R.string.brightness), vm.vBrightness, -1f..1f, onDone = { vm.commitVideoSettings() }) { vm.vBrightness = it }
+                                    Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f, onDone = { vm.commitVideoSettings() }) { vm.vContrast = it }
                                 }
                                 VTool.EXPORT -> {
-                                    Button(onClick = { vm.exportVideo() }, enabled = !vm.busy,
+                                    Button(onClick = { if (vm.runVideoExportPreflight()) vm.exportVideo() }, enabled = !vm.busy,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.export_video)) }
+                                    vm.exportPreflightIssues.forEach { issue ->
+                                        Text("• $issue", color = Color(0xFFFFC27A), style = MaterialTheme.typography.bodySmall)
+                                    }
                                     if (vm.busy) {
                                         Text(stringResource(vm.stage), style = MaterialTheme.typography.bodyMedium)
                                         OutlinedButton(onClick = { vm.cancel() }) { Text(stringResource(R.string.cancel)) }
@@ -693,21 +1017,307 @@ fun VideoEditor(vm: MainVM) {
                     }
                 }
                 Box(Modifier.padding(horizontal = 16.dp)) { InfoText(vm) }
+                VideoTimelineTracks(vm, onAudioTap = { tool = VTool.MUSIC; toolCategory = "audio" }, onTextTap = { tool = VTool.TEXT; toolCategory = "text" }, onStickerTap = { tool = VTool.STICKER; toolCategory = "overlay" }, onMarkerTap = { seekToTimeline(it) })
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Storm.hairline))
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val tools = listOf(
-                        Triple(VTool.TRIM, Ic.SCISSORS, R.string.tool_trim), Triple(VTool.MUSIC, Ic.MUSIC, R.string.tool_music),
-                        Triple(VTool.VOLUME, Ic.VOLUME, R.string.tool_volume), Triple(VTool.FILTER, Ic.FILTER, R.string.tool_filter), Triple(VTool.TEXT, Ic.TEXT, R.string.tool_text),
-                        Triple(VTool.STICKER, Ic.STICKER, R.string.tool_sticker), Triple(VTool.SPEED, Ic.SPEED, R.string.tool_speed),
-                        Triple(VTool.CROP, Ic.CROP, R.string.tool_crop), Triple(VTool.ROTATE, Ic.ROTATE, R.string.tool_rotate),
-                        Triple(VTool.FLIP, Ic.FLIP, R.string.tool_flip), Triple(VTool.ADJUST, Ic.ADJUST, R.string.tool_adjust),
-                        Triple(VTool.EXPORT, Ic.EXPORT, R.string.tool_export))
-                    tools.forEach { (t, ic, lb) -> ToolButton(ic, stringResource(lb), tool == t) { tool = t } }
+                val tools = listOf(
+                    Triple(VTool.TRIM, Ic.SCISSORS, R.string.tool_trim), Triple(VTool.MUSIC, Ic.MUSIC, R.string.tool_music),
+                    Triple(VTool.VOLUME, Ic.VOLUME, R.string.tool_volume), Triple(VTool.FILTER, Ic.FILTER, R.string.tool_filter), Triple(VTool.TEXT, Ic.TEXT, R.string.tool_text),
+                    Triple(VTool.STICKER, Ic.STICKER, R.string.tool_sticker), Triple(VTool.SPEED, Ic.SPEED, R.string.tool_speed),
+                    Triple(VTool.CROP, Ic.CROP, R.string.tool_crop), Triple(VTool.ROTATE, Ic.ROTATE, R.string.tool_rotate),
+                    Triple(VTool.FLIP, Ic.FLIP, R.string.tool_flip), Triple(VTool.ADJUST, Ic.ADJUST, R.string.tool_adjust),
+                    Triple(VTool.EXPORT, Ic.EXPORT, R.string.tool_export))
+                val categories = listOf(
+                    "edit" to "برش و تصویر", "audio" to "صدا", "text" to "متن", "overlay" to "لایه‌ها", "export" to "خروجی")
+                val visibleTools = tools.filter { (t, _, _) -> when (toolCategory) {
+                    "audio" -> t == VTool.MUSIC || t == VTool.VOLUME
+                    "text" -> t == VTool.TEXT
+                    "overlay" -> t == VTool.STICKER
+                    "export" -> t == VTool.EXPORT
+                    else -> t == VTool.TRIM || t == VTool.FILTER || t == VTool.SPEED || t == VTool.CROP || t == VTool.ROTATE || t == VTool.FLIP || t == VTool.ADJUST
+                } }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("ابزارهای تدوین", color = Storm.text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                        Text("${visibleTools.size} ابزار", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        categories.forEach { (id, label) ->
+                            FilterChip(selected = toolCategory == id, onClick = {
+                                toolCategory = id
+                                tool = when (id) { "audio" -> VTool.MUSIC; "text" -> VTool.TEXT; "overlay" -> VTool.STICKER; "export" -> VTool.EXPORT; else -> VTool.TRIM }
+                            }, label = { Text(label, style = MaterialTheme.typography.labelSmall) })
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        visibleTools.forEach { (t, ic, lb) -> ToolButton(ic, stringResource(lb), tool == t) { tool = t } }
+                    }
                 }
             }
         }
     }
+}
+
+/** Compact multi-track timeline inspired by mobile nonlinear editors. Tracks are selectable and
+ * reflect the real project state; the these lanes render measured peak samples decoded from the selected audio files. */
+@Composable
+private fun AudioWaveformView(values: List<Float>, label: String, tint: Color, modifier: Modifier = Modifier) {
+    Box(modifier.clip(RoundedCornerShape(7.dp)).background(tint.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+        if (values.isNotEmpty()) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 3.dp)) {
+                val count = values.size
+                val step = size.width / count.coerceAtLeast(1)
+                val bar = (step * 0.66f).coerceAtLeast(1f)
+                values.forEachIndexed { index, value ->
+                    val h = (size.height * value.coerceIn(0.025f, 1f)).coerceAtLeast(2f)
+                    drawRoundRect(tint, topLeft = androidx.compose.ui.geometry.Offset(index * step + (step - bar) / 2f, (size.height - h) / 2f),
+                        size = androidx.compose.ui.geometry.Size(bar, h), cornerRadius = androidx.compose.ui.geometry.CornerRadius(bar / 2f))
+                }
+            }
+        } else Text(label.ifBlank { "در حال تحلیل صدا…" }, color = tint, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun VideoTimelineTracks(
+    vm: MainVM,
+    onAudioTap: () -> Unit,
+    onTextTap: () -> Unit,
+    onStickerTap: () -> Unit,
+    onMarkerTap: (Long) -> Unit
+) {
+    val duration = ((if (vm.segments.isEmpty()) vm.videoDur else vm.segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) })
+        / vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+    var keyTime by remember(vm.selectedOverlayClipId) { mutableFloatStateOf(0f) }
+    var keyAlpha by remember(vm.selectedOverlayClipId) { mutableFloatStateOf(1f) }
+    var keyPosition by remember(vm.selectedOverlayClipId) { mutableIntStateOf(1) }
+    var timelineZoom by remember { mutableFloatStateOf(1f) }
+    val timelineScroll = rememberScrollState()
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("TIMELINE", style = MaterialTheme.typography.labelSmall, color = Storm.muted,
+                modifier = Modifier.weight(1f))
+            Text(fmt(duration), style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+            Spacer(Modifier.width(8.dp))
+            FilterChip(selected = vm.timelineSnapEnabled, onClick = { vm.timelineSnapEnabled = !vm.timelineSnapEnabled },
+                label = { Text(if (vm.timelineSnapEnabled) "چسبندگی روشن" else "چسبندگی خاموش") })
+            OutlinedButton(onClick = { vm.addVideoMarker(vm.playheadMs) }) { Text("+ نشانگر") }
+        }
+        if (vm.videoMarkers.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                vm.videoMarkers.forEach { marker ->
+                    OutlinedButton(onClick = { onMarkerTap(marker) }, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 4.dp)) {
+                        Text("◆ ${fmt(marker)}", style = MaterialTheme.typography.labelSmall)
+                    }
+                    TextButton(onClick = { vm.removeVideoMarker(marker) }, contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)) { Text("×") }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("زوم", color = Storm.muted, style = MaterialTheme.typography.labelSmall)
+            Slider(value = timelineZoom, onValueChange = { timelineZoom = it }, valueRange = 1f..4f,
+                modifier = Modifier.weight(1f).height(28.dp))
+            Text("${timelineZoom.toInt()}×", color = Storm.arc, style = MaterialTheme.typography.labelSmall)
+            TextButton(onClick = { timelineZoom = 1f; timelineScroll.dispatchRawDelta(-timelineScroll.value.toFloat()) },
+                contentPadding = PaddingValues(horizontal = 5.dp, vertical = 0.dp)) {
+                Text("تناسب", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val scaledWidth = maxWidth * timelineZoom
+            Column(Modifier.horizontalScroll(timelineScroll).width(scaledWidth), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                // Interactive ruler: tap or scrub anywhere on the timeline to move the playhead.
+                // The ruler scales with the timeline, so zoom remains useful on long projects.
+                Box(Modifier.fillMaxWidth().height(25.dp)
+                    .pointerInput(duration) {
+                        detectTapGestures { position ->
+                            onMarkerTap(TimelineMath.timeAtFraction(position.x / size.width.coerceAtLeast(1), duration))
+                        }
+                    }
+                    .pointerInput(duration) {
+                        detectDragGestures(onDragStart = { position ->
+                            onMarkerTap(TimelineMath.timeAtFraction(position.x / size.width.coerceAtLeast(1), duration))
+                        }, onDrag = { change, _ ->
+                            change.consume()
+                            onMarkerTap(TimelineMath.timeAtFraction(change.position.x / size.width.coerceAtLeast(1), duration))
+                        })
+                    }) {
+                    Row(Modifier.fillMaxSize().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        listOf("0:00", "25%", "50%", "75%", fmt(duration)).forEach {
+                            Text(it, style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                        }
+                    }
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        val w = size.width.coerceAtLeast(1f)
+                        val x = (vm.playheadMs.toFloat() / duration.coerceAtLeast(1L)).coerceIn(0f, 1f) * w
+                        drawLine(Storm.bolt, androidx.compose.ui.geometry.Offset(x, 0f),
+                            androidx.compose.ui.geometry.Offset(x, size.height), strokeWidth = 2.dp.toPx())
+                        vm.videoMarkers.forEach { marker ->
+                            val mx = (marker.toFloat() / duration.coerceAtLeast(1L)).coerceIn(0f, 1f) * w
+                            drawLine(Color(0xFFFFC45C), androidx.compose.ui.geometry.Offset(mx, size.height * 0.52f),
+                                androidx.compose.ui.geometry.Offset(mx, size.height), strokeWidth = 1.5.dp.toPx())
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("${fmt(vm.playheadMs)}  /  ${fmt(duration)}", style = MaterialTheme.typography.labelSmall,
+                        color = Storm.bolt)
+                    Text("برای جابه‌جایی، خط‌کش را لمس یا بکشید", style = MaterialTheme.typography.labelSmall,
+                        color = Storm.muted)
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("VIDEO", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+            Row(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(8.dp))
+                .background(Storm.surfaceTop), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (vm.segments.isEmpty()) {
+                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF315C79)), contentAlignment = Alignment.Center) {
+                        Text("کل ویدئو", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                    }
+                } else {
+                    vm.segments.forEachIndexed { index, seg ->
+                        val weight = (seg.endMs - seg.startMs).coerceAtLeast(1L).toFloat()
+                        Box(Modifier.weight(weight).fillMaxHeight()
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(if (vm.selSeg == index) Color(0xFFDF713E) else Color(0xFF315C79))
+                            .clickable { vm.selSeg = index }, contentAlignment = Alignment.Center) {
+                            Text(if (seg.uri == null) "${index + 1}" else "${index + 1} +",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+        if (vm.music != null) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onAudioTap), verticalAlignment = Alignment.CenterVertically) {
+                Text("MUSIC", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFC45C))
+                AudioWaveformView(vm.musicWaveform, "", Color(0xFFFFC45C), Modifier.weight(1f).height(30.dp))
+            }
+        }
+        if (vm.voice != null) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onAudioTap), verticalAlignment = Alignment.CenterVertically) {
+                Text("VOICE", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFF77D7B0))
+                AudioWaveformView(vm.voiceWaveform, "", Color(0xFF77D7B0), Modifier.weight(1f).height(30.dp))
+            }
+        }
+        if (vm.music == null && vm.voice == null) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onAudioTap), verticalAlignment = Alignment.CenterVertically) {
+                Text("AUDIO", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFC45C))
+                Text("+ افزودن موسیقی یا صدا", color = Color(0xFFFFD58A), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        vm.videoEffectClips.forEach { effect ->
+            val durationMs = (if (vm.segments.isEmpty()) vm.videoDur else vm.segments.sumOf { (it.endMs-it.startMs).coerceAtLeast(0L) })
+                .div(vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+            val startFraction = (effect.startMs.toFloat() / durationMs).coerceIn(0f, 1f)
+            val maxWidthFraction = (1f - startFraction).coerceAtLeast(0.025f)
+            val widthFraction = ((effect.endMs - effect.startMs).toFloat() / durationMs).coerceIn(0.025f, maxWidthFraction)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("FX", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFFD6A7FF))
+                BoxWithConstraints(Modifier.weight(1f).height(27.dp).clip(RoundedCornerShape(6.dp)).background(Storm.surfaceTop)) {
+                    val w = maxWidth
+                    Box(Modifier.offset(x = w * startFraction).width((w * widthFraction).coerceAtLeast(18.dp)).fillMaxHeight()
+                        .clip(RoundedCornerShape(5.dp)).background(if (vm.selectedVideoEffectId == effect.id) Color(0xFF8052A8) else Color(0xFF463A68))
+                        .clickable { vm.selectedVideoEffectId = effect.id }, contentAlignment = Alignment.Center) {
+                        Text(stringResource(VideoFx.filters.getOrNull(effect.filterIndex)?.nameRes ?: R.string.filter_none),
+                            color = Color.White, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                TextButton(onClick = { vm.removeEffectClip(effect.id) }) { Text("×", color = Storm.muted) }
+            }
+            if (vm.selectedVideoEffectId == effect.id) {
+                val start = effect.startMs.coerceIn(0L, durationMs - 1L)
+                val end = effect.endMs.coerceIn(start + 1L, durationMs)
+                Text("بازه زمانی فیلتر: ${fmt(start)} تا ${fmt(end)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                RangeSlider(value = start.toFloat()..end.toFloat(), onValueChange = { vm.updateEffectClip(effect.id, it.start.toLong(), it.endInclusive.toLong()) },
+                    valueRange = 0f..durationMs.toFloat())
+            }
+        }
+        if (vm.overlayText.isNotBlank()) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onTextTap), verticalAlignment = Alignment.CenterVertically) {
+                Text("TEXT", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFF73D6E8))
+                Box(Modifier.weight(1f).height(25.dp).clip(RoundedCornerShape(7.dp))
+                    .background(Color(0xFF24505B)), contentAlignment = Alignment.CenterStart) {
+                    Text(vm.overlayText, Modifier.padding(horizontal = 9.dp), maxLines = 1,
+                        style = MaterialTheme.typography.labelSmall, color = Color.White)
+                }
+            }
+        }
+        if (vm.sticker != null) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onStickerTap), verticalAlignment = Alignment.CenterVertically) {
+                Text("STICKER", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFF8DD9A7))
+                Box(Modifier.weight(1f).height(25.dp).clip(RoundedCornerShape(7.dp))
+                    .background(Color(0xFF244B3C)), contentAlignment = Alignment.CenterStart) {
+                    Text(vm.sticker ?: "", Modifier.padding(horizontal = 9.dp), color = Color.White)
+                }
+            }
+        }
+        vm.videoOverlayClips.forEach { clip ->
+            val durationMs = (if (vm.segments.isEmpty()) vm.videoDur else vm.segments.sumOf { (it.endMs-it.startMs).coerceAtLeast(0L) })
+                .div(vm.vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+            val startFraction = (clip.startMs.toFloat() / durationMs).coerceIn(0f, 1f)
+            val widthFraction = minOf(((clip.endMs - clip.startMs).toFloat() / durationMs).coerceAtLeast(0.025f), (1f-startFraction).coerceAtLeast(0.025f))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(when (clip.kind) { "TEXT" -> "TEXT"; "IMAGE" -> "IMAGE"; else -> "STICKER" }, Modifier.width(58.dp),
+                    style = MaterialTheme.typography.labelSmall, color = when (clip.kind) { "TEXT" -> Color(0xFF73D6E8); "IMAGE" -> Color(0xFFB7A0FF); else -> Color(0xFF8DD9A7) })
+                BoxWithConstraints(Modifier.weight(1f).height(27.dp).clip(RoundedCornerShape(6.dp)).background(Storm.surfaceTop)) {
+                    val totalWidth = maxWidth
+                    Box(Modifier.offset(x = totalWidth * startFraction).width((totalWidth * widthFraction).coerceAtLeast(18.dp))
+                        .fillMaxHeight().clip(RoundedCornerShape(5.dp))
+                        .background(if (vm.selectedOverlayClipId == clip.id) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))
+                        .pointerInput(clip.id, durationMs) {
+                            var dragTotal = 0f
+                            detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
+                                onDrag = { change, amount ->
+                                    change.consume(); dragTotal += amount.x
+                                    val delta = (dragTotal / size.width.toFloat().coerceAtLeast(1f) * (clip.endMs - clip.startMs)).toLong()
+                                    vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
+                                }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                        }
+                        .clickable { vm.selectedOverlayClipId = clip.id }, contentAlignment = Alignment.Center) {
+                        Text(clip.content, Modifier.padding(horizontal = 5.dp), maxLines = 1, color = Color.White,
+                            style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                TextButton(onClick = { vm.removeOverlayClip(clip.id) }) { Text("×", color = Storm.muted) }
+            }
+            if (vm.selectedOverlayClipId == clip.id) {
+                val safeStart = clip.startMs.coerceIn(0L, durationMs - 1L)
+                val safeEnd = clip.endMs.coerceIn(safeStart + 1L, durationMs)
+                Text("شروع: ${fmt(safeStart)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd) },
+                    valueRange = 0f..(durationMs - 1L).toFloat())
+                Text("پایان: ${fmt(safeEnd)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                Slider(value = safeEnd.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, safeStart, it.toLong()) },
+                    valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat())
+                Divider(color = Storm.hairline)
+                Text("فریم‌های کلیدی حرکت و شفافیت", style = MaterialTheme.typography.labelMedium, color = Storm.arc)
+                Text("زمان فریم: ${fmt(keyTime.toLong().coerceIn(safeStart, safeEnd))}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                Slider(value = keyTime.coerceIn(safeStart.toFloat(), safeEnd.toFloat()), onValueChange = { keyTime = it },
+                    valueRange = safeStart.toFloat()..safeEnd.toFloat())
+                Text("شفافیت: ${(keyAlpha * 100).toInt()}٪", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                Slider(value = keyAlpha, onValueChange = { keyAlpha = it }, valueRange = 0f..1f)
+                ChoiceRow(listOf("بالا", "وسط", "پایین"), keyPosition) { keyPosition = it }
+                Button(onClick = { vm.addOverlayKeyframe(clip.id, keyTime.toLong(), keyAlpha, keyPosition) },
+                    modifier = Modifier.fillMaxWidth()) { Text("ثبت فریم کلیدی") }
+                if (clip.keyframes.isNotEmpty()) {
+                    Text("فریم‌های ثبت‌شده", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        clip.keyframes.forEach { frame ->
+                            AssistChip(onClick = { keyTime = frame.timeMs.toFloat(); keyAlpha = frame.alpha; keyPosition = frame.position },
+                                label = { Text("${fmt(frame.timeMs)} · ${(frame.alpha * 100).toInt()}٪") },
+                                trailingIcon = { TextButton(onClick = { vm.removeOverlayKeyframe(clip.id, frame.timeMs) }) { Text("×") } })
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+}
 }
 
 @Composable
@@ -784,6 +1394,30 @@ fun PrepareScreen(vm: MainVM) {
     }
 }
 
+
+@Composable
+fun PhotoProjectsDialog(vm: MainVM, onDismiss: () -> Unit) {
+    var list by remember { mutableStateOf(vm.listPhotoProjects()) }
+    AlertDialog(onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close_dialog)) } },
+        title = { Text("پروژه‌های ادیت عکس") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { vm.savePhotoProject(); onDismiss() }, enabled = vm.photoSrc != null && !vm.busy,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ذخیره پروژه قابل ویرایش") }
+                Text("عکس اصلی، تنظیمات، ماسک‌ها و تصاویر لایه‌ها در پروژه نگهداری می‌شوند.",
+                    style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                if (list.isEmpty()) Text("هنوز پروژه‌ای ذخیره نشده است.", style = MaterialTheme.typography.bodyMedium)
+                list.forEach { project ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(project.name, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.loadPhotoProject(project.id); onDismiss() }) { Text("بازکردن") }
+                        TextButton(onClick = { vm.deletePhotoProject(project.id); list = vm.listPhotoProjects() }) { Text("حذف") }
+                    }
+                }
+            }
+        })
+}
 
 @Composable
 fun ProjectsDialog(vm: MainVM, onDismiss: () -> Unit) {
