@@ -97,7 +97,7 @@ object ProjectCodec {
                 }.distinct().sorted(),
                 o.optLong("fim", 0L).coerceIn(0L, 5_000L), o.optLong("fom", 0L).coerceIn(0L, 5_000L),
                 o.optLong("fiv", 0L).coerceIn(0L, 5_000L), o.optLong("fov", 0L).coerceIn(0L, 5_000L),
-                o.optBoolean("mm", false), o.optBoolean("mv", false), AudioTrackRouting.normalize(o.optString("solo", "NONE"))
+                o.optBoolean("mm", false), o.optBoolean("mv", false), AudioTrackRouting.normalize(o.optString("solo", "NONE")))
         }
     } catch (e: Exception) { null }
 }
