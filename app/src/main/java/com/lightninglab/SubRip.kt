@@ -29,6 +29,23 @@ object SubRip {
         return cues.sortedWith(compareBy<SubtitleCue> { it.startMs }.thenBy { it.endMs })
     }
 
+    /** Serialize editable text overlays back to standard SubRip. */
+    fun serialize(cues: List<SubtitleCue>): String = cues
+        .filter { it.endMs > it.startMs && it.text.isNotBlank() }
+        .sortedWith(compareBy<SubtitleCue> { it.startMs }.thenBy { it.endMs })
+        .mapIndexed { index, cue ->
+            "\${index + 1}\n\${formatTimestamp(cue.startMs)} --> \${formatTimestamp(cue.endMs)}\n\${cue.text.replace("\r\n", "\n").replace('\r', '\n')}"
+        }.joinToString("\n\n").let { if (it.isEmpty()) "" else "$it\n" }
+
+    private fun formatTimestamp(value: Long): String {
+        val ms = value.coerceAtLeast(0L)
+        val hours = ms / 3_600_000L
+        val minutes = (ms / 60_000L) % 60L
+        val seconds = (ms / 1_000L) % 60L
+        val millis = ms % 1_000L
+        return "\${hours.toString().padStart(2, '0')}:\${minutes.toString().padStart(2, '0')}:\${seconds.toString().padStart(2, '0')},\${millis.toString().padStart(3, '0')}"
+    }
+
     private fun timestamp(parts: List<String>, offset: Int): Long? {
         val hours = parts[offset].toLongOrNull() ?: return null
         val minutes = parts[offset + 1].toLongOrNull() ?: return null

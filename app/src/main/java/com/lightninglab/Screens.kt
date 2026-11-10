@@ -661,6 +661,9 @@ fun VideoEditor(vm: MainVM) {
     val pickSubRip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) vm.importSubRip(u)
     }
+    val saveSubRip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-subrip")) { u ->
+        if (u != null) vm.exportSubRip(u)
+    }
     val pickVideoImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.addVideoImageClip(u)
     }
@@ -940,6 +943,10 @@ fun VideoEditor(vm: MainVM) {
                                     OutlinedButton(onClick = { pickSubRip.launch(arrayOf("application/x-subrip", "text/plain", "application/octet-stream")) },
                                         enabled = vm.videoUri != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
                                         Text("واردکردن زیرنویس SRT")
+                                    }
+                                    OutlinedButton(onClick = { saveSubRip.launch("captions.srt") },
+                                        enabled = vm.videoOverlayClips.any { it.kind == "TEXT" }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("خروجی زیرنویس SRT")
                                     }
                                     if (vm.subtitleImportStatus.isNotBlank()) {
                                         Text(vm.subtitleImportStatus, style = MaterialTheme.typography.labelSmall, color = Storm.arc)

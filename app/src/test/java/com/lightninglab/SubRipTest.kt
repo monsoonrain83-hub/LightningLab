@@ -44,4 +44,11 @@ class SubRipTest {
         assertEquals(100L, cue.startMs)
         assertEquals("Caption", cue.text)
     }
+
+    @Test fun serializesAndRoundTripsMultilineCues() {
+        val cues = listOf(SubtitleCue(1_250L, 3_500L, "A line\nSecond line"))
+        val encoded = SubRip.serialize(cues)
+        assertTrue(encoded.startsWith("1\n00:00:01,250 --> 00:00:03,500\n"))
+        assertEquals(cues, SubRip.parse(encoded))
+    }
 }

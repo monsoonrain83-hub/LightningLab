@@ -474,6 +474,30 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
 
+    /** Exports all current text overlay clips as a standard .srt sidecar file. */
+    fun exportSubRip(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val cues = videoOverlayClips.filter { it.kind == "TEXT" }
+                    .map { SubtitleCue(it.startMs, it.endMs, it.content) }
+                if (cues.isEmpty()) {
+                    subtitleImportStatus = "هیچ لایهٔ متنی برای خروجی SRT وجود ندارد."
+                    return@launch
+                }
+                val srt = SubRip.serialize(cues)
+                withContext(Dispatchers.IO) {
+                    val output = app.contentResolver.openOutputStream(uri, "wt")
+                        ?: throw java.io.IOException("subtitle output cannot be opened")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(srt) }
+                }
+                subtitleImportStatus = "\${cues.size} زیرنویس در فایل SRT ذخیره شد."
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                subtitleImportStatus = "خطا در ذخیرهٔ SRT: \${e.message ?: "SRT"}"
+            }
+        }
+    }
+
     /** Imports timed SubRip captions as ordinary editable/exportable text overlay clips. */
     var subtitleImportStatus by mutableStateOf("")
     fun importSubRip(uri: Uri) {
