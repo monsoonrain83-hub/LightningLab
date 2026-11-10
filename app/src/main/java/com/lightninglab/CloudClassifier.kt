@@ -44,26 +44,34 @@ class CloudClassifier(private val modelFile: File) {
     fun load(): Boolean {
         close()
         if (!modelFile.exists()) return false
+        var candidate: Interpreter? = null
         return try {
             val it = Interpreter(modelFile)
+            candidate = it
             val input = it.getInputTensor(0)
             val inputShape = input.shape()
             val inputOk = inputShape.contentEquals(intArrayOf(1, SIZE, SIZE, 3)) && input.dataType() == DataType.FLOAT32
             val output = it.getOutputTensor(0)
             val outputShape = output.shape()
-            // The training pipeline exports exactly one batch with one score per genus.
-            // Checking only the last dimension could accidentally accept [N], [1,1,N], etc.
+            // Accept only [1,10] or [1,11] float softmax outputs; reject ambiguous tensor ranks.
             val outputCount = outputShape.getOrNull(1)
             val labels = labelsForOutputCount(outputCount ?: -1)
             if (!inputOk || outputShape.size != 2 || outputShape[0] != 1 || labels == null || output.dataType() != DataType.FLOAT32) {
-                it.close(); false
+                it.close()
+                candidate = null
+                false
             } else {
                 activeLabels = labels
                 activeCcsnInput = usesCcsnUnitInput(outputCount ?: -1, input.name())
                 interp = it
+                candidate = null
                 true
             }
-        } catch (e: Throwable) { interp = null; false }
+        } catch (e: Throwable) {
+            try { candidate?.close() } catch (_: Throwable) { }
+            interp = null
+            false
+        }
     }
 
     @Synchronized

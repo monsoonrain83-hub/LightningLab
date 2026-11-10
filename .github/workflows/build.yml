@@ -1,6 +1,13 @@
 name: Build APK
 on:
   push:
+    paths:
+      - 'update.zip'
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
   contents: write
@@ -17,8 +24,6 @@ jobs:
             echo "Source root: $SRC"
             cp -r "$SRC"/. .
             rm -f update.zip
-            # Fix the three Int.coerceAtLeast call sites reported by run 186.
-            python3 -c 'from pathlib import Path; p=Path("app/src/main/java/com/lightninglab/Screens.kt"); s=p.read_text(); old="size.width.coerceAtLeast(1f)"; assert s.count(old) >= 3, "expected three timeline ruler errors"; p.write_text(s.replace(old, "size.width.coerceAtLeast(1)", 3))'
             git config user.name "lightninglab-bot"
             git config user.email "bot@users.noreply.github.com"
             git add -A
