@@ -309,7 +309,7 @@ fun PhotoEditor(vm: MainVM) {
     var histogram by remember { mutableStateOf<PhotoHistogramData?>(null) }
     LaunchedEffect(shown, prev, vm.showOriginal, healMode, maskMode) {
         val source = if (vm.showOriginal || (healMode && !maskMode)) prev else shown ?: prev
-        histogram = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        histogram = if (source == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             PhotoHistogram.compute(source)
         }
     }
