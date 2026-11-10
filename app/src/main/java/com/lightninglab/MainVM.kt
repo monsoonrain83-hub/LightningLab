@@ -22,6 +22,8 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.Crop
+import androidx.media3.effect.MatrixTransformation
+import androidx.media3.effect.Presentation
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
@@ -143,6 +145,119 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var stickerSize by mutableStateOf(1)
     var stickerPos by mutableStateOf(1)
     var selSeg by mutableStateOf(-1)
+    // ---- timeline (all times on the OUTPUT timeline, see Timeline.kt) ----
+    var playheadMs by mutableStateOf(0L)
+    val textClips = mutableStateListOf<TextClip>()
+    val stickerClips = mutableStateListOf<StickerClip>()
+    val audioClips = mutableStateListOf<AudioClip>()
+    val zoomKeys = mutableStateListOf<ZoomKey>()
+    /** What is selected on the timeline: 0 none, 1 text, 2 sticker, 3 audio, 4 zoom marker. */
+    var selKind by mutableStateOf(0)
+    var selId by mutableStateOf(-1)
+    var exportHeight by mutableStateOf(0)          // 0 = keep source size, else 360/480/720/1080/2160
+    var exportQuality by mutableStateOf(1)         // 0 low size, 1 balanced, 2 high
+    val fonts = mutableStateListOf<String>().also { l -> File(app.filesDir, "fonts").listFiles()?.sortedBy { it.name }?.forEach { l += it.absolutePath } }
+    private var nextId = 1
+    fun newId() = nextId++
+    /** Copies a user-chosen .ttf/.otf into app storage and makes it available to text clips. */
+    fun importFont(u: Uri) {
+        viewModelScope.launch {
+            try {
+                val f = withContext(Dispatchers.IO) {
+                    val dir = File(app.filesDir, "fonts").also { it.mkdirs() }
+                    val name = (app.contentResolver.query(u, null, null, null, null)?.use { c ->
+                        val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (c.moveToFirst() && i >= 0) c.getString(i) else null
+                    } ?: ("font_" + System.currentTimeMillis() + ".ttf")).replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    val out = File(dir, name)
+                    (app.contentResolver.openInputStream(u) ?: throw java.io.IOException("cannot open")).use { i -> out.outputStream().use { o -> i.copyTo(o) } }
+                    android.graphics.Typeface.createFromFile(out)   // throws if the file is not a font
+                    out.absolutePath
+                }
+                if (f !in fonts) fonts += f
+                val sel = textClips.firstOrNull { selKind == 1 && it.id == selId }
+                if (sel != null) updateText(sel.id) { it.copy(font = f) }
+                info(R.string.ve_font_added)
+            } catch (e: Exception) { info(R.string.ve_font_bad) }
+        }
+    }
+    /** Length of the output timeline in ms (trimmed/joined source divided by speed). */
+    val totalMs: Long get() = (((if (segments.isEmpty()) videoDur else segments.sumOf { it.endMs - it.startMs }) / vSpeed)).toLong()
+    fun select(kind: Int, id: Int) { selKind = kind; selId = id }
+    private fun clampHere(len: Long): LongArray {
+        val start = playheadMs.coerceAtMost(max(0L, totalMs - TimelineMath.MIN_CLIP_MS))
+        return TimelineMath.clampRange(start, start + len, totalMs)
+    }
+    fun addText(text: String) {
+        val r = clampHere(3000)
+        val t = TextClip(newId(), text, 0xFFFFFFFF.toInt(), 1, 2, false, r[0], r[1], fonts.lastOrNull())
+        textClips += t; select(1, t.id)
+    }
+    fun addSticker(emoji: String) {
+        val r = clampHere(3000)
+        val t = StickerClip(newId(), emoji, 2, 1, r[0], r[1]); stickerClips += t; select(2, t.id)
+    }
+    fun addAudio(u: Uri, label: String, kind: Int, atMs: Long = playheadMs) {
+        viewModelScope.launch {
+            val d = withContext(Dispatchers.IO) { audioDur(u, 0L) }
+            if (d <= 0L) { info(R.string.error_generic, "audio"); return@launch }
+            val c = AudioClip(newId(), u.toString(), label, kind, atMs.coerceIn(0L, max(0L, totalMs - 200L)), d)
+            audioClips += c; select(3, c.id)
+        }
+    }
+    fun addZoom(scale: Float) {
+        val t = playheadMs.coerceIn(0L, totalMs)
+        zoomKeys.removeAll { kotlin.math.abs(it.timeMs - t) < 100 }
+        val k = ZoomKey(newId(), t, scale); zoomKeys += k; select(4, k.id)
+    }
+    fun updateText(id: Int, f: (TextClip) -> TextClip) { val i = textClips.indexOfFirst { it.id == id }; if (i >= 0) textClips[i] = f(textClips[i]) }
+    fun updateSticker(id: Int, f: (StickerClip) -> StickerClip) { val i = stickerClips.indexOfFirst { it.id == id }; if (i >= 0) stickerClips[i] = f(stickerClips[i]) }
+    fun updateAudio(id: Int, f: (AudioClip) -> AudioClip) { val i = audioClips.indexOfFirst { it.id == id }; if (i >= 0) audioClips[i] = f(audioClips[i]) }
+    fun updateZoom(id: Int, f: (ZoomKey) -> ZoomKey) { val i = zoomKeys.indexOfFirst { it.id == id }; if (i >= 0) zoomKeys[i] = f(zoomKeys[i]) }
+    fun deleteSelected() {
+        when (selKind) {
+            1 -> textClips.removeAll { it.id == selId }
+            2 -> stickerClips.removeAll { it.id == selId }
+            3 -> audioClips.removeAll { it.id == selId }
+            4 -> zoomKeys.removeAll { it.id == selId }
+        }
+        selKind = 0; selId = -1
+    }
+    /** Moves the selected clip (text/sticker/audio) by dMs on the timeline; zoom markers move too. */
+    fun moveSelected(dMs: Long) {
+        when (selKind) {
+            1 -> updateText(selId) { val r = TimelineMath.clampRange(it.startMs + dMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
+            2 -> updateSticker(selId) { val r = TimelineMath.clampRange(it.startMs + dMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
+            3 -> updateAudio(selId) { it.copy(startMs = (it.startMs + dMs).coerceIn(0L, max(0L, totalMs - 200L))) }
+            4 -> updateZoom(selId) { it.copy(timeMs = (it.timeMs + dMs).coerceIn(0L, totalMs)) }
+        }
+    }
+    /** Changes the length of the selected text/sticker clip (audio keeps its natural length). */
+    fun resizeSelected(dMs: Long) {
+        when (selKind) {
+            1 -> updateText(selId) { val r = TimelineMath.clampRange(it.startMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
+            2 -> updateSticker(selId) { val r = TimelineMath.clampRange(it.startMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
+        }
+    }
+    /** Splits the segment under the playhead in two. */
+    fun splitAtPlayhead() {
+        val segs = if (segments.isEmpty()) listOf(Seg(0, videoDur)) else segments.toList()
+        val (i, off) = TimelineMath.locate(segs.map { it.endMs - it.startMs }, vSpeed, playheadMs)
+        val sg = segs.getOrNull(i) ?: return
+        val pr = TimelineMath.split(sg.startMs, sg.endMs, sg.startMs + off) ?: run { info(R.string.split_here_impossible); return }
+        if (segments.isEmpty()) segments += Seg(0, videoDur)
+        segments[i] = Seg(pr.first[0], pr.first[1], sg.uri)
+        segments.add(i + 1, Seg(pr.second[0], pr.second[1], sg.uri))
+        segPush(); selSeg = i + 1
+    }
+    /** Trims the selected segment's source range by (dStart, dEnd) ms. */
+    fun trimSelected(dStart: Long, dEnd: Long) {
+        val i = selSeg; val sg = segments.getOrNull(i) ?: return
+        val maxEnd = if (sg.uri == null) videoDur else Long.MAX_VALUE
+        val ns = (sg.startMs + dStart).coerceAtLeast(0L); val ne = (sg.endMs + dEnd).coerceAtMost(maxEnd)
+        if (ne - ns < TimelineMath.MIN_CLIP_MS) return
+        segments[i] = sg.copy(startMs = ns, endMs = ne); segPush()
+    }
+
     fun duplicateSeg(i: Int) {
         if (i !in segments.indices) return
         segments.add(i + 1, segments[i].copy()); segPush(); selSeg = i + 1
@@ -769,6 +884,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             if (rot == 90 || rot == 270) { videoW = vh; videoH = vw } else { videoW = vw; videoH = vh }
             videoUri = u; segments.clear(); segReset(); selSeg = -1; infoRes = null
+            segments += Seg(0, videoDur); segPush(); selSeg = 0
+            textClips.clear(); stickerClips.clear(); audioClips.clear(); zoomKeys.clear(); selKind = 0; selId = -1; playheadMs = 0L
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
@@ -845,15 +962,15 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         }
                         SegData(sg.startMs, sg.endMs, c)
                     }
-                    val mu = music?.let { m ->
-                        val n = if (m.path?.endsWith(".wav") == true) "music.wav" else "music.audio"; copyTo(m, File(dir, n)); n
+                    val audios = audioClips.map { c ->
+                        val n = "audio_" + c.id + ".bin"; copyTo(Uri.parse(c.uri), File(dir, n)); c.copy(uri = n)
                     }
-                    val vo = voice?.let { copyTo(it, File(dir, "voice.m4a")); "voice.m4a" }
                     val name = "Project " + java.text.SimpleDateFormat("MM-dd HH:mm", Locale.US).format(java.util.Date())
                     File(dir, "project.json").writeText(ProjectCodec.encode(ProjectData(
-                        name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
-                        vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
-                        sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice)))
+                        name, "main.mp4", videoDur, segs, null, null, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
+                        vRotate, vFlipH, vFlipV, vCrop, "", 0xFFFFFFFF.toInt(), 1, 1, false,
+                        null, 1, 1, volOrig, volMusic, volVoice,
+                        textClips.toList(), stickerClips.toList(), audios, zoomKeys.toList())))
                 }
                 info(R.string.project_saved)
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "save") } finally { busy = false }
@@ -866,15 +983,20 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
             loadVideo(Uri.fromFile(File(dir, p.video)))
             if (videoUri == null) return
+            if (p.segs.isNotEmpty()) segments.clear()
             for (sg in p.segs) segments.add(Seg(sg.startMs, sg.endMs, sg.clip?.let { Uri.fromFile(File(dir, it)) }))
             segReset(); segPush(); selSeg = -1
-            music = p.music?.let { Uri.fromFile(File(dir, it)) }; musicName = null
-            voice = p.voice?.let { Uri.fromFile(File(dir, it)) }
             muteOriginal = p.mute; vFilter = p.filter; vSpeed = p.speed; vBrightness = p.brightness; vContrast = p.contrast
             vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
-            overlayText = p.text; textColor = p.textColor; textSize = p.textSize; textPos = p.textPos; textBg = p.textBg
-            sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
+            textClips.addAll(p.texts); stickerClips.addAll(p.stickers); zoomKeys.addAll(p.zooms)
+            audioClips.addAll(p.audios.map { it.copy(uri = Uri.fromFile(File(dir, it.uri)).toString()) })
+            nextId = (textClips.map { it.id } + stickerClips.map { it.id } + audioClips.map { it.id } + zoomKeys.map { it.id }).maxOrNull()?.plus(1) ?: 1
+            // projects saved before the timeline existed: one whole-video text/sticker, music and voice track
+            if (p.texts.isEmpty() && p.text.isNotBlank()) textClips += TextClip(newId(), p.text, p.textColor, p.textSize, p.textPos, p.textBg, 0L, max(500L, totalMs))
+            if (p.stickers.isEmpty() && p.sticker != null) stickerClips += StickerClip(newId(), p.sticker, p.stickerSize, p.stickerPos, 0L, max(500L, totalMs))
+            p.music?.let { addAudio(Uri.fromFile(File(dir, it)), app.getString(R.string.tool_music), 0, 0L) }
+            p.voice?.let { addAudio(Uri.fromFile(File(dir, it)), app.getString(R.string.rec_label), 2, 0L) }
             screen = Screen.VIDEO
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
     }
@@ -909,32 +1031,61 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 if (vRotate != 0 || vFlipH || vFlipV) fx += ScaleAndRotateTransformation.Builder()
                     .setScale(if (vFlipH) -1f else 1f, if (vFlipV) -1f else 1f)
                     .setRotationDegrees(vRotate.toFloat()).build()
-                val ov = ArrayList<TextureOverlay>()
-                if (overlayText.isNotBlank()) ov += TextOverlay.createStaticTextOverlay(
-                    VideoFx.styled(overlayText.trim(), textColor, textSize, textPos, textBg))
-                sticker?.let { ov += TextOverlay.createStaticTextOverlay(
-                    VideoFx.styled(it, 0xFFFFFFFF.toInt(), stickerSize, stickerPos, false, 2.2f)) }
-                if (ov.isNotEmpty()) fx += OverlayEffect(ImmutableList.copyOf(ov))
-                val items = segs.map { s ->
-                    val mi = MediaItem.Builder().setUri(s.uri ?: u).setClippingConfiguration(
+                val items = segs.map { sg ->
+                    val mi = MediaItem.Builder().setUri(sg.uri ?: u).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder()
-                            .setStartPositionMs(s.startMs).setEndPositionMs(s.endMs).build()).build()
+                            .setStartPositionMs(sg.startMs).setEndPositionMs(sg.endMs).build()).build()
                     EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
                         .setEffects(Effects(if (volOrig != 1f) listOf<AudioProcessor>(VolumeProcessor(volOrig)) else emptyList(), fx)).build()
                 }
+                val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
-                val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
-                for ((au, vol) in listOfNotNull(music?.let { it to volMusic }, voice?.let { it to volVoice })) {
-                    val end = min(total, audioDur(au, total))
-                    val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
-                    seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true)
-                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()))
+                // audio clips: each is its own sequence, delayed by a gap
+                for (c in audioClips) {
+                    if (c.startMs >= total - 100) continue
+                    val len = min(c.durMs, total - c.startMs)
+                    val mi = MediaItem.Builder().setUri(Uri.parse(c.uri)).setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(len).build()).build()
+                    val vol = c.vol * (if (c.kind == 2) volVoice else volMusic)
+                    val ei = EditedMediaItem.Builder(mi).setRemoveVideo(true)
+                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()
+                    val sb = EditedMediaItemSequence.Builder()
+                    if (c.startMs > 0) sb.addGap(c.startMs * 1000)
+                    seqs += sb.addItem(ei).build()
                 }
+                // composition-level effects run on the OUTPUT timeline: zoom markers, then timed text/stickers on top
+                val cfx = ArrayList<Effect>()
+                if (zoomKeys.isNotEmpty()) {
+                    val keys = zoomKeys.toList()
+                    cfx += MatrixTransformation { t ->
+                        val z = TimelineMath.zoomAt(keys, t / 1000)
+                        android.graphics.Matrix().also { it.postScale(z, z) }
+                    }
+                }
+                val (rw, rh) = if (vRotate % 180 != 0) videoH to videoW else videoW to videoH
+                val ow = if (rw > 0) rw else 1080; val oh = if (rh > 0) rh else 1920
+                val ov = ArrayList<TextureOverlay>()
+                for (t in textClips) {
+                    if (t.text.isBlank()) continue
+                    val tf = t.font?.let { try { android.graphics.Typeface.createFromFile(it) } catch (e: Exception) { null } }
+                    ov += TimedOverlay(OverlayRender.render(t.text, t.color, ow, oh, t.size, t.bg, true, tf), t.startMs * 1000, t.endMs * 1000, t.pos)
+                }
+                for (k in stickerClips) {
+                    ov += TimedOverlay(OverlayRender.render(k.emoji, 0xFFFFFFFF.toInt(), ow, oh, k.size, false, false, null, 2f), k.startMs * 1000, k.endMs * 1000, k.pos)
+                }
+                if (ov.isNotEmpty()) cfx += OverlayEffect(ImmutableList.copyOf(ov))
+                if (exportHeight > 0) cfx += Presentation.createForHeight(exportHeight)
                 val done = CompletableDeferred<Throwable?>()
                 val t = Transformer.Builder(app)
                     .setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC)
+                    .setEncoderFactory(androidx.media3.transformer.DefaultEncoderFactory.Builder(app)
+                        .setRequestedVideoEncoderSettings(
+                            androidx.media3.transformer.VideoEncoderSettings.Builder()
+                                .setBitrateMode(android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+                                .also { b -> when (exportQuality) { 0 -> b.setBitrate(2_000_000); 2 -> b.setBitrate(16_000_000); else -> b.setBitrate(8_000_000) } }
+                                .build())
+                        .build())
                     .addListener(object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) { done.complete(null) }
                         override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
@@ -942,7 +1093,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         }
                     }).build()
                 tr = t
-                t.start(Composition.Builder(seqs).build(), out.absolutePath)
+                t.start(Composition.Builder(seqs).setEffects(Effects(emptyList(), cfx)).build(), out.absolutePath)
                 val ph = ProgressHolder()
                 while (!done.isCompleted) {
                     if (t.getProgress(ph) != Transformer.PROGRESS_STATE_NOT_STARTED) progress = ph.progress / 100f
