@@ -1,0 +1,1 @@
+The 11-class output count alone is insufficient to identify the CCSN preprocessing pipeline. CCSN mode is now enabled only when the input tensor name includes `input_layer_6`; other legacy 11-class models retain the original 0..255/letterbox behavior. This prevents silently applying the wrong input transform to unrelated models.
