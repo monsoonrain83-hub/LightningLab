@@ -35,7 +35,7 @@ data class PhotoParams(
 )
 
 /** One removal mark: x,y normalised to image width/height, r normalised to image WIDTH. */
-data class Heal(val x: Float, val y: Float, val r: Float)
+data class Heal(val x: Float, val y: Float, val r: Float, val softness: Float = 0.22f)
 
 object PhotoEdit {
     fun apply(src: Bitmap, p: PhotoParams): Bitmap {
@@ -164,12 +164,31 @@ object PhotoEdit {
             val bw = x1 - x0; val bh = y1 - y0
             if (bw < 3 || bh < 3) continue
             val px = IntArray(bw * bh); out.getPixels(px, 0, bw, x0, y0, bw, bh)
+            val original = px.copyOf()
             val unk = BooleanArray(bw * bh)
+            val feather = (r * c.softness.coerceIn(0f, 0.8f)).coerceAtLeast(1f)
+            val distances = FloatArray(bw * bh)
             for (y in 0 until bh) for (x in 0 until bw) {
                 val dx = x + x0 - cx; val dy = y + y0 - cy
-                if (dx * dx + dy * dy <= r * r) unk[y * bw + x] = true
+                val d = kotlin.math.sqrt(dx * dx + dy * dy)
+                distances[y * bw + x] = d
+                if (d <= r) unk[y * bw + x] = true
             }
             Inpaint.fill(px, bw, bh, unk)
+            // Feather the repair boundary to avoid a visible circular seam.
+            for (i in px.indices) if (unk[i]) {
+                val edge = ((r - distances[i]) / feather).coerceIn(0f, 1f)
+                val a = edge * edge * (3f - 2f * edge)
+                if (a < 0.999f) {
+                    val o = original[i]; val f = px[i]
+                    val aa = (a * 255f).toInt()
+                    val inv = 255 - aa
+                    val rr = ((((f shr 16) and 255) * aa + ((o shr 16) and 255) * inv) / 255)
+                    val gg = ((((f shr 8) and 255) * aa + ((o shr 8) and 255) * inv) / 255)
+                    val bb = (((f and 255) * aa + (o and 255) * inv) / 255)
+                    px[i] = (0xFF shl 24) or (rr shl 16) or (gg shl 8) or bb
+                }
+            }
             out.setPixels(px, 0, bw, x0, y0, bw, bh)
         }
         return out

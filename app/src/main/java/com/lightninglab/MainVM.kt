@@ -2,6 +2,8 @@ package com.lightninglab
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.content.Intent
 import android.graphics.Matrix
 import android.graphics.ImageDecoder
 import android.media.MediaMetadataRetriever
@@ -11,6 +13,7 @@ import android.os.Build
 import android.text.SpannableString
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -22,8 +25,6 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.Crop
-import androidx.media3.effect.MatrixTransformation
-import androidx.media3.effect.Presentation
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
@@ -59,10 +60,17 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
-enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE }
+enum class Screen { HOME, RESULTS, ABOUT, PHOTO, VIDEO, WEATHER, PREPARE, CLOUD_ATLAS }
 /** order = 0: not selected; 1 = base background; 2.. = overlays in the order the user tapped. */
 data class Item(val event: LightningEvent, val thumb: Bitmap, val order: Int = 0)
 data class Seg(val startMs: Long, val endMs: Long, val uri: Uri? = null)
+data class VideoEffectClip(val id: Long, val filterIndex: Int, val startMs: Long, val endMs: Long)
+data class VideoOverlayKeyframe(val timeMs: Long, val alpha: Float = 1f, val position: Int = 1)
+data class VideoOverlayClip(
+    val id: Long, val kind: String, val content: String, val startMs: Long, val endMs: Long,
+    val color: Int = 0xFFFFFFFF.toInt(), val size: Int = 1, val position: Int = 1, val background: Boolean = false,
+    val keyframes: List<VideoOverlayKeyframe> = emptyList(), val assetFile: String? = null
+)
 data class CloudVideoFrameResult(
     val elapsedMillis: Long,
     val genusCode: String?,
@@ -70,17 +78,54 @@ data class CloudVideoFrameResult(
     val coverPercent: Int,
     val oktas: Int,
     val texture: Float,
-    val kindLabel: String
+    val kindLabel: String,
+    /** Optional multi-label structural feature scores from the separately imported TFLite model. */
+    val structuralFeatures: List<Pair<String, Float>>? = null
 )
 data class CloudVideoReport(
     val durationMillis: Long,
     val sampledFrames: Int,
     val frameResults: List<CloudVideoFrameResult>,
     val evolution: CloudEvolutionReport,
-    val modelWasAvailable: Boolean
+    val modelWasAvailable: Boolean,
+    val temporalConsensus: CloudTemporalConsensus,
+    val cloudCoverTrend: CloudCoverTrend,
+    val structuralFeatureTrend: CloudFeatureTemporalReport
+)
+
+private data class PhotoEditorSnapshot(
+    val params: PhotoParams,
+    val texts: List<PhotoTextLayer>,
+    val shapes: List<PhotoShapeLayer>,
+    val images: List<PhotoImageLayer>,
+    val masks: List<PhotoMaskStroke>,
+    val maskInverted: Boolean
+)
+
+/** One coherent undo unit for the video editor. Bitmap references are retained by history
+ * snapshots so deleting an image overlay can be undone without decoding or losing its asset. */
+private data class VideoEditorSnapshot(
+    val segments: List<Seg>, val overlays: List<VideoOverlayClip>, val effects: List<VideoEffectClip>,
+    val markers: List<Long>, val overlayBitmaps: Map<Long, Bitmap>, val selectedOverlay: Long?, val selectedEffect: Long?,
+    val muteOriginal: Boolean, val brightness: Float, val contrast: Float, val rotate: Int,
+    val flipH: Boolean, val flipV: Boolean, val crop: Float, val speed: Float,
+    val filter: Int, val music: Uri?, val voice: Uri?, val volOrig: Float, val volMusic: Float, val volVoice: Float,
+    val overlayText: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
+    val sticker: String?, val stickerSize: Int, val stickerPos: Int
 )
 
 class MainVM(private val app: Application) : AndroidViewModel(app) {
+    /** Decode through the explicit listener overload so Kotlin does not have to infer an overloaded SAM. */
+    private fun decodeSoftwareBitmap(uri: Uri, maxDimension: Int): Bitmap {
+        val source = ImageDecoder.createSource(app.contentResolver, uri)
+        return ImageDecoder.decodeBitmap(source, ImageDecoder.OnHeaderDecodedListener { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            var sample = 1
+            val largest = maxOf(info.size.width, info.size.height)
+            while (largest / sample > maxDimension.coerceAtLeast(1)) sample *= 2
+            decoder.setTargetSampleSize(sample)
+        })
+    }
     var screen by mutableStateOf(Screen.HOME)
     var uri by mutableStateOf<Uri?>(null)
     var busy by mutableStateOf(false)
@@ -100,28 +145,415 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var photoPrev by mutableStateOf<Bitmap?>(null)
     var params by mutableStateOf(PhotoParams())
     var watermark by mutableStateOf(true)
+    val photoLayers = mutableStateListOf<PhotoTextLayer>()
+    val photoShapeLayers = mutableStateListOf<PhotoShapeLayer>()
+    val photoImageLayers = mutableStateListOf<PhotoImageLayer>()
+    val photoMaskStrokes = mutableStateListOf<PhotoMaskStroke>()
+    var photoMaskInverted by mutableStateOf(false)
+    fun addPhotoMaskStroke(stroke: PhotoMaskStroke) { if (stroke.points.isNotEmpty()) { photoMaskStrokes.add(stroke); commit() } }
+    fun undoPhotoMaskStroke() { if (photoMaskStrokes.isNotEmpty()) { photoMaskStrokes.removeAt(photoMaskStrokes.lastIndex); commit() } }
+    fun clearPhotoMask() { if (photoMaskStrokes.isNotEmpty()) { photoMaskStrokes.clear(); commit() } }
+    fun togglePhotoMaskInvert() { photoMaskInverted = !photoMaskInverted; commit() }
+    private var nextPhotoLayerId = 1L
+    fun addPhotoTextLayer(text: String) {
+        val clean = text.trim()
+        if (clean.isEmpty()) return
+        photoLayers.add(PhotoTextLayer(nextPhotoLayerId++, "Text ${photoLayers.size + 1}", clean, zIndex = nextPhotoZ())); commit()
+    }
+    fun duplicatePhotoTextLayer(id: Long): Long? {
+        val old = photoLayers.firstOrNull { it.id == id } ?: return null
+        val idNew = nextPhotoLayerId++
+        photoLayers.add(old.copy(id = idNew, name = "${old.name} copy", x = (old.x + 0.025f).coerceAtMost(0.98f),
+            y = (old.y + 0.025f).coerceAtMost(0.98f), zIndex = nextPhotoZ()))
+        commit(); return idNew
+    }
+
+    fun updatePhotoLayer(id: Long, transform: (PhotoTextLayer) -> PhotoTextLayer) {
+        val index = photoLayers.indexOfFirst { it.id == id }
+        if (index >= 0) { photoLayers[index] = transform(photoLayers[index]); commit() }
+    }
+    fun movePhotoLayer(id: Long, delta: Int) {
+        val from = photoLayers.indexOfFirst { it.id == id }; val to = (from + delta).coerceIn(0, photoLayers.lastIndex)
+        if (from >= 0 && to in photoLayers.indices && from != to) { val item = photoLayers.removeAt(from); photoLayers.add(to, item); commit() }
+    }
+    fun removePhotoLayer(id: Long) { if (photoLayers.removeAll { it.id == id }) commit() }
+    fun addPhotoImageLayer(u: Uri) {
+        viewModelScope.launch {
+            try {
+                val decoded = withContext(Dispatchers.IO) {
+                    decodeSoftwareBitmap(u, 2048)
+                }
+                val id = nextPhotoLayerId++
+                photoImageLayers.add(PhotoImageLayer(id, "تصویر $id", decoded, zIndex = nextPhotoZ())); commit()
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "overlay image") }
+        }
+    }
+    fun duplicatePhotoImageLayer(id: Long): Long? {
+        val old = photoImageLayers.firstOrNull { it.id == id } ?: return null
+        val copy = try { old.bitmap.copy(Bitmap.Config.ARGB_8888, true) } catch (_: Exception) { null } ?: return null
+        val idNew = nextPhotoLayerId++
+        photoImageLayers.add(old.copy(id = idNew, name = "${old.name} copy", bitmap = copy,
+            x = (old.x + 0.025f).coerceAtMost(0.98f), y = (old.y + 0.025f).coerceAtMost(0.98f), zIndex = nextPhotoZ()))
+        commit(); return idNew
+    }
+
+    fun updatePhotoImage(id: Long, transform: (PhotoImageLayer) -> PhotoImageLayer) {
+        val index = photoImageLayers.indexOfFirst { it.id == id }
+        if (index >= 0) { photoImageLayers[index] = transform(photoImageLayers[index]); commit() }
+    }
+    fun movePhotoImage(id: Long, delta: Int) {
+        val from = photoImageLayers.indexOfFirst { it.id == id }; if (from < 0) return
+        val to = (from + delta).coerceIn(0, photoImageLayers.lastIndex)
+        if (to != from) { val item = photoImageLayers.removeAt(from); photoImageLayers.add(to, item); commit() }
+    }
+    fun removePhotoImage(id: Long) {
+        val item = photoImageLayers.firstOrNull { it.id == id } ?: return
+        photoImageLayers.remove(item)
+        // Bitmap stays alive while an undo snapshot can still reference it.
+        commit()
+    }
+    fun addPhotoShape(shape: PhotoShapeLayer.Shape) {
+        val id = nextPhotoLayerId++
+        photoShapeLayers.add(PhotoShapeLayer(id, if (shape == PhotoShapeLayer.Shape.RECTANGLE) "مستطیل $id" else "بیضی $id", shape, zIndex = nextPhotoZ())); commit()
+    }
+    fun duplicatePhotoShapeLayer(id: Long): Long? {
+        val old = photoShapeLayers.firstOrNull { it.id == id } ?: return null
+        val idNew = nextPhotoLayerId++
+        photoShapeLayers.add(old.copy(id = idNew, name = "${old.name} copy", x = (old.x + 0.025f).coerceAtMost(0.98f),
+            y = (old.y + 0.025f).coerceAtMost(0.98f), zIndex = nextPhotoZ()))
+        commit(); return idNew
+    }
+
+    fun updatePhotoShape(id: Long, transform: (PhotoShapeLayer) -> PhotoShapeLayer) {
+        val index = photoShapeLayers.indexOfFirst { it.id == id }
+        if (index >= 0) { photoShapeLayers[index] = transform(photoShapeLayers[index]); commit() }
+    }
+    fun movePhotoShape(id: Long, delta: Int) {
+        val from = photoShapeLayers.indexOfFirst { it.id == id }
+        if (from < 0) return
+        val to = (from + delta).coerceIn(0, photoShapeLayers.lastIndex)
+        if (to != from) { val item = photoShapeLayers.removeAt(from); photoShapeLayers.add(to, item); commit() }
+    }
+    fun removePhotoShape(id: Long) { if (photoShapeLayers.removeAll { it.id == id }) commit() }
+
+    private fun nextPhotoZ(): Int {
+        val allZ = photoShapeLayers.map { it.zIndex } + photoImageLayers.map { it.zIndex } + photoLayers.map { it.zIndex }
+        // Normalize legacy layers that all used zIndex=0 before assigning a new top layer.
+        if (allZ.distinct().size != allZ.size) {
+            var z = 0
+            photoShapeLayers.indices.forEach { i -> photoShapeLayers[i] = photoShapeLayers[i].copy(zIndex = z++) }
+            photoImageLayers.indices.forEach { i -> photoImageLayers[i] = photoImageLayers[i].copy(zIndex = z++) }
+            photoLayers.indices.forEach { i -> photoLayers[i] = photoLayers[i].copy(zIndex = z++) }
+        }
+        return ((photoShapeLayers.maxOfOrNull { it.zIndex } ?: -1)
+            .coerceAtLeast(photoImageLayers.maxOfOrNull { it.zIndex } ?: -1)
+            .coerceAtLeast(photoLayers.maxOfOrNull { it.zIndex } ?: -1)) + 1
+    }
+
+    /** Reorders text, shape and image overlays in one shared stack (positive delta = forward). */
+    fun movePhotoLayerGlobal(kind: String, id: Long, delta: Int) {
+        data class Ref(val kind: String, val id: Long, val z: Int)
+        val all = buildList {
+            photoLayers.forEach { add(Ref("TEXT", it.id, it.zIndex)) }
+            photoShapeLayers.forEach { add(Ref("SHAPE", it.id, it.zIndex)) }
+            photoImageLayers.forEach { add(Ref("IMAGE", it.id, it.zIndex)) }
+        }.sortedWith(compareBy<Ref> { it.z }.thenBy { when (it.kind) { "SHAPE" -> 0; "IMAGE" -> 1; else -> 2 } })
+        val from = all.indexOfFirst { it.kind == kind && it.id == id }
+        if (from < 0 || all.isEmpty()) return
+        val to = (from + delta).coerceIn(0, all.lastIndex)
+        if (to == from) return
+        val reordered = all.toMutableList(); val item = reordered.removeAt(from); reordered.add(to, item)
+        reordered.forEachIndexed { index, ref -> when (ref.kind) {
+            "TEXT" -> photoLayers.indexOfFirst { it.id == ref.id }.takeIf { it >= 0 }?.let { i -> photoLayers[i] = photoLayers[i].copy(zIndex = index) }
+            "SHAPE" -> photoShapeLayers.indexOfFirst { it.id == ref.id }.takeIf { it >= 0 }?.let { i -> photoShapeLayers[i] = photoShapeLayers[i].copy(zIndex = index) }
+            "IMAGE" -> photoImageLayers.indexOfFirst { it.id == ref.id }.takeIf { it >= 0 }?.let { i -> photoImageLayers[i] = photoImageLayers[i].copy(zIndex = index) }
+        } }
+        commit()
+    }
+    /** Fast gesture updates are not added to history until finishPhotoLayerGesture(). */
+    fun translatePhotoLayer(kind: String, id: Long, dx: Float, dy: Float) {
+        when (kind) {
+            "TEXT" -> photoLayers.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { i ->
+                val v = photoLayers[i]; photoLayers[i] = v.copy(x = (v.x + dx).coerceIn(0f, 1f), y = (v.y + dy).coerceIn(0f, 1f))
+            }
+            "SHAPE" -> photoShapeLayers.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { i ->
+                val v = photoShapeLayers[i]; photoShapeLayers[i] = v.copy(x = (v.x + dx).coerceIn(0f, 1f), y = (v.y + dy).coerceIn(0f, 1f))
+            }
+            "IMAGE" -> photoImageLayers.indexOfFirst { it.id == id }.takeIf { it >= 0 }?.let { i ->
+                val v = photoImageLayers[i]; photoImageLayers[i] = v.copy(x = (v.x + dx).coerceIn(0f, 1f), y = (v.y + dy).coerceIn(0f, 1f))
+            }
+        }
+    }
+    fun finishPhotoLayerGesture() = commit()
+
     var showOriginal by mutableStateOf(false)
     var align by mutableStateOf(true)
     var canUndo by mutableStateOf(false)
     var canRedo by mutableStateOf(false)
-    private val hist = ArrayList<PhotoParams>(); private var hi = -1
+    private val hist = ArrayList<PhotoEditorSnapshot>(); private var hi = -1
+    private fun photoSnapshot() = PhotoEditorSnapshot(params, photoLayers.toList(), photoShapeLayers.toList(), photoImageLayers.toList(), photoMaskStrokes.toList(), photoMaskInverted)
+    private fun restorePhotoSnapshot(s: PhotoEditorSnapshot) {
+        params = s.params
+        photoLayers.clear(); photoLayers.addAll(s.texts)
+        photoShapeLayers.clear(); photoShapeLayers.addAll(s.shapes)
+        photoImageLayers.clear(); photoImageLayers.addAll(s.images)
+        photoMaskStrokes.clear(); photoMaskStrokes.addAll(s.masks)
+        photoMaskInverted = s.maskInverted
+    }
     private fun histFlags() { canUndo = hi > 0; canRedo = hi < hist.size - 1 }
-    private fun histReset() { hist.clear(); hist += params; hi = 0; histFlags() }
-    /** Call after a finished edit gesture (slider released, button tapped). */
+    private fun histReset() { hist.clear(); hist += photoSnapshot(); hi = 0; histFlags() }
+    /** One shared, non-destructive history for adjustments, masks and all overlay-layer edits. */
     fun commit() {
-        if (hist.getOrNull(hi) == params) return
+        val current = photoSnapshot()
+        if (hist.getOrNull(hi) == current) return
         while (hist.size > hi + 1) hist.removeAt(hist.size - 1)
-        hist += params
-        if (hist.size > 60) hist.removeAt(0)
+        hist += current
+        if (hist.size > 80) hist.removeAt(0)
         hi = hist.size - 1; histFlags()
     }
-    fun undo() { if (hi > 0) { hi--; params = hist[hi]; histFlags() } }
-    fun redo() { if (hi < hist.size - 1) { hi++; params = hist[hi]; histFlags() } }
+    fun undo() { if (hi > 0) { hi--; restorePhotoSnapshot(hist[hi]); histFlags() } }
+    fun redo() { if (hi < hist.size - 1) { hi++; restorePhotoSnapshot(hist[hi]); histFlags() } }
 
     // video editor
     var videoUri by mutableStateOf<Uri?>(null)
     var videoDur by mutableStateOf(0L)
+    var videoFrameDurationMs by mutableStateOf(33L)
+    var playheadMs by mutableLongStateOf(0L)
+    fun videoOverlayBitmap(id: Long): Bitmap? = videoOverlayBitmaps[id]?.takeUnless { it.isRecycled }
     val segments = mutableStateListOf<Seg>()
+    val videoMarkers = mutableStateListOf<Long>()
+    val videoOverlayClips = mutableStateListOf<VideoOverlayClip>()
+    val videoEffectClips = mutableStateListOf<VideoEffectClip>()
+    private var nextVideoEffectId = 1L
+    var selectedVideoEffectId by mutableStateOf<Long?>(null)
+    var selectedOverlayClipId by mutableStateOf<Long?>(null)
+    var timelineSnapEnabled by mutableStateOf(true)
+    private var nextVideoOverlayId = 1L
+    private val videoOverlayBitmaps = LinkedHashMap<Long, Bitmap>()
+    private val videoBitmapPool = LinkedHashSet<Bitmap>()
+    private val retiredVideoOverlayBitmaps = ArrayList<Bitmap>()
+    private fun releaseRetiredVideoImages() { if (!busy) { retiredVideoOverlayBitmaps.forEach { if (!it.isRecycled) it.recycle() }; retiredVideoOverlayBitmaps.clear() } }
+    private val videoHistory = ArrayList<VideoEditorSnapshot>()
+    private var videoHistoryIndex = -1
+    private var restoringVideoHistory = false
+    private fun captureVideoSnapshot() = VideoEditorSnapshot(
+        segments.toList(), videoOverlayClips.toList(), videoEffectClips.toList(), videoMarkers.toList(), videoOverlayBitmaps.toMap(),
+        selectedOverlayClipId, selectedVideoEffectId, muteOriginal, vBrightness, vContrast, vRotate,
+        vFlipH, vFlipV, vCrop, vSpeed, vFilter, music, voice, volOrig, volMusic, volVoice,
+        overlayText, textColor, textSize, textPos, textBg, sticker, stickerSize, stickerPos
+    )
+    private fun updateVideoHistoryFlags() {
+        canUndoSeg = videoHistoryIndex > 0
+        canRedoSeg = videoHistoryIndex in 0 until videoHistory.lastIndex
+    }
+    private fun cleanupVideoBitmaps() {
+        val referenced = LinkedHashSet<Bitmap>()
+        referenced.addAll(videoOverlayBitmaps.values)
+        videoHistory.forEach { referenced.addAll(it.overlayBitmaps.values) }
+        videoBitmapPool.toList().filterNot { it in referenced }.forEach { bitmap ->
+            if (!bitmap.isRecycled) bitmap.recycle()
+            videoBitmapPool.remove(bitmap)
+        }
+    }
+    private fun resetVideoHistory() {
+        videoHistory.clear(); videoHistory += captureVideoSnapshot(); videoHistoryIndex = 0
+        updateVideoHistoryFlags(); cleanupVideoBitmaps()
+    }
+    private fun pushVideoHistory() {
+        if (restoringVideoHistory) return
+        if (videoHistoryIndex < 0) { resetVideoHistory(); return }
+        while (videoHistory.size > videoHistoryIndex + 1) videoHistory.removeAt(videoHistory.lastIndex)
+        videoHistory += captureVideoSnapshot()
+        if (videoHistory.size > 60) videoHistory.removeAt(0)
+        videoHistoryIndex = videoHistory.lastIndex
+        updateVideoHistoryFlags(); cleanupVideoBitmaps()
+    }
+    private fun restoreVideoSnapshot(s: VideoEditorSnapshot) {
+        restoringVideoHistory = true
+        try {
+            segments.clear(); segments.addAll(s.segments)
+            videoOverlayClips.clear(); videoOverlayClips.addAll(s.overlays)
+            videoEffectClips.clear(); videoEffectClips.addAll(s.effects)
+            videoMarkers.clear(); videoMarkers.addAll(s.markers)
+            videoOverlayBitmaps.clear(); videoOverlayBitmaps.putAll(s.overlayBitmaps)
+            selectedOverlayClipId = s.selectedOverlay; selectedVideoEffectId = s.selectedEffect
+            muteOriginal = s.muteOriginal; vBrightness = s.brightness; vContrast = s.contrast; vRotate = s.rotate
+            vFlipH = s.flipH; vFlipV = s.flipV; vCrop = s.crop; vSpeed = s.speed; vFilter = s.filter
+            if (music != s.music) { music = s.music; s.music?.let { analyzeWaveform(it, false) } ?: run { musicWaveform = emptyList() } }
+            if (voice != s.voice) { voice = s.voice; s.voice?.let { analyzeWaveform(it, true) } ?: run { voiceWaveform = emptyList() } }
+            volOrig = s.volOrig; volMusic = s.volMusic; volVoice = s.volVoice
+            overlayText = s.overlayText; textColor = s.textColor; textSize = s.textSize; textPos = s.textPos; textBg = s.textBg
+            sticker = s.sticker; stickerSize = s.stickerSize; stickerPos = s.stickerPos
+            segReset(); segPush(); selSeg = -1
+        } finally { restoringVideoHistory = false }
+    }
+    fun undoVideoEdit() {
+        if (videoHistoryIndex > 0) { videoHistoryIndex--; restoreVideoSnapshot(videoHistory[videoHistoryIndex]); updateVideoHistoryFlags() }
+    }
+    fun redoVideoEdit() {
+        if (videoHistoryIndex < videoHistory.lastIndex) { videoHistoryIndex++; restoreVideoSnapshot(videoHistory[videoHistoryIndex]); updateVideoHistoryFlags() }
+    }
+    /** Commit one user-finished settings gesture as a single undo step. */
+    fun commitVideoSettings() = pushVideoHistory()
+    var musicWaveform by mutableStateOf<List<Float>>(emptyList())
+    var voiceWaveform by mutableStateOf<List<Float>>(emptyList())
+    var waveformBusy by mutableStateOf(false)
+    private var musicWaveformJob: Job? = null
+    private var voiceWaveformJob: Job? = null
+    private var waveformTasks = 0
+    fun updateMusicSource(u: Uri?) {
+        music = u; pushVideoHistory()
+        if (u == null) { musicWaveformJob?.cancel(); musicWaveform = emptyList(); musicName = null }
+        else analyzeWaveform(u, false)
+    }
+    fun updateVoiceSource(u: Uri?) {
+        voice = u; pushVideoHistory()
+        if (u == null) { voiceWaveformJob?.cancel(); voiceWaveform = emptyList() }
+        else analyzeWaveform(u, true)
+    }
+    private fun analyzeWaveform(u: Uri, isVoice: Boolean) {
+        if (isVoice) voiceWaveformJob?.cancel() else musicWaveformJob?.cancel()
+        val task = viewModelScope.launch {
+            waveformTasks++; waveformBusy = true
+            try {
+                val data = withContext(Dispatchers.IO) { AudioWaveform.decode(app, u) }
+                if (isVoice) voiceWaveform = data else musicWaveform = data
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { if (isVoice) voiceWaveform = emptyList() else musicWaveform = emptyList() }
+            finally { waveformTasks = (waveformTasks - 1).coerceAtLeast(0); waveformBusy = waveformTasks > 0 }
+        }
+        if (isVoice) voiceWaveformJob = task else musicWaveformJob = task
+    }
+    fun addOverlayKeyframe(id: Long, timeMs: Long, alpha: Float, position: Int) {
+        val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0) return
+        val clip = videoOverlayClips[i]
+        val t = timeMs.coerceIn(clip.startMs, clip.endMs)
+        val frames = (clip.keyframes.filterNot { it.timeMs == t } + VideoOverlayKeyframe(t, alpha.coerceIn(0f, 1f), position.coerceIn(0, 2))).sortedBy { it.timeMs }
+        videoOverlayClips[i] = clip.copy(keyframes = frames); pushVideoHistory()
+    }
+    fun removeOverlayKeyframe(id: Long, timeMs: Long) {
+        val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0) return
+        val updated = videoOverlayClips[i].copy(keyframes = videoOverlayClips[i].keyframes.filterNot { it.timeMs == timeMs })
+        if (updated != videoOverlayClips[i]) { videoOverlayClips[i] = updated; pushVideoHistory() }
+    }
+    fun addEffectClip() {
+        val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong()
+        if (total <= 0L) return
+        val clip = VideoEffectClip(nextVideoEffectId++, vFilter, 0L, total)
+        videoEffectClips.add(clip); selectedVideoEffectId = clip.id; pushVideoHistory()
+    }
+    fun updateEffectClip(id: Long, start: Long, end: Long) {
+        val i = videoEffectClips.indexOfFirst { it.id == id }; if (i < 0) return
+        val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+        val anchors = if (timelineSnapEnabled) buildList {
+            add(0L); add(total)
+            addAll(videoMarkers)
+            var boundary = 0L
+            segments.forEach { segment ->
+                boundary += (segment.endMs - segment.startMs).coerceAtLeast(0L)
+                add((boundary / vSpeed.coerceAtLeast(0.05f)).toLong())
+            }
+            videoEffectClips.filterIndexed { index, _ -> index != i }.forEach { add(it.startMs); add(it.endMs) }
+            videoOverlayClips.forEach { add(it.startMs); add(it.endMs) }
+        } else emptyList()
+        val snappedStart = TimelineMath.snapTime(start, anchors)
+        val a = snappedStart.coerceIn(0L, total - 1L)
+        val snappedEnd = TimelineMath.snapTime(end, anchors)
+        val b = snappedEnd.coerceIn(a + 1L, total)
+        val updated = videoEffectClips[i].copy(startMs = a, endMs = b)
+        if (updated != videoEffectClips[i]) { videoEffectClips[i] = updated; pushVideoHistory() }
+    }
+    fun removeEffectClip(id: Long) { if (videoEffectClips.removeAll { it.id == id }) { if (selectedVideoEffectId == id) selectedVideoEffectId = null; pushVideoHistory() } }
+
+    private fun defaultOverlayRange(totalMs: Long): Pair<Long, Long> {
+        val total = totalMs.coerceAtLeast(1L)
+        val start = playheadMs.coerceIn(0L, total - 1L)
+        val end = (start + 5_000L).coerceAtMost(total).coerceAtLeast(start + 1L)
+        return start to end
+    }
+
+    fun addTextClip() {
+        val value = overlayText.trim(); if (value.isEmpty()) return
+        val total = (if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)
+        if (total <= 0L) return
+        val (startMs, endMs) = defaultOverlayRange(total.toLong())
+        val clip = VideoOverlayClip(nextVideoOverlayId++, "TEXT", value, startMs, endMs, textColor, textSize, textPos, textBg,
+            listOf(VideoOverlayKeyframe(startMs, 1f, textPos), VideoOverlayKeyframe(endMs, 1f, textPos)))
+        videoOverlayClips.add(clip); selectedOverlayClipId = clip.id; pushVideoHistory()
+    }
+    fun addStickerClip() {
+        val value = sticker ?: return
+        val total = (if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)
+        if (total <= 0L) return
+        val (startMs, endMs) = defaultOverlayRange(total.toLong())
+        val clip = VideoOverlayClip(nextVideoOverlayId++, "STICKER", value, startMs, endMs, 0xFFFFFFFF.toInt(), stickerSize, stickerPos, false,
+            listOf(VideoOverlayKeyframe(startMs, 1f, stickerPos), VideoOverlayKeyframe(endMs, 1f, stickerPos)))
+        videoOverlayClips.add(clip); selectedOverlayClipId = clip.id; pushVideoHistory()
+    }
+    fun addVideoImageClip(uri: Uri) {
+        if (busy) return
+        val total = (if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)
+        if (total <= 0L) return
+        viewModelScope.launch {
+            try {
+                val bitmap = withContext(Dispatchers.IO) {
+                    val decoded = decodeSoftwareBitmap(uri, 1200)
+                    val targetW = (videoW.coerceAtLeast(decoded.width) * 0.38f).toInt().coerceAtLeast(64)
+                    if (decoded.width > targetW) {
+                        val targetH = (decoded.height * targetW.toFloat() / decoded.width).toInt().coerceAtLeast(1)
+                        Bitmap.createScaledBitmap(decoded, targetW, targetH, true).also { if (it !== decoded) decoded.recycle() }
+                    } else decoded
+                }
+                val id = nextVideoOverlayId++
+                val (startMs, endMs) = defaultOverlayRange(total.toLong())
+                videoOverlayBitmaps[id] = bitmap; videoBitmapPool.add(bitmap)
+                videoOverlayClips.add(VideoOverlayClip(id, "IMAGE", "تصویر $id", startMs, endMs, 0xFFFFFFFF.toInt(), 1, 1, false,
+                    listOf(VideoOverlayKeyframe(startMs, 1f, 1), VideoOverlayKeyframe(endMs, 1f, 1))))
+                selectedOverlayClipId = id; pushVideoHistory()
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video image overlay") }
+        }
+    }
+
+    fun updateOverlayClip(id: Long, start: Long, end: Long, recordHistory: Boolean = true) {
+        val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0) return
+        val limit = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs-it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong()
+        if (limit < 1L) return
+        val anchors = if (timelineSnapEnabled) buildList {
+            add(0L); add(limit)
+            addAll(videoMarkers)
+            var boundary = 0L
+            segments.forEach { segment ->
+                boundary += (segment.endMs - segment.startMs).coerceAtLeast(0L)
+                add((boundary / vSpeed.coerceAtLeast(0.05f)).toLong())
+            }
+            videoOverlayClips.filterIndexed { index, _ -> index != i }.forEach { add(it.startMs); add(it.endMs) }
+            videoEffectClips.forEach { add(it.startMs); add(it.endMs) }
+        } else emptyList()
+        val snappedStart = TimelineMath.snapTime(start, anchors)
+        val a = snappedStart.coerceIn(0L, limit - 1L)
+        val snappedEnd = TimelineMath.snapTime(end, anchors)
+        val b = snappedEnd.coerceIn(a + 1L, limit)
+        val updated = videoOverlayClips[i].copy(startMs = a, endMs = b, keyframes = videoOverlayClips[i].keyframes.map { it.copy(timeMs = it.timeMs.coerceIn(a, b)) }.distinctBy { it.timeMs }.sortedBy { it.timeMs })
+        if (updated != videoOverlayClips[i]) { videoOverlayClips[i] = updated; if (recordHistory) pushVideoHistory() }
+    }
+    fun finishVideoTimelineGesture() = pushVideoHistory()
+    fun updateSelectedOverlayFromControls() {
+        val id = selectedOverlayClipId ?: return
+        val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0) return
+        val old = videoOverlayClips[i]
+        if (old.kind == "IMAGE") return
+        videoOverlayClips[i] = if (old.kind == "TEXT") old.copy(content = overlayText.trim().ifEmpty { old.content },
+            color = textColor, size = textSize, position = textPos, background = textBg)
+        else old.copy(content = sticker ?: old.content, size = stickerSize, position = stickerPos)
+        pushVideoHistory()
+    }
+    fun removeOverlayClip(id: Long) {
+        videoOverlayClips.removeAll { it.id == id }
+        // Keep the bitmap alive while an undo snapshot can still reference it.
+        videoOverlayBitmaps.remove(id)
+        if (selectedOverlayClipId == id) selectedOverlayClipId = null
+        pushVideoHistory()
+    }
     var music by mutableStateOf<Uri?>(null)
     var muteOriginal by mutableStateOf(false)
     var vBrightness by mutableStateOf(0f)
@@ -145,122 +577,43 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var stickerSize by mutableStateOf(1)
     var stickerPos by mutableStateOf(1)
     var selSeg by mutableStateOf(-1)
-    // ---- timeline (all times on the OUTPUT timeline, see Timeline.kt) ----
-    var playheadMs by mutableStateOf(0L)
-    val textClips = mutableStateListOf<TextClip>()
-    val stickerClips = mutableStateListOf<StickerClip>()
-    val audioClips = mutableStateListOf<AudioClip>()
-    val zoomKeys = mutableStateListOf<ZoomKey>()
-    /** What is selected on the timeline: 0 none, 1 text, 2 sticker, 3 audio, 4 zoom marker. */
-    var selKind by mutableStateOf(0)
-    var selId by mutableStateOf(-1)
-    var exportHeight by mutableStateOf(0)          // 0 = keep source size, else 360/480/720/1080/2160
-    var exportQuality by mutableStateOf(1)         // 0 low size, 1 balanced, 2 high
-    val fonts = mutableStateListOf<String>().also { l -> File(app.filesDir, "fonts").listFiles()?.sortedBy { it.name }?.forEach { l += it.absolutePath } }
-    private var nextId = 1
-    fun newId() = nextId++
-    /** Copies a user-chosen .ttf/.otf into app storage and makes it available to text clips. */
-    fun importFont(u: Uri) {
-        viewModelScope.launch {
-            try {
-                val f = withContext(Dispatchers.IO) {
-                    val dir = File(app.filesDir, "fonts").also { it.mkdirs() }
-                    val name = (app.contentResolver.query(u, null, null, null, null)?.use { c ->
-                        val i = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME); if (c.moveToFirst() && i >= 0) c.getString(i) else null
-                    } ?: ("font_" + System.currentTimeMillis() + ".ttf")).replace(Regex("[^A-Za-z0-9._-]"), "_")
-                    val out = File(dir, name)
-                    (app.contentResolver.openInputStream(u) ?: throw java.io.IOException("cannot open")).use { i -> out.outputStream().use { o -> i.copyTo(o) } }
-                    android.graphics.Typeface.createFromFile(out)   // throws if the file is not a font
-                    out.absolutePath
-                }
-                if (f !in fonts) fonts += f
-                val sel = textClips.firstOrNull { selKind == 1 && it.id == selId }
-                if (sel != null) updateText(sel.id) { it.copy(font = f) }
-                info(R.string.ve_font_added)
-            } catch (e: Exception) { info(R.string.ve_font_bad) }
-        }
-    }
-    /** Length of the output timeline in ms (trimmed/joined source divided by speed). */
-    val totalMs: Long get() = (((if (segments.isEmpty()) videoDur else segments.sumOf { it.endMs - it.startMs }) / vSpeed)).toLong()
-    fun select(kind: Int, id: Int) { selKind = kind; selId = id }
-    private fun clampHere(len: Long): LongArray {
-        val start = playheadMs.coerceAtMost(max(0L, totalMs - TimelineMath.MIN_CLIP_MS))
-        return TimelineMath.clampRange(start, start + len, totalMs)
-    }
-    fun addText(text: String) {
-        val r = clampHere(3000)
-        val t = TextClip(newId(), text, 0xFFFFFFFF.toInt(), 1, 2, false, r[0], r[1], fonts.lastOrNull())
-        textClips += t; select(1, t.id)
-    }
-    fun addSticker(emoji: String) {
-        val r = clampHere(3000)
-        val t = StickerClip(newId(), emoji, 2, 1, r[0], r[1]); stickerClips += t; select(2, t.id)
-    }
-    fun addAudio(u: Uri, label: String, kind: Int, atMs: Long = playheadMs) {
-        viewModelScope.launch {
-            val d = withContext(Dispatchers.IO) { audioDur(u, 0L) }
-            if (d <= 0L) { info(R.string.error_generic, "audio"); return@launch }
-            val c = AudioClip(newId(), u.toString(), label, kind, atMs.coerceIn(0L, max(0L, totalMs - 200L)), d)
-            audioClips += c; select(3, c.id)
-        }
-    }
-    fun addZoom(scale: Float) {
-        val t = playheadMs.coerceIn(0L, totalMs)
-        zoomKeys.removeAll { kotlin.math.abs(it.timeMs - t) < 100 }
-        val k = ZoomKey(newId(), t, scale); zoomKeys += k; select(4, k.id)
-    }
-    fun updateText(id: Int, f: (TextClip) -> TextClip) { val i = textClips.indexOfFirst { it.id == id }; if (i >= 0) textClips[i] = f(textClips[i]) }
-    fun updateSticker(id: Int, f: (StickerClip) -> StickerClip) { val i = stickerClips.indexOfFirst { it.id == id }; if (i >= 0) stickerClips[i] = f(stickerClips[i]) }
-    fun updateAudio(id: Int, f: (AudioClip) -> AudioClip) { val i = audioClips.indexOfFirst { it.id == id }; if (i >= 0) audioClips[i] = f(audioClips[i]) }
-    fun updateZoom(id: Int, f: (ZoomKey) -> ZoomKey) { val i = zoomKeys.indexOfFirst { it.id == id }; if (i >= 0) zoomKeys[i] = f(zoomKeys[i]) }
-    fun deleteSelected() {
-        when (selKind) {
-            1 -> textClips.removeAll { it.id == selId }
-            2 -> stickerClips.removeAll { it.id == selId }
-            3 -> audioClips.removeAll { it.id == selId }
-            4 -> zoomKeys.removeAll { it.id == selId }
-        }
-        selKind = 0; selId = -1
-    }
-    /** Moves the selected clip (text/sticker/audio) by dMs on the timeline; zoom markers move too. */
-    fun moveSelected(dMs: Long) {
-        when (selKind) {
-            1 -> updateText(selId) { val r = TimelineMath.clampRange(it.startMs + dMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
-            2 -> updateSticker(selId) { val r = TimelineMath.clampRange(it.startMs + dMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
-            3 -> updateAudio(selId) { it.copy(startMs = (it.startMs + dMs).coerceIn(0L, max(0L, totalMs - 200L))) }
-            4 -> updateZoom(selId) { it.copy(timeMs = (it.timeMs + dMs).coerceIn(0L, totalMs)) }
-        }
-    }
-    /** Changes the length of the selected text/sticker clip (audio keeps its natural length). */
-    fun resizeSelected(dMs: Long) {
-        when (selKind) {
-            1 -> updateText(selId) { val r = TimelineMath.clampRange(it.startMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
-            2 -> updateSticker(selId) { val r = TimelineMath.clampRange(it.startMs, it.endMs + dMs, totalMs); it.copy(startMs = r[0], endMs = r[1]) }
-        }
-    }
-    /** Splits the segment under the playhead in two. */
-    fun splitAtPlayhead() {
-        val segs = if (segments.isEmpty()) listOf(Seg(0, videoDur)) else segments.toList()
-        val (i, off) = TimelineMath.locate(segs.map { it.endMs - it.startMs }, vSpeed, playheadMs)
-        val sg = segs.getOrNull(i) ?: return
-        val pr = TimelineMath.split(sg.startMs, sg.endMs, sg.startMs + off) ?: run { info(R.string.split_here_impossible); return }
-        if (segments.isEmpty()) segments += Seg(0, videoDur)
-        segments[i] = Seg(pr.first[0], pr.first[1], sg.uri)
-        segments.add(i + 1, Seg(pr.second[0], pr.second[1], sg.uri))
-        segPush(); selSeg = i + 1
-    }
-    /** Trims the selected segment's source range by (dStart, dEnd) ms. */
-    fun trimSelected(dStart: Long, dEnd: Long) {
-        val i = selSeg; val sg = segments.getOrNull(i) ?: return
-        val maxEnd = if (sg.uri == null) videoDur else Long.MAX_VALUE
-        val ns = (sg.startMs + dStart).coerceAtLeast(0L); val ne = (sg.endMs + dEnd).coerceAtMost(maxEnd)
-        if (ne - ns < TimelineMath.MIN_CLIP_MS) return
-        segments[i] = sg.copy(startMs = ns, endMs = ne); segPush()
-    }
-
     fun duplicateSeg(i: Int) {
         if (i !in segments.indices) return
-        segments.add(i + 1, segments[i].copy()); segPush(); selSeg = i + 1
+        segments.add(i + 1, segments[i].copy()); segPush(); selSeg = i + 1; pushVideoHistory()
+    }
+    /** Reorder two clips in the output sequence without changing their source in/out points. */
+    fun moveSegment(from: Int, to: Int): Boolean {
+        val destination = TimelineMath.reorderIndex(segments.size, from, to) ?: return false
+        val item = segments.removeAt(from)
+        segments.add(destination, item)
+        selSeg = destination
+        segPush(); pushVideoHistory()
+        return true
+    }
+    /** Update a selected clip's source in/out points during a trim gesture; commit once on release. */
+    fun updateSegmentRange(index: Int, requestedStart: Long, requestedEnd: Long): Boolean {
+        val old = segments.getOrNull(index) ?: return false
+        val sourceLimit = if (old.uri == null) videoDur.coerceAtLeast(old.endMs) else old.endMs
+        val range = TimelineMath.trimSegmentRange(requestedStart, requestedEnd, sourceLimit) ?: return false
+        val updated = old.copy(startMs = range[0], endMs = range[1])
+        if (updated == old) return false
+        segments[index] = updated
+        return true
+    }
+    /** Split the selected source segment at the current output playhead. */
+    fun splitSelectedSegmentAtPlayhead(): Boolean {
+        val i = selSeg
+        if (i !in segments.indices) return false
+        val speed = vSpeed.coerceAtLeast(0.05f)
+        val beforeOutput = segments.take(i).sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) } / speed
+        val localSource = ((playheadMs - beforeOutput.toLong()).coerceAtLeast(0L) * speed).toLong()
+        val segment = segments[i]
+        val cut = (segment.startMs + localSource).coerceIn(segment.startMs, segment.endMs)
+        val split = TimelineMath.split(segment.startMs, segment.endMs, cut) ?: return false
+        segments[i] = segment.copy(startMs = split.first[0], endMs = split.first[1])
+        segments.add(i + 1, segment.copy(startMs = split.second[0], endMs = split.second[1]))
+        segPush(); selSeg = i + 1; pushVideoHistory()
+        return true
     }
     var vSpeed by mutableStateOf(1f)
     var musicName by mutableStateOf<Int?>(null)
@@ -274,7 +627,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     if (!file.exists()) SoundFx.writeWav(file, SoundFx.render(k))
                     file
                 }
-                music = Uri.fromFile(f); musicName = nameRes
+                updateMusicSource(Uri.fromFile(f)); musicName = nameRes
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "fx") }
         }
     }
@@ -316,7 +669,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             try {
                 val n = withContext(Dispatchers.Default) { PhotoEdit.heal(s, marks) }
                 healBackup = s; replaceSource(n); healCircles.clear(); canUndoHeal = true
-            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "heal") } finally { busy = false }
+            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "heal") } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
     /** Replaces the working photo by its subject on a transparent background (<= 2048 px long side). */
@@ -333,7 +686,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 }
                 healBackup = s; replaceSource(n); healCircles.clear(); canUndoHeal = true
                 info(R.string.cutout_done)
-            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "cutout") } finally { busy = false }
+            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "cutout") } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
     fun undoHeal() { healBackup?.let { replaceSource(it); healBackup = null; canUndoHeal = false } }
@@ -380,7 +733,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     Exporter.saveImage(app, img, false, 92, false, "LightningLab_sky_${System.currentTimeMillis()}")
                 }
                 info(R.string.saved)
-            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "infographic") } finally { busy = false }
+            } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "infographic") } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
     var canUndoSeg by mutableStateOf(false)
@@ -393,11 +746,46 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         segHist += segments.toList(); segHi = segHist.size - 1; segFlags()
     }
     private fun segRestore() { segments.clear(); segments.addAll(segHist[segHi]); segFlags() }
-    fun addSeg(sg: Seg) { segments += sg; segPush() }
-    fun removeSeg(i: Int) { if (i in segments.indices) { segments.removeAt(i); segPush() } }
-    fun clearSegs() { if (segments.isNotEmpty()) { segments.clear(); segPush() } }
-    fun undoSeg() { if (segHi > 0) { segHi--; segRestore() } }
-    fun redoSeg() { if (segHi < segHist.size - 1) { segHi++; segRestore() } }
+    fun addSeg(sg: Seg) { segments += sg; segPush(); pushVideoHistory() }
+    fun removeSeg(i: Int) { if (i in segments.indices) { segments.removeAt(i); segPush(); pushVideoHistory() } }
+    fun addVideoMarker(timeMs: Long = playheadMs) {
+        val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong()
+        val marker = timeMs.coerceIn(0L, total.coerceAtLeast(0L))
+        if (marker !in videoMarkers) { videoMarkers.add(marker); videoMarkers.sort(); pushVideoHistory() }
+    }
+    fun removeVideoMarker(timeMs: Long) { if (videoMarkers.remove(timeMs)) pushVideoHistory() }
+    /** Remove a segment and close its output-time gap across overlays, effects and markers. */
+    fun rippleDeleteSegment(index: Int): Boolean {
+        val removed = segments.getOrNull(index) ?: return false
+        val speed = vSpeed.coerceAtLeast(0.05f)
+        val cutStart = (segments.take(index).sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) } / speed).toLong()
+        val cutDuration = ((removed.endMs - removed.startMs).coerceAtLeast(0L) / speed).toLong()
+        if (cutDuration <= 0L) return false
+        segments.removeAt(index)
+        fun shift(t: Long) = TimelineMath.rippleShift(t, cutStart, cutDuration)
+        val overlays = videoOverlayClips.mapNotNull { clip ->
+            val start = shift(clip.startMs); val end = shift(clip.endMs)
+            if (end <= start) null else clip.copy(startMs = start, endMs = end,
+                keyframes = clip.keyframes.map { it.copy(timeMs = shift(it.timeMs)) }
+                    .filter { it.timeMs in start..end }.distinctBy { it.timeMs }.sortedBy { it.timeMs })
+        }
+        videoOverlayClips.clear(); videoOverlayClips.addAll(overlays)
+        val effects = videoEffectClips.mapNotNull { effect ->
+            val start = shift(effect.startMs); val end = shift(effect.endMs)
+            if (end <= start) null else effect.copy(startMs = start, endMs = end)
+        }
+        videoEffectClips.clear(); videoEffectClips.addAll(effects)
+        val markers = videoMarkers.map { shift(it) }.distinct().sorted()
+        videoMarkers.clear(); videoMarkers.addAll(markers)
+        selectedOverlayClipId?.let { id -> if (videoOverlayClips.none { it.id == id }) selectedOverlayClipId = null }
+        selectedVideoEffectId?.let { id -> if (videoEffectClips.none { it.id == id }) selectedVideoEffectId = null }
+        selSeg = when { segments.isEmpty() -> -1; index >= segments.size -> segments.lastIndex; else -> index }
+        segPush(); pushVideoHistory()
+        return true
+    }
+    fun clearSegs() { if (segments.isNotEmpty()) { segments.clear(); segPush(); pushVideoHistory() } }
+    fun undoSeg() = undoVideoEdit()
+    fun redoSeg() = redoVideoEdit()
 
     // ---- optional TFLite cloud model + observer tags ----
     private val cloudModel by lazy { CloudClassifier(File(app.filesDir, "cloud_model.tflite")) }
@@ -453,39 +841,73 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
     fun initModel() { viewModelScope.launch {
-        modelReady = withContext(Dispatchers.IO) { cloudModel.load() }
-        featureModelReady = withContext(Dispatchers.IO) { cloudFeatureModel.load() }
-        segmentationModelReady = withContext(Dispatchers.IO) { cloudSegmentationModel.load() }
-        atmosphericSegmentationReady = withContext(Dispatchers.IO) { atmosphericSegmentationModel.load() }
+        modelReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_model.tflite"), File(app.filesDir, "cloud_model.tflite.previous"), cloudModel::close, cloudModel::load)
+        }
+        featureModelReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_features.tflite"), File(app.filesDir, "cloud_features.tflite.previous"), cloudFeatureModel::close, cloudFeatureModel::load)
+        }
+        segmentationModelReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_segmentation.tflite"), File(app.filesDir, "cloud_segmentation.tflite.previous"), cloudSegmentationModel::close, cloudSegmentationModel::load)
+        }
+        atmosphericSegmentationReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "atmosphere_multiclass.tflite"), File(app.filesDir, "atmosphere_multiclass.tflite.previous"), atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
+        }
     } }
     fun importModel(u: Uri) {
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "cloud_model.tflite")
+                val temp = File(app.filesDir, "cloud_model.tflite.importing")
+                val backup = File(app.filesDir, "cloud_model.tflite.previous")
                 try {
-                    val f = File(app.filesDir, "cloud_model.tflite")
-                    val tmp = File(app.filesDir, "cloud_model.tflite.importing")
-                    val backup = File(app.filesDir, "cloud_model.tflite.previous")
-                    tmp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { i ->
-                        tmp.outputStream().use { o -> i.copyTo(o) }
-                        tmp.exists() && tmp.length() > 0L
+                    ModelFileRecovery.prepareForImport(target, backup, cloudModel::close, cloudModel::load)
+                    temp.delete()
+                    backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                        temp.isFile && temp.length() > 0L
                     } ?: false
-                    if (!copied) { tmp.delete(); false }
-                    else {
-                        // Replace atomically so a failed import cannot destroy a previously working model.
+                    if (!copied) {
+                        temp.delete()
+                        false
+                    } else {
+                        // Keep the last working model until the candidate has passed the
+                        // interpreter's tensor-contract checks. A bad import must never
+                        // silently replace a previously usable classifier.
                         cloudModel.close()
-                        val hadPrevious = f.exists()
-                        if (hadPrevious && !f.renameTo(backup)) { tmp.delete(); cloudModel.load(); false }
-                        else if (!tmp.renameTo(f)) {
-                            tmp.delete()
-                            if (hadPrevious) backup.renameTo(f)
-                            cloudModel.load(); false
-                        } else {
-                            backup.delete()
+                        val hadPrevious = target.exists()
+                        if (hadPrevious && !target.renameTo(backup)) {
+                            temp.delete()
                             cloudModel.load()
+                            false
+                        } else if (!temp.renameTo(target)) {
+                            temp.delete()
+                            if (hadPrevious) { backup.renameTo(target) } else { Unit }
+                            cloudModel.load()
+                            false
+                        } else {
+                            val valid = cloudModel.load()
+                            if (valid) {
+                                backup.delete()
+                                true
+                            } else {
+                                target.delete()
+                                if (hadPrevious) { backup.renameTo(target) } else { Unit }
+                                cloudModel.load()
+                                false
+                            }
                         }
                     }
-                } catch (e: Throwable) { false }
+                } catch (_: Throwable) {
+                    temp.delete()
+                    if (backup.exists()) {
+                        target.delete()
+                        backup.renameTo(target)
+                    }
+                    cloudModel.load()
+                    false
+                }
             }
             modelReady = ok
             if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
@@ -498,16 +920,42 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val temp = File(app.filesDir, "cloud_features.tflite.importing")
                 val backup = File(app.filesDir, "cloud_features.tflite.previous")
                 try {
+                    ModelFileRecovery.prepareForImport(target, backup, cloudFeatureModel::close, cloudFeatureModel::load)
                     temp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input -> temp.outputStream().use { output -> input.copyTo(output) }; temp.length() > 0L } ?: false
-                    if (!copied) { temp.delete(); false } else {
+                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                        temp.exists() && temp.length() > 0L
+                    } ?: false
+                    if (!copied) {
+                        temp.delete(); false
+                    } else {
                         cloudFeatureModel.close()
                         val hadOld = target.exists()
-                        if (hadOld && !target.renameTo(backup)) { temp.delete(); cloudFeatureModel.load(); false }
-                        else if (!temp.renameTo(target)) { temp.delete(); if (hadOld) backup.renameTo(target); cloudFeatureModel.load(); false }
-                        else { backup.delete(); cloudFeatureModel.load() }
+                        if (hadOld && !target.renameTo(backup)) {
+                            temp.delete(); cloudFeatureModel.load(); false
+                        } else if (!temp.renameTo(target)) {
+                            temp.delete()
+                            if (hadOld) { backup.renameTo(target) } else { Unit }
+                            cloudFeatureModel.load(); false
+                        } else {
+                            val valid = cloudFeatureModel.load()
+                            if (valid) {
+                                backup.delete()
+                                true
+                            } else {
+                                target.delete()
+                                if (hadOld) { backup.renameTo(target) } else { Unit }
+                                cloudFeatureModel.load()
+                                false
+                            }
+                        }
                     }
-                } catch (_: Throwable) { temp.delete(); if (backup.exists() && !target.exists()) backup.renameTo(target); cloudFeatureModel.load(); false }
+                } catch (_: Throwable) {
+                    temp.delete()
+                    if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
+                    cloudFeatureModel.load()
+                    false
+                }
             }
             featureModelReady = ok
             if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
@@ -521,6 +969,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val temp = File(app.filesDir, "cloud_segmentation.tflite.importing")
                 val backup = File(app.filesDir, "cloud_segmentation.tflite.previous")
                 try {
+                    ModelFileRecovery.prepareForImport(target, backup, cloudSegmentationModel::close, cloudSegmentationModel::load)
                     temp.delete(); backup.delete()
                     val copied = app.contentResolver.openInputStream(u)?.use { input ->
                         temp.outputStream().use { output -> input.copyTo(output) }
@@ -531,14 +980,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         val hadOld = target.exists()
                         if (hadOld && !target.renameTo(backup)) { temp.delete(); cloudSegmentationModel.load(); false }
                         else if (!temp.renameTo(target)) {
-                            temp.delete(); if (hadOld) backup.renameTo(target)
+                            temp.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
                             cloudSegmentationModel.load(); false
                         } else {
                             val valid = cloudSegmentationModel.load()
                             if (valid) backup.delete()
                             else {
                                 target.delete()
-                                if (hadOld) backup.renameTo(target)
+                                if (hadOld) { backup.renameTo(target) } else { Unit }
                                 cloudSegmentationModel.load()
                             }
                             valid
@@ -546,7 +995,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     }
                 } catch (_: Throwable) {
                     temp.delete()
-                    if (backup.exists() && !target.exists()) backup.renameTo(target)
+                    if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
                     cloudSegmentationModel.load()
                     false
                 }
@@ -564,6 +1013,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val temp = File(app.filesDir, "atmosphere_multiclass.tflite.importing")
                 val backup = File(app.filesDir, "atmosphere_multiclass.tflite.previous")
                 try {
+                    ModelFileRecovery.prepareForImport(target, backup, atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
                     temp.delete(); backup.delete()
                     val copied = app.contentResolver.openInputStream(u)?.use { input ->
                         temp.outputStream().use { output -> input.copyTo(output) }
@@ -574,19 +1024,19 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         val hadOld = target.exists()
                         if (hadOld && !target.renameTo(backup)) { temp.delete(); atmosphericSegmentationModel.load(); false }
                         else if (!temp.renameTo(target)) {
-                            temp.delete(); if (hadOld) backup.renameTo(target)
+                            temp.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
                             atmosphericSegmentationModel.load(); false
                         } else {
                             val valid = atmosphericSegmentationModel.load()
                             if (valid) backup.delete() else {
-                                target.delete(); if (hadOld) backup.renameTo(target)
+                                target.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
                                 atmosphericSegmentationModel.load()
                             }
                             valid
                         }
                     }
                 } catch (_: Throwable) {
-                    temp.delete(); if (backup.exists() && !target.exists()) backup.renameTo(target)
+                    temp.delete(); if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
                     atmosphericSegmentationModel.load(); false
                 }
             }
@@ -604,12 +1054,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val (bmp, res) = withContext(Dispatchers.Default) {
-                    val b = ImageDecoder.decodeBitmap(ImageDecoder.createSource(app.contentResolver, u)) { dec, inf, _ ->
-                        dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                        var k = 1; var m = max(inf.size.width, inf.size.height)
-                        while (m / k > 1024) k *= 2
-                        dec.setTargetSampleSize(k)
-                    }
+                    val b = decodeSoftwareBitmap(u, 1024)
                     val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
                     b to CloudAnalysis.analyze(px, b.width, b.height)
                 }
@@ -676,7 +1121,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                                     frame.getPixels(pixels, 0, frame.width, 0, 0, frame.width, frame.height)
                                     val sky = CloudAnalysis.analyze(pixels, frame.width, frame.height)
                                     val ranked = cloudModel.classify(frame)
-                                    val top = ranked?.firstOrNull()
+                                    val structuralFeatures = cloudFeatureModel.classify(frame)
+                                    val top: Pair<String, Float>? = ranked?.firstOrNull()
                                     val label = when (sky.kind) {
                                         CloudAnalysis.Kind.CLEAR -> "آسمان صاف یا کم‌ابر"
                                         CloudAnalysis.Kind.THIN_STREAKS -> "رگه‌های نازک احتمالی"
@@ -692,7 +1138,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                                         coverPercent = (sky.cover * 100f).toInt().coerceIn(0, 100),
                                         oktas = sky.oktas,
                                         texture = sky.texture,
-                                        kindLabel = label
+                                        kindLabel = label,
+                                        structuralFeatures = structuralFeatures
                                     )
                                     observations += CloudFrameObservation(
                                         elapsedMillis = ms,
@@ -708,7 +1155,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         }
                         require(results.size >= 2) { "از این ویدئو دست‌کم دو فریم قابل استخراج نبود." }
                         val evolution = CloudEvolutionAnalyzer().analyze(observations)
-                        CloudVideoReport(duration, results.size, results, evolution, results.any { it.genusCode != null })
+                        val consensus = CloudTemporalConsensusAnalyzer.analyze(results)
+                        CloudVideoReport(
+                            duration, results.size, results, evolution,
+                            results.any { it.genusCode != null }, consensus,
+                            CloudCoverTrendAnalyzer.analyze(results),
+                            CloudFeatureTemporalAnalyzer.analyze(results)
+                        )
                     } finally { retriever.release() }
                 }
                 cloudVideoReport = report
@@ -722,7 +1175,26 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun info(res: Int, vararg a: Any) { infoRes = res; infoArgs = a.toList() }
+    fun shareCloudVideoReport() {
+        val report = cloudVideoReport ?: return
+        val lines = mutableListOf<String>()
+        lines += "گزارش تحلیل آفلاین ویدئوی ابر — Lightning Lab"
+        lines += "مدت ویدئو: ${report.durationMillis / 1000} ثانیه | فریم‌های بررسی‌شده: ${report.sampledFrames}"
+        lines += "روند پوشش ابریِ برآوردشده: ${report.cloudCoverTrend.labelPersian}"
+        lines += "ابتدا: ${report.cloudCoverTrend.firstMeanPercent}٪ | انتها: ${report.cloudCoverTrend.lastMeanPercent}٪ | تغییر: ${report.cloudCoverTrend.changePercentagePoints} واحد درصد"
+        lines += "جمع‌بندی جنس ابر: ${report.temporalConsensus.candidates.joinToString("، ") { CloudInfo.genusName(it.genusCode) + " (${it.frameSharePercent}٪ فریم‌ها)" }.ifBlank { "خروجی مدل جنس در دسترس نیست" }}"
+        lines += "ویژگی‌های ساختاری: ${report.structuralFeatureTrend.candidates.joinToString("، ") { CloudFeatureTemporalAnalyzer.displayName(it.code) + " (${it.frameSharePercent}٪ فریم‌ها)" }.ifBlank { "مدل ویژگی ساختاری خروجی قابل گزارش ندارد" }}"
+        lines += report.structuralFeatureTrend.notePersian
+        lines += "یادآوری: نتایج ماشینی و تخمینی‌اند؛ امتیاز مدل احتمال کالیبره‌شده نیست و جایگزین مشاهده یا ارزیابی هواشناسی نمی‌شود."
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "گزارش تحلیل ابر — Lightning Lab")
+            putExtra(Intent.EXTRA_TEXT, lines.joinToString("\n"))
+        }
+        app.startActivity(Intent.createChooser(send, "اشتراک گزارش تحلیل ابر").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    fun info(res: Int, vararg a: Any) { infoRes = res; infoArgs = a.toList() }
 
     // ---------------- detection ----------------
     // ---- pre-detect trim ----
@@ -759,7 +1231,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 if (items.isEmpty()) info(R.string.no_events) else screen = Screen.RESULTS
             } catch (c: CancellationException) { throw c
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
-            } finally { busy = false }
+            } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
 
@@ -804,7 +1276,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 }
             } catch (c: CancellationException) { throw c
             } catch (e: Throwable) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
-            } finally { busy = false }
+            } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
 
@@ -829,13 +1301,15 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 info(R.string.frames_saved, ok)
             } catch (c: CancellationException) { throw c
             } catch (e: Throwable) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
-            } finally { busy = false }
+            } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
 
     // ---------------- photo editor ----------------
     fun setPhoto(b: Bitmap) {
-        photoSrc = b; params = PhotoParams(); histReset(); showOriginal = false
+        // Previous snapshots may still be rendering/exporting; drop references without recycling their bitmaps here.
+        photoSrc = b; params = PhotoParams(); photoLayers.clear(); photoShapeLayers.clear(); photoMaskStrokes.clear(); photoMaskInverted = false; photoImageLayers.clear(); nextPhotoLayerId = 1L; histReset()
+        showOriginal = false
         val s = 1280f / max(b.width, b.height)
         photoPrev = if (s < 1f) Bitmap.createScaledBitmap(b, (b.width * s).toInt(), (b.height * s).toInt(), true) else b
         screen = Screen.PHOTO
@@ -845,12 +1319,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val b = withContext(Dispatchers.IO) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(app.contentResolver, u)) { dec, inf, _ ->
-                        dec.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                        var k = 1; var m = max(inf.size.width, inf.size.height)
-                        while (m / k > 4096) k *= 2
-                        dec.setTargetSampleSize(k)
-                    }
+                    decodeSoftwareBitmap(u, 4096)
                 }
                 setPhoto(b)
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "image") }
@@ -861,15 +1330,25 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val s = photoSrc ?: return
         if (busy) return
         busy = true
+        val paramsSnapshot = params
+        val layersSnapshot = photoLayers.toList()
+        val shapesSnapshot = photoShapeLayers.toList()
+        val imagesSnapshot = photoImageLayers.toList()
+        val masksSnapshot = photoMaskStrokes.toList()
+        val invertMaskSnapshot = photoMaskInverted
+        val watermarkSnapshot = watermark
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.Default) {
-                    val out = PhotoEdit.apply(s, params)
-                    Exporter.saveImage(app, out, png, 95, watermark, "LightningLab_${System.currentTimeMillis()}")
+                    val adjusted = PhotoEdit.apply(s, paramsSnapshot)
+                    val out = PhotoLayers.render(adjusted, layersSnapshot, shapesSnapshot, imagesSnapshot, masksSnapshot, invertMaskSnapshot)
+                    if (out !== adjusted && !adjusted.isRecycled) adjusted.recycle()
+                    Exporter.saveImage(app, out, png, 95, watermarkSnapshot, "LightningLab_${System.currentTimeMillis()}")
+                    if (!out.isRecycled) out.recycle()
                 }
                 info(R.string.saved)
             } catch (e: Throwable) { info(R.string.error_generic, e.message ?: "save")
-            } finally { busy = false }
+            } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
 
@@ -879,13 +1358,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         try {
             r.setDataSource(app, u)
             videoDur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val fps = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()?.takeIf { it in 1f..240f } ?: 30f
+            videoFrameDurationMs = (1000f / fps).toLong().coerceAtLeast(1L)
             val vw = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
             val vh = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             if (rot == 90 || rot == 270) { videoW = vh; videoH = vw } else { videoW = vw; videoH = vh }
-            videoUri = u; segments.clear(); segReset(); selSeg = -1; infoRes = null
-            segments += Seg(0, videoDur); segPush(); selSeg = 0
-            textClips.clear(); stickerClips.clear(); audioClips.clear(); zoomKeys.clear(); selKind = 0; selId = -1; playheadMs = 0L
+            videoUri = u; playheadMs = 0L; segments.clear(); videoMarkers.clear(); videoOverlayClips.clear(); videoEffectClips.clear(); selectedVideoEffectId = null; nextVideoEffectId = 1L; videoOverlayBitmaps.values.forEach { if (busy) retiredVideoOverlayBitmaps.add(it) else if (!it.isRecycled) it.recycle() }; videoOverlayBitmaps.clear(); selectedOverlayClipId = null; nextVideoOverlayId = 1L; segReset(); selSeg = -1; infoRes = null; resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
@@ -921,23 +1400,111 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         try { r.release() } catch (e: Exception) { }
         recorder = null; recording = false
         val f = recFile; recFile = null
-        if (ok && f != null && f.exists() && f.length() > 1000) { voice = Uri.fromFile(f); info(R.string.rec_added) }
+        if (ok && f != null && f.exists() && f.length() > 1000) { updateVoiceSource(Uri.fromFile(f)); info(R.string.rec_added) }
         else { f?.delete(); info(R.string.rec_too_short) }
     }
     override fun onCleared() {
         try { recorder?.release() } catch (e: Exception) { }
+        photoImageLayers.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
+        (videoBitmapPool + videoOverlayBitmaps.values + videoHistory.flatMap { it.overlayBitmaps.values }).distinct().forEach { if (!it.isRecycled) it.recycle() }
+        retiredVideoOverlayBitmaps.forEach { if (!it.isRecycled) it.recycle() }
         try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close() } catch (_: Exception) { }
         super.onCleared()
     }
+
+    // ---- editable photo projects: source, adjustments, masks and all overlay assets remain editable ----
+    class PhotoProjectInfo(val id: String, val name: String, val modified: Long)
+    private val photoProjectsDir get() = File(app.filesDir, "photo-projects")
+    fun listPhotoProjects(): List<PhotoProjectInfo> = photoProjectsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") && File(it, "project.json").exists() }
+        ?.mapNotNull { d -> PhotoProjectCodec.decode(File(d, "project.json").readText())?.let { PhotoProjectInfo(d.name, it.name, File(d, "project.json").lastModified()) } }
+        ?.sortedByDescending { it.modified } ?: emptyList()
+
+    fun savePhotoProject() {
+        val source = photoSrc ?: return
+        if (busy) return
+        busy = true
+        val p = params; val texts = photoLayers.toList(); val shapes = photoShapeLayers.toList(); val images = photoImageLayers.toList()
+        val masks = photoMaskStrokes.toList(); val inverted = photoMaskInverted
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val finalDir = File(photoProjectsDir, "photo_" + System.currentTimeMillis())
+                    val dir = File(photoProjectsDir, ".${finalDir.name}.tmp")
+                    dir.deleteRecursively(); dir.mkdirs()
+                    fun saveBitmap(bitmap: Bitmap, file: File) {
+                        if (bitmap.isRecycled) throw java.io.IOException("photo layer bitmap was released")
+                        file.outputStream().buffered().use { stream ->
+                            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) throw java.io.IOException("PNG encode failed")
+                            stream.flush()
+                        }
+                    }
+                    saveBitmap(source, File(dir, "source.png"))
+                    val imageData = images.map { layer ->
+                        val file = "layer_${layer.id}.png"; saveBitmap(layer.bitmap, File(dir, file))
+                        PhotoImageData(layer.id, layer.name, file, layer.x, layer.y, layer.width, layer.opacity, layer.visible, layer.zIndex, layer.rotationDegrees)
+                    }
+                    val name = "Photo " + java.text.SimpleDateFormat("MM-dd HH:mm", Locale.US).format(java.util.Date())
+                    val data = PhotoProjectData(name, "source.png", p,
+                        texts.map { PhotoTextData(it.id, it.name, it.text, it.x, it.y, it.size, it.color, it.opacity, it.visible, it.bold, it.zIndex, it.rotationDegrees) },
+                        shapes.map { PhotoShapeData(it.id, it.name, it.shape.name, it.x, it.y, it.width, it.height, it.color, it.opacity, it.strokeWidth, it.visible, it.zIndex, it.rotationDegrees) },
+                        imageData, masks.map { PhotoMaskData(it.points, it.radius, it.softness) }, inverted)
+                    val manifestTemp = File(dir, "project.json.tmp")
+                    manifestTemp.writeText(PhotoProjectCodec.encode(data), Charsets.UTF_8)
+                    if (!manifestTemp.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize photo project manifest")
+                    if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot finalize photo project folder")
+                }
+                info(R.string.project_saved)
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "photo project") }
+            finally { busy = false; releaseRetiredVideoImages() }
+        }
+    }
+
+    fun loadPhotoProject(id: String) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            try {
+                val loaded = withContext(Dispatchers.IO) {
+                    val dir = File(photoProjectsDir, id)
+                    val data = PhotoProjectCodec.decode(File(dir, "project.json").readText()) ?: throw java.io.IOException("invalid photo project")
+                    val source = BitmapFactory.decodeFile(File(dir, data.source).absolutePath) ?: throw java.io.IOException("missing source image")
+                    val images = data.images.map { item ->
+                        val bmp = BitmapFactory.decodeFile(File(dir, item.file).absolutePath) ?: throw java.io.IOException("missing layer image ${item.file}")
+                        item to bmp
+                    }
+                    Triple(data, source, images)
+                }
+                val (data, source, images) = loaded
+                setPhoto(source)
+                params = data.params
+                photoLayers.clear(); photoLayers.addAll(data.texts.map { PhotoTextLayer(it.id, it.name, it.text, it.x, it.y, it.size, it.color, it.opacity, it.visible, it.bold, it.z, it.rotation) })
+                photoShapeLayers.clear(); photoShapeLayers.addAll(data.shapes.map { PhotoShapeLayer(it.id, it.name,
+                    runCatching { PhotoShapeLayer.Shape.valueOf(it.shape) }.getOrDefault(PhotoShapeLayer.Shape.RECTANGLE), it.x, it.y, it.width, it.height,
+                    it.color, it.opacity, it.stroke, it.visible, it.z, it.rotation) })
+                photoImageLayers.clear(); photoImageLayers.addAll(images.map { (item, bmp) -> PhotoImageLayer(item.id, item.name, bmp, item.x, item.y, item.width, item.opacity, item.visible, item.z, item.rotation) })
+                photoMaskStrokes.clear(); photoMaskStrokes.addAll(data.masks.map { PhotoMaskStroke(it.points, it.radius, it.softness) })
+                photoMaskInverted = data.maskInverted
+                nextPhotoLayerId = ((photoLayers.maxOfOrNull { it.id } ?: 0L).coerceAtLeast(photoShapeLayers.maxOfOrNull { it.id } ?: 0L)
+                    .coerceAtLeast(photoImageLayers.maxOfOrNull { it.id } ?: 0L)) + 1L
+                histReset()
+            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "load photo project") }
+            finally { busy = false; releaseRetiredVideoImages() }
+        }
+    }
+
+    fun deletePhotoProject(id: String) { File(photoProjectsDir, id).deleteRecursively() }
 
     // ---- video projects (the source files are COPIED into app storage: picker URIs do not survive restarts) ----
     class ProjectInfo(val id: String, val name: String, val modified: Long)
     private val projectsDir get() = File(app.filesDir, "projects")
 
-    fun listProjects(): List<ProjectInfo> =
-        projectsDir.listFiles()?.filter { it.isDirectory && File(it, "project.json").exists() }?.mapNotNull { d ->
+    fun listProjects(): List<ProjectInfo> {
+        projectsDir.listFiles()?.filter { it.isDirectory && it.name.startsWith(".") && it.name.endsWith(".tmp") && System.currentTimeMillis() - it.lastModified() > 86_400_000L }
+            ?.forEach { it.deleteRecursively() }
+        return projectsDir.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") && File(it, "project.json").exists() }?.mapNotNull { d ->
             ProjectCodec.decode(File(d, "project.json").readText())?.let { ProjectInfo(d.name, it.name, File(d, "project.json").lastModified()) }
         }?.sortedByDescending { it.modified } ?: emptyList()
+    }
 
     private fun copyTo(u: Uri, dest: File) {
         if (u.scheme == "file") File(u.path!!).copyTo(dest, overwrite = true)
@@ -950,10 +1517,18 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val main = videoUri ?: return
         if (busy) return
         busy = true; stage = R.string.saving_project; progress = 0f
+        val overlayClipsSnapshot = videoOverlayClips.toList()
+        val effectClipsSnapshot = videoEffectClips.toList()
+        val markerSnapshot = videoMarkers.toList()
+        val overlayBitmapsSnapshot = videoOverlayBitmaps.toMap()
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val dir = File(projectsDir, "p" + System.currentTimeMillis()); dir.mkdirs()
+                    projectsDir.mkdirs()
+                    val finalDir = File(projectsDir, "p" + System.currentTimeMillis())
+                    val dir = File(projectsDir, ".${finalDir.name}.tmp")
+                    dir.deleteRecursively()
+                    if (!dir.mkdirs()) throw java.io.IOException("cannot create project staging directory")
                     copyTo(main, File(dir, "main.mp4"))
                     val clips = LinkedHashMap<String, String>()
                     val segs = segments.map { sg ->
@@ -962,18 +1537,35 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         }
                         SegData(sg.startMs, sg.endMs, c)
                     }
-                    val audios = audioClips.map { c ->
-                        val n = "audio_" + c.id + ".bin"; copyTo(Uri.parse(c.uri), File(dir, n)); c.copy(uri = n)
+                    val mu = music?.let { m ->
+                        val n = if (m.path?.endsWith(".wav") == true) "music.wav" else "music.audio"; copyTo(m, File(dir, n)); n
                     }
+                    val vo = voice?.let { copyTo(it, File(dir, "voice.m4a")); "voice.m4a" }
                     val name = "Project " + java.text.SimpleDateFormat("MM-dd HH:mm", Locale.US).format(java.util.Date())
-                    File(dir, "project.json").writeText(ProjectCodec.encode(ProjectData(
-                        name, "main.mp4", videoDur, segs, null, null, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
-                        vRotate, vFlipH, vFlipV, vCrop, "", 0xFFFFFFFF.toInt(), 1, 1, false,
-                        null, 1, 1, volOrig, volMusic, volVoice,
-                        textClips.toList(), stickerClips.toList(), audios, zoomKeys.toList())))
+                    val overlayData = overlayClipsSnapshot.map { clip ->
+                        val asset = overlayBitmapsSnapshot[clip.id]?.let { bitmap ->
+                            val file = "overlay_${clip.id}.png"
+                            File(dir, file).outputStream().use { stream -> if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) throw java.io.IOException("overlay PNG encode failed") }
+                            file
+                        } ?: clip.assetFile
+                        OverlayClipData(clip.id, clip.kind, clip.content, clip.startMs, clip.endMs, clip.color, clip.size, clip.position, clip.background,
+                            clip.keyframes.map { k -> OverlayKeyframeData(k.timeMs, k.alpha, k.position) }, asset)
+                    }
+                    val manifest = File(dir, "project.json.tmp")
+                    manifest.writeText(ProjectCodec.encode(ProjectData(
+                        name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
+                        vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
+                        sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice,
+                        overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot)), Charsets.UTF_8)
+                    if (!manifest.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize project manifest")
+                    // Publish only a complete project. A crash before this point leaves a hidden staging folder.
+                    if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot publish completed project")
                 }
                 info(R.string.project_saved)
-            } catch (e: Exception) { info(R.string.error_generic, e.message ?: "save") } finally { busy = false }
+            } catch (e: Exception) {
+                projectsDir.listFiles()?.filter { it.isDirectory && it.name.startsWith(".") && it.name.endsWith(".tmp") }?.forEach { it.deleteRecursively() }
+                info(R.string.error_generic, e.message ?: "save")
+            } finally { busy = false; releaseRetiredVideoImages() }
         }
     }
 
@@ -983,21 +1575,27 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
             loadVideo(Uri.fromFile(File(dir, p.video)))
             if (videoUri == null) return
-            if (p.segs.isNotEmpty()) segments.clear()
             for (sg in p.segs) segments.add(Seg(sg.startMs, sg.endMs, sg.clip?.let { Uri.fromFile(File(dir, it)) }))
+            videoMarkers.clear(); videoMarkers.addAll(p.markers)
             segReset(); segPush(); selSeg = -1
+            updateMusicSource(p.music?.let { Uri.fromFile(File(dir, it)) }); musicName = null
+            updateVoiceSource(p.voice?.let { Uri.fromFile(File(dir, it)) })
             muteOriginal = p.mute; vFilter = p.filter; vSpeed = p.speed; vBrightness = p.brightness; vContrast = p.contrast
             vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
+            overlayText = p.text; textColor = p.textColor; textSize = p.textSize; textPos = p.textPos; textBg = p.textBg
+            sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
+            videoOverlayBitmaps.values.forEach { if (busy) retiredVideoOverlayBitmaps.add(it) else if (!it.isRecycled) it.recycle() }; videoOverlayBitmaps.clear()
+            videoOverlayClips.clear(); videoOverlayClips.addAll(p.overlayClips.map { item ->
+                item.assetFile?.let { asset -> BitmapFactory.decodeFile(File(dir, asset).absolutePath)?.let { videoOverlayBitmaps[item.id] = it } }
+                VideoOverlayClip(item.id, item.kind, item.content, item.startMs, item.endMs, item.color, item.size, item.position, item.background,
+                    item.keyframes.map { k -> VideoOverlayKeyframe(k.timeMs, k.alpha, k.position) }, item.assetFile)
+            })
+            nextVideoOverlayId = (videoOverlayClips.maxOfOrNull { it.id } ?: 0L) + 1L
+            videoEffectClips.clear(); videoEffectClips.addAll(p.effectClips.map { VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs) })
+            nextVideoEffectId = (videoEffectClips.maxOfOrNull { it.id } ?: 0L) + 1L
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
-            textClips.addAll(p.texts); stickerClips.addAll(p.stickers); zoomKeys.addAll(p.zooms)
-            audioClips.addAll(p.audios.map { it.copy(uri = Uri.fromFile(File(dir, it.uri)).toString()) })
-            nextId = (textClips.map { it.id } + stickerClips.map { it.id } + audioClips.map { it.id } + zoomKeys.map { it.id }).maxOrNull()?.plus(1) ?: 1
-            // projects saved before the timeline existed: one whole-video text/sticker, music and voice track
-            if (p.texts.isEmpty() && p.text.isNotBlank()) textClips += TextClip(newId(), p.text, p.textColor, p.textSize, p.textPos, p.textBg, 0L, max(500L, totalMs))
-            if (p.stickers.isEmpty() && p.sticker != null) stickerClips += StickerClip(newId(), p.sticker, p.stickerSize, p.stickerPos, 0L, max(500L, totalMs))
-            p.music?.let { addAudio(Uri.fromFile(File(dir, it)), app.getString(R.string.tool_music), 0, 0L) }
-            p.voice?.let { addAudio(Uri.fromFile(File(dir, it)), app.getString(R.string.rec_label), 2, 0L) }
             screen = Screen.VIDEO
+            resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
     }
 
@@ -1012,11 +1610,48 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { fallback } finally { r.release() }
     }
 
+    var exportPreflightIssues by mutableStateOf<List<String>>(emptyList())
+
+    /** Checks the project before expensive rendering and reports actionable issues in Persian. */
+    fun runVideoExportPreflight(): Boolean {
+        val issues = ArrayList<String>()
+        if (videoUri == null) issues += "فایل ویدئوی اصلی انتخاب نشده است."
+        if (videoDur <= 0L) issues += "مدت‌زمان ویدئو قابل تشخیص نیست؛ فایل دیگری انتخاب کنید."
+        if (videoW <= 0 || videoH <= 0) issues += "ابعاد تصویر ویدئو قابل خواندن نیست."
+        val sourceSegments = if (segments.isEmpty()) listOf(Seg(0L, videoDur, videoUri)) else segments.toList()
+        sourceSegments.forEachIndexed { index, seg ->
+            if (seg.startMs < 0L || (seg.uri == null && seg.endMs > videoDur) || seg.endMs - seg.startMs < 100L)
+                issues += "بازهٔ قطعهٔ ${index + 1} نامعتبر است؛ ابتدا و انتهای برش را بررسی کنید."
+            if (seg.uri != null && seg.uri.scheme == "file" && !File(seg.uri.path.orEmpty()).isFile)
+                issues += "فایل منبع قطعهٔ ${index + 1} پیدا نشد."
+        }
+        val outputDuration = (sourceSegments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) } / vSpeed.coerceAtLeast(0.05f)).toLong()
+        if (outputDuration <= 0L) issues += "مدت‌زمان خروجی صفر است؛ حداقل یک قطعهٔ معتبر لازم است."
+        videoOverlayClips.forEach { clip ->
+            if (clip.startMs < 0L || clip.endMs <= clip.startMs || clip.endMs > outputDuration)
+                issues += "زمان‌بندی لایهٔ ${clip.kind} خارج از محدودهٔ ویدئو است."
+            if (clip.kind == "IMAGE" && videoOverlayBitmaps[clip.id]?.isRecycled != false && clip.assetFile == null)
+                issues += "تصویر یکی از لایه‌های ویدئو در دسترس نیست."
+        }
+        videoEffectClips.forEach { clip ->
+            if (clip.startMs < 0L || clip.endMs <= clip.startMs || clip.endMs > outputDuration)
+                issues += "بازهٔ یکی از افکت‌ها خارج از محدودهٔ ویدئو است."
+        }
+        if (app.cacheDir.usableSpace < 150L * 1024L * 1024L)
+            issues += "فضای خالی حافظه کمتر از ۱۵۰ مگابایت است؛ پیش از خروجی فضا آزاد کنید."
+        exportPreflightIssues = issues.distinct()
+        return exportPreflightIssues.isEmpty()
+    }
+
     /** Multi-segment trim, optional mute, optional music (mixed with or replacing original), H.264/AAC MP4. */
     fun exportVideo() {
         val u = videoUri ?: return
         if (busy) return
+        if (exportPreflightIssues.isNotEmpty()) return
         busy = true; progress = 0f; stage = R.string.exporting; infoRes = null
+        val overlaySnapshot = videoOverlayClips.toList()
+        val effectSnapshot = videoEffectClips.toList()
+        val overlayBitmapSnapshot = videoOverlayBitmaps.toMap()
         job = viewModelScope.launch {
             val out = File(app.cacheDir, "export_${System.currentTimeMillis()}.mp4")
             var tr: Transformer? = null
@@ -1024,68 +1659,81 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val segs = if (segments.isEmpty()) listOf(Seg(0, videoDur)) else segments.toList()
                 val fx = ArrayList<Effect>()
                 VideoFx.cropBounds(videoW, videoH, vCrop)?.let { fx += Crop(it[0], it[1], it[2], it[3]) }
-                fx += VideoFx.filterEffects(vFilter)
                 if (vBrightness != 0f) fx += Brightness(vBrightness)
                 if (vContrast != 0f) fx += Contrast(vContrast)
                 if (vSpeed != 1f) fx += SpeedChangeEffect(vSpeed)
                 if (vRotate != 0 || vFlipH || vFlipV) fx += ScaleAndRotateTransformation.Builder()
                     .setScale(if (vFlipH) -1f else 1f, if (vFlipV) -1f else 1f)
                     .setRotationDegrees(vRotate.toFloat()).build()
-                val items = segs.map { sg ->
-                    val mi = MediaItem.Builder().setUri(sg.uri ?: u).setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder()
-                            .setStartPositionMs(sg.startMs).setEndPositionMs(sg.endMs).build()).build()
-                    EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
-                        .setEffects(Effects(if (volOrig != 1f) listOf<AudioProcessor>(VolumeProcessor(volOrig)) else emptyList(), fx)).build()
+                // Split each source segment at overlay boundaries. Every generated media item
+                // receives only the overlays active during that exact output-time interval.
+                // Legacy single text/sticker settings remain exportable for older projects.
+                val timedClips = if (overlaySnapshot.isEmpty()) buildList {
+                    val legacyTotal = (segs.sumOf { (it.endMs-it.startMs).coerceAtLeast(0L) } / vSpeed.coerceAtLeast(0.05f)).toLong()
+                    if (overlayText.isNotBlank() && legacyTotal > 0L) add(VideoOverlayClip(-1L, "TEXT", overlayText.trim(), 0L, legacyTotal, textColor, textSize, textPos, textBg))
+                    sticker?.let { if (legacyTotal > 0L) add(VideoOverlayClip(-2L, "STICKER", it, 0L, legacyTotal, 0xFFFFFFFF.toInt(), stickerSize, stickerPos, false)) }
+                } else overlaySnapshot
+                val items = ArrayList<EditedMediaItem>()
+                var timelineCursor = 0L
+                for (segment in segs) {
+                    val sourceLength = (segment.endMs - segment.startMs).coerceAtLeast(1L)
+                    val outputLength = (sourceLength / vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+                    val animationCuts = timedClips.flatMap { clip ->
+                        buildList {
+                            add(clip.startMs); add(clip.endMs)
+                            if (clip.keyframes.size > 1 && (clip.keyframes.map { it.alpha }.distinct().size > 1 || clip.keyframes.map { it.position }.distinct().size > 1)) {
+                                val span = (clip.endMs - clip.startMs).coerceAtLeast(1L)
+                                val step = (span / 1600L).coerceAtLeast(100L)
+                                var t = clip.startMs + step
+                                while (t < clip.endMs) { add(t); t += step }
+                                clip.keyframes.forEach { add(it.timeMs) }
+                            }
+                        }
+                    }
+                    val effectCuts = effectSnapshot.flatMap { listOf(it.startMs, it.endMs) }
+                    val cuts = (listOf(0L, outputLength) + animationCuts.map { it - timelineCursor } + effectCuts.map { it - timelineCursor }
+                        .filter { it > 0L && it < outputLength }).distinct().sorted()
+                    for (j in 0 until cuts.lastIndex) {
+                        val outA = cuts[j]; val outB = cuts[j + 1]
+                        if (outB <= outA) continue
+                        val sourceA = (segment.startMs + outA * vSpeed).toLong().coerceAtMost(segment.endMs - 1L)
+                        val sourceB = (segment.startMs + outB * vSpeed).toLong().coerceIn(sourceA + 1L, segment.endMs)
+                        val active = timedClips.filter { it.startMs < timelineCursor + outB && it.endMs > timelineCursor + outA }
+                        val itemFx = ArrayList<Effect>(); itemFx.addAll(fx)
+                        val activeEffects = effectSnapshot.filter { it.startMs < timelineCursor + outB && it.endMs > timelineCursor + outA }
+                        if (activeEffects.isEmpty()) itemFx.addAll(VideoFx.filterEffects(vFilter))
+                        else activeEffects.sortedBy { it.id }.forEach { effect -> itemFx.addAll(VideoFx.filterEffects(effect.filterIndex)) }
+                        val overlays: List<TextureOverlay> = active.mapNotNull { clip ->
+                            val state = VideoFx.overlayStateAt(clip, timelineCursor + (outA + outB) / 2L)
+                            if (clip.kind == "IMAGE") {
+                                overlayBitmapSnapshot[clip.id]?.takeUnless { it.isRecycled }?.let { StaticBitmapOverlay(it, state.position, state.alpha) }
+                            } else {
+                                val styled = if (clip.kind == "STICKER") VideoFx.styled(clip.content, clip.color, clip.size, state.position, false, 2.2f, state.alpha)
+                                    else VideoFx.styled(clip.content, clip.color, clip.size, state.position, clip.background, alpha = state.alpha)
+                                TextOverlay.createStaticTextOverlay(styled)
+                            }
+                        }
+                        if (overlays.isNotEmpty()) itemFx += OverlayEffect(ImmutableList.copyOf(overlays))
+                        val mi = MediaItem.Builder().setUri(segment.uri ?: u).setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder().setStartPositionMs(sourceA).setEndPositionMs(sourceB).build()).build()
+                        items += EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
+                            .setEffects(Effects(if (volOrig != 1f) listOf<AudioProcessor>(VolumeProcessor(volOrig)) else emptyList(), itemFx)).build()
+                    }
+                    timelineCursor += outputLength
                 }
-                val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
-                // audio clips: each is its own sequence, delayed by a gap
-                for (c in audioClips) {
-                    if (c.startMs >= total - 100) continue
-                    val len = min(c.durMs, total - c.startMs)
-                    val mi = MediaItem.Builder().setUri(Uri.parse(c.uri)).setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(len).build()).build()
-                    val vol = c.vol * (if (c.kind == 2) volVoice else volMusic)
-                    val ei = EditedMediaItem.Builder(mi).setRemoveVideo(true)
-                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()
-                    val sb = EditedMediaItemSequence.Builder()
-                    if (c.startMs > 0) sb.addGap(c.startMs * 1000)
-                    seqs += sb.addItem(ei).build()
+                val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
+                for ((au, vol) in listOfNotNull(music?.let { it to volMusic }, voice?.let { it to volVoice })) {
+                    val end = min(total, audioDur(au, total))
+                    val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
+                        MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
+                    seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true)
+                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()))
                 }
-                // composition-level effects run on the OUTPUT timeline: zoom markers, then timed text/stickers on top
-                val cfx = ArrayList<Effect>()
-                if (zoomKeys.isNotEmpty()) {
-                    val keys = zoomKeys.toList()
-                    cfx += MatrixTransformation { t ->
-                        val z = TimelineMath.zoomAt(keys, t / 1000)
-                        android.graphics.Matrix().also { it.postScale(z, z) }
-                    }
-                }
-                val (rw, rh) = if (vRotate % 180 != 0) videoH to videoW else videoW to videoH
-                val ow = if (rw > 0) rw else 1080; val oh = if (rh > 0) rh else 1920
-                val ov = ArrayList<TextureOverlay>()
-                for (t in textClips) {
-                    if (t.text.isBlank()) continue
-                    val tf = t.font?.let { try { android.graphics.Typeface.createFromFile(it) } catch (e: Exception) { null } }
-                    ov += TimedOverlay(OverlayRender.render(t.text, t.color, ow, oh, t.size, t.bg, true, tf), t.startMs * 1000, t.endMs * 1000, t.pos)
-                }
-                for (k in stickerClips) {
-                    ov += TimedOverlay(OverlayRender.render(k.emoji, 0xFFFFFFFF.toInt(), ow, oh, k.size, false, false, null, 2f), k.startMs * 1000, k.endMs * 1000, k.pos)
-                }
-                if (ov.isNotEmpty()) cfx += OverlayEffect(ImmutableList.copyOf(ov))
-                if (exportHeight > 0) cfx += Presentation.createForHeight(exportHeight)
                 val done = CompletableDeferred<Throwable?>()
                 val t = Transformer.Builder(app)
                     .setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC)
-                    .setEncoderFactory(androidx.media3.transformer.DefaultEncoderFactory.Builder(app)
-                        .setRequestedVideoEncoderSettings(
-                            androidx.media3.transformer.VideoEncoderSettings.Builder()
-                                .setBitrateMode(android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-                                .also { b -> when (exportQuality) { 0 -> b.setBitrate(2_000_000); 2 -> b.setBitrate(16_000_000); else -> b.setBitrate(8_000_000) } }
-                                .build())
-                        .build())
                     .addListener(object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) { done.complete(null) }
                         override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
@@ -1093,7 +1741,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         }
                     }).build()
                 tr = t
-                t.start(Composition.Builder(seqs).setEffects(Effects(emptyList(), cfx)).build(), out.absolutePath)
+                t.start(Composition.Builder(seqs).build(), out.absolutePath)
                 val ph = ProgressHolder()
                 while (!done.isCompleted) {
                     if (t.getProgress(ph) != Transformer.PROGRESS_STATE_NOT_STARTED) progress = ph.progress / 100f
@@ -1105,7 +1753,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 info(R.string.video_saved)
             } catch (c: CancellationException) { tr?.cancel(); throw c
             } catch (e: Throwable) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
-            } finally { out.delete(); busy = false }
+            } finally { out.delete(); busy = false; releaseRetiredVideoImages() }
         }
     }
 }

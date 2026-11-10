@@ -34,3 +34,14 @@ The transient-flash analyzer (`FlashAnalyzer.kt`) is original code written for t
 |---|---|
 | ML Kit Subject Segmentation (`play-services-mlkit-subject-segmentation:16.0.0-beta1`) | Google ML Kit terms (free, on-device; model delivered by Google Play services, not bundled; BETA). Requires Google Play services. Check ML Kit terms before commercial release. |
 | Concat (jub0t) | AGPL-3.0-or-later (+ plugin exception, commercial licence available). NO code used - reference for ideas only (Rust, different stack). |
+
+## Cloud AI research references (Phase 2.22)
+
+The following repositories and datasets were reviewed as research references only. No source code, trained weights, or images from them are bundled in this update:
+
+- RDCEP/clouds (AICCA; MODIS satellite cloud-pattern atlas): https://github.com/RDCEP/clouds
+- marcosPlaza/Ground-based-Cloud-Classification-with-Deep-Learning (README declares MIT): https://github.com/marcosPlaza/Ground-based-Cloud-Classification-with-Deep-Learning
+- ASKabalan/infrared-cloud-detection and IRIS-CloudDeep (thermal infrared; dataset card declares CC BY 4.0): https://github.com/ASKabalan/infrared-cloud-detection and https://huggingface.co/datasets/ASKabalan/IRIS-CloudDeep
+- npatel221/Cloud_Classification_DL (satellite cloud organization; no redistribution license verified during review): https://github.com/npatel221/Cloud_Classification_DL
+
+See `docs/CLOUD_AI_REPOSITORY_REVIEW_FA.md` for the scope, caveats, and integration decisions. Repository-level licenses do not automatically license third-party datasets or model weights.

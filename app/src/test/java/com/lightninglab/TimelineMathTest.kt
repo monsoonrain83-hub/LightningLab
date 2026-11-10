@@ -26,6 +26,39 @@ class TimelineMathTest {
         assertEquals(3500L, TimelineMath.outPosition(segs, 1f, 2, 500))
         assertEquals(1000L, TimelineMath.outPosition(segs, 2f, 1, 0))
     }
+    @Test fun rulerFractionMapsToSafeTimelineTime() {
+        assertEquals(0L, TimelineMath.timeAtFraction(-0.2f, 10_000L))
+        assertEquals(5_000L, TimelineMath.timeAtFraction(0.5f, 10_000L))
+        assertEquals(10_000L, TimelineMath.timeAtFraction(1.2f, 10_000L))
+        assertEquals(0L, TimelineMath.timeAtFraction(0.5f, -1L))
+    }
+    @Test fun snappingUsesNearestAnchorOnlyInsideTolerance() {
+        assertEquals(1000L, TimelineMath.snapTime(1060L, listOf(0L, 1000L, 2000L)))
+        assertEquals(1160L, TimelineMath.snapTime(1160L, listOf(0L, 1000L, 2000L)))
+    }
+    @Test fun snappingCanBeDisabledWithNoAnchors() {
+        assertEquals(1060L, TimelineMath.snapTime(1060L, emptyList()))
+    }
+    @Test fun trimSegmentRangeKeepsMinimumAndSourceBounds() {
+        assertNull(TimelineMath.trimSegmentRange(0, 100, 100))
+        val trimmed = TimelineMath.trimSegmentRange(-500, 5000, 3000)!!
+        assertEquals(0L, trimmed[0]); assertEquals(3000L, trimmed[1])
+        val inner = TimelineMath.trimSegmentRange(800, 900, 3000)!!
+        assertEquals(800L, inner[0]); assertEquals(1000L, inner[1])
+    }
+    @Test fun reorderIndexRejectsInvalidAndNoOpMoves() {
+        assertEquals(2, TimelineMath.reorderIndex(4, 1, 2) ?: -1)
+        assertNull(TimelineMath.reorderIndex(4, 1, 1))
+        assertNull(TimelineMath.reorderIndex(4, -1, 2))
+        assertNull(TimelineMath.reorderIndex(0, 0, 0))
+    }
+    @Test fun rippleShiftClosesTheDeletedGap() {
+        assertEquals(900L, TimelineMath.rippleShift(900, 1000, 500))
+        assertEquals(1000L, TimelineMath.rippleShift(1200, 1000, 500))
+        assertEquals(1000L, TimelineMath.rippleShift(1500, 1000, 500))
+        assertEquals(1700L, TimelineMath.rippleShift(2200, 1000, 500))
+        assertEquals(2200L, TimelineMath.rippleShift(2200, 1000, 0))
+    }
     @Test fun splitNeedsRoomOnBothSides() {
         assertNull(TimelineMath.split(0, 1000, 100))
         assertNull(TimelineMath.split(0, 1000, 900))

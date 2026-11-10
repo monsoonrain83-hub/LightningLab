@@ -223,4 +223,17 @@
     <string name="live_preview">معاينة مباشرة</string>
     <string name="original_view">الصورة الأصلية</string>
 
+    <string name="tab_layers">الطبقات</string>
+
+    <!-- Home workspace polish -->
+    <string name="home_hero_title">تحليل واستخراج لحظات البرق</string>
+    <string name="home_hero_body">اختر فيديو للعثور على إطارات البرق دون اتصال.</string>
+    <string name="home_tools">الأدوات الرئيسية</string>
+    <string name="home_tool_count">٤ مساحات عمل</string>
+    <string name="home_cloud_atlas">أطلس السحب</string>
+    <string name="home_cloud_atlas_sub">تصنيف المنظمة العالمية للأرصاد وتحديد أنواع السحب</string>
+    <string name="home_processing">جارٍ المعالجة</string>
+    <string name="home_sensitivity">حساسية الكشف</string>
+    <string name="home_sensitivity_hint">حساسية استخراج الإطارات الساطعة</string>
+    <string name="home_offline_note">تتم المعالجة على جهازك دون رفع ملفاتك إلى السحابة.</string>
 </resources>

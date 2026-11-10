@@ -41,10 +41,11 @@ fun App(vm: MainVM = viewModel()) {
                                 Screen.VIDEO -> VideoEditor(vm)
                                 Screen.WEATHER -> WeatherScreen(vm)
                                 Screen.PREPARE -> PrepareScreen(vm)
+                                Screen.CLOUD_ATLAS -> CloudAtlasScreen(vm)
                             }
                         }
                     }
-                    if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE) NavBar(vm)
+                    if (vm.screen != Screen.RESULTS && vm.screen != Screen.ABOUT && vm.screen != Screen.PREPARE && vm.screen != Screen.CLOUD_ATLAS) NavBar(vm)
                 }
             }
         }

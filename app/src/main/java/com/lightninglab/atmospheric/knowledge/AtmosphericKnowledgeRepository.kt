@@ -30,6 +30,10 @@ class AtmosphericKnowledgeRepository(context: Context) {
 
     fun accessoryClouds(): List<TaxonomyEntry> = db.getAccessoryClouds()
 
+    fun supplementaryFeatures(): List<TaxonomyEntry> = db.getFeatures()
+
+    fun varieties(): List<TaxonomyEntry> = db.getVarieties()
+
     fun cloudGenera(): List<PhenomenonRecord> =
         listOf("Ci", "Cc", "Cs", "Ac", "As", "Ns", "Sc", "St", "Cu", "Cb")
             .mapNotNull(db::getPhenomenon)
