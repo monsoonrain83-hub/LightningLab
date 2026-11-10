@@ -14,19 +14,21 @@
 - r10.46: بازیابی سورس واقعی از artifactهای GitHub Actions، رفع خطاهای Kotlin تایم‌لاین، اصلاح مسیر ثبت سورس و حفظ snapshot بیلد.
 - r10.47: دستگیره‌های مستقیم trim چپ/راست برای overlay و effect، drag جابه‌جایی بر اساس عرض کل timeline، تجمیع Undo gesture و حداقل طول ۲۰۰ms برای effect؛ ادغام‌شده در main.
 - CI: مرحلهٔ مستقل \`testDebugUnitTest\` پیش از APK اضافه شده و گزارش XML/HTML تست‌ها به‌صورت artifact حتی در شکست آپلود می‌شود.
-- SRT parser و تست‌های مستقل آن در شاخه r10.48 اضافه شده‌اند؛ smoke test مستقل Kotlin نیز اجرا شده است.
+- SRT import/export: فایل‌های SubRip به کلیپ‌های متنی قابل‌ویرایش تبدیل و از همان لایه‌ها به SRT استاندارد صادر می‌شوند؛ parser/serializer تست‌های مستقل دارند.
 - قرارداد طبقه‌بندی ابر: تفکیک ۱۰ جنس طبیعی WMO از کلاس دیتاستی Contrail (Ct)، تفکیک species و varieties، نام‌گذاری supplementary/accessory features.
 - سازگاری مدل CCSN کاربر: تشخیص مدل ۱۱کلاسه بر اساس امضای tensor، ترتیب برچسب‌ها و preprocessing مستقل، ارتقای TFLite runtime به ۲.۱۷.۰؛ فایل وزن به علت نامشخص‌بودن مجوز مخزن مبدأ در APK/GitHub bundle قرار نمی‌گیرد و از مسیر Import کاربر بارگذاری می‌شود.
 
-## وضعیت فعلی r10.48
-- [x] ورود فایل SRT به ابزار متن Video Editor و تبدیل cueها به کلیپ‌های متنی قابل‌ویرایش
+## وضعیت فعلی r10.49
+- [x] ورود و خروج فایل SRT در ابزار متن Video Editor؛ cueها به کلیپ‌های قابل‌ویرایش تبدیل می‌شوند و export دوباره SRT می‌سازد
 - [x] پشتیبانی parser از comma/dot، چندخطی، BOM، cue settings و entityهای پایه
 - [x] تست‌های parser و قرارداد مدل CCSN
 - [x] اجرای unit tests در CI و ذخیره گزارش شکست
-- [ ] رفع دو تست شکست‌خورده DayLine (رد صحنهٔ jitter بدون صاعقه و نگه‌داشتن صاعقه باریک)
-- [ ] سبزشدن تمام unit tests
-- [ ] سبزشدن assembleDebug با TFLite 2.17.0 و تمام تغییرات Compose
-- [ ] ادغام r10.48 در main و تولید APK نهایی
+- [x] اصلاح هم‌ترازی سراسری DayLine؛ تست‌های jitter بدون صاعقه و صاعقه باریک در snapshot قبلی سبز شدند
+- [x] افزودن Fade-in/Fade-out مستقل موسیقی و صدای ضبط‌شده با envelope خطی
+- [x] ذخیره/بازیابی fadeها در Undo/Redo و ProjectCodec v5؛ پروژه‌های v1-v4 با مقدار پیش‌فرض صفر خوانده می‌شوند
+- [ ] سبزشدن تمام unit tests روی آخرین commit r10.49
+- [ ] سبزشدن assembleDebug با TFLite 2.17.0، SRT export و AudioProcessor جدید
+- [ ] ادغام r10.49 در main و تولید APK نهایی
 
 ## Creative Studio — موارد باز
 ### Video
