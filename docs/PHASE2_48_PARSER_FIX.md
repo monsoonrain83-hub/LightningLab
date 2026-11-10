@@ -1,0 +1,1 @@
+Correct raw regex escapes and Kotlin newline literals in the SubRip parser tests before validating r10.48.
