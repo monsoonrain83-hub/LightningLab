@@ -309,8 +309,13 @@ fun PhotoEditor(vm: MainVM) {
     var histogram by remember { mutableStateOf<PhotoHistogramData?>(null) }
     LaunchedEffect(shown, prev, vm.showOriginal, healMode, maskMode) {
         val source = if (vm.showOriginal || (healMode && !maskMode)) prev else shown ?: prev
-        histogram = if (source == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            PhotoHistogram.compute(source)
+        histogram = if (source == null) null else {
+            val safeBitmap = source.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { PhotoHistogram.compute(safeBitmap) }
+            } finally {
+                if (!safeBitmap.isRecycled) safeBitmap.recycle()
+            }
         }
     }
     LaunchedEffect(vm.params, prev, layerSnapshot, shapeSnapshot, imageSnapshot, maskSnapshot, maskInverted) {
