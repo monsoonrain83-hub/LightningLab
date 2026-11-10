@@ -39,11 +39,14 @@ class DayLineTest {
     @Test fun jitterAloneNeverLooksLikeABolt() {
         val s = run(false)
         assertTrue("one stat per frame", s.size == 40)
-        assertTrue("longest unpaired structure stays short", s.all { it.longest < FlashAnalyzer.dayLongest(0.6f) })
+        val maxLongest = s.maxOfOrNull { it.longest } ?: 0
+        println("DAYLINE_NO_BOLT maxLongest=$maxLongest stats=" + s.filter { it.longest >= FlashAnalyzer.dayLongest(0.6f) }.map { "${it.tMs}:${it.longest}:${it.unpaired}" })
+        assertTrue("longest unpaired structure stays short: max=$maxLongest", s.all { it.longest < FlashAnalyzer.dayLongest(0.6f) })
     }
 
     @Test fun thinBoltIsFoundDespiteJitter() {
         val s = run(true)
+        println("DAYLINE_WITH_BOLT frame20=${s[20].longest} unpaired=${s[20].unpaired} area=${s[20].areaFrac}; otherMax=" + s.indices.filter { it != 20 }.maxOfOrNull { s[it].longest })
         assertTrue("bolt frame longest >= 60, was ${s[20].longest}", s[20].longest >= 60)
         assertTrue("others stay short", s.indices.filter { it != 20 }.all { s[it].longest < FlashAnalyzer.dayLongest(0.6f) })
     }

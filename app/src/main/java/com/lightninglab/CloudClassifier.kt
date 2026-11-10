@@ -21,13 +21,22 @@ class CloudClassifier(private val modelFile: File) {
     companion object {
         /** Ten WMO cloud genera in the exact order emitted by tools/train_cloud_model.py. */
         val LABELS = listOf("Ac", "As", "Cb", "Cc", "Ci", "Cs", "Cu", "Ns", "Sc", "St")
-        /** Backward compatibility for previously imported CCSN models that included contrails. */
+        /** Backward compatibility for CCSN's 11 classes, including contrails. */
         val LEGACY_LABELS = listOf("Ac", "As", "Cb", "Cc", "Ci", "Cs", "Ct", "Cu", "Ns", "Sc", "St")
         const val SIZE = 224
+
+        /** The legacy CCSN export uses external RGB /255 preprocessing and a stretched resize. */
+        internal fun labelsForOutputCount(count: Int): List<String>? = when (count) {
+            LABELS.size -> LABELS
+            LEGACY_LABELS.size -> LEGACY_LABELS
+            else -> null
+        }
+        internal fun usesCcsnUnitInput(count: Int): Boolean = count == LEGACY_LABELS.size
     }
 
     private var interp: Interpreter? = null
     private var activeLabels: List<String> = LABELS
+    private var activeCcsnInput: Boolean = false
 
     /** True when a supported ten-genus or legacy eleven-class model was loaded. */
     @Synchronized
@@ -44,14 +53,10 @@ class CloudClassifier(private val modelFile: File) {
             // The training pipeline exports exactly one batch with one score per genus.
             // Checking only the last dimension could accidentally accept [N], [1,1,N], etc.
             val outputCount = outputShape.getOrNull(1)
-            val labels = when (outputCount) {
-                LABELS.size -> LABELS
-                LEGACY_LABELS.size -> LEGACY_LABELS
-                else -> null
-            }
+            val labels = labelsForOutputCount(outputCount ?: -1)
             if (!inputOk || outputShape.size != 2 || outputShape[0] != 1 || labels == null || output.dataType() != DataType.FLOAT32) {
                 it.close(); false
-            } else { activeLabels = labels; interp = it; true }
+            } else { activeLabels = labels; activeCcsnInput = usesCcsnUnitInput(outputCount ?: -1); interp = it; true }
         } catch (e: Throwable) { interp = null; false }
     }
 
@@ -66,24 +71,35 @@ class CloudClassifier(private val modelFile: File) {
         var scaled: Bitmap? = null
         var padded: Bitmap? = null
         return try {
-            // Preserve aspect ratio: training and inference both use centered grey padding.
-            val scale = minOf(SIZE.toFloat() / bmp.width, SIZE.toFloat() / bmp.height)
-            val dw = (bmp.width * scale).toInt().coerceIn(1, SIZE)
-            val dh = (bmp.height * scale).toInt().coerceIn(1, SIZE)
-            scaled = Bitmap.createScaledBitmap(bmp, dw, dh, true)
-            padded = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(padded!!)
-            canvas.drawColor(Color.rgb(128, 128, 128))
-            val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-            canvas.drawBitmap(scaled!!, ((SIZE - dw) / 2f), ((SIZE - dh) / 2f), paint)
+            // CCSN's published trainer uses cv2.resize to a square and RGB /255.
+            // The newer in-app trainer uses aspect-preserving grey padding and raw 0..255;
+            // keep both preprocessing contracts explicit and tied to the detected output shape.
+            if (activeCcsnInput) {
+                padded = Bitmap.createScaledBitmap(bmp, SIZE, SIZE, true)
+            } else {
+                val scale = minOf(SIZE.toFloat() / bmp.width, SIZE.toFloat() / bmp.height)
+                val dw = (bmp.width * scale).toInt().coerceIn(1, SIZE)
+                val dh = (bmp.height * scale).toInt().coerceIn(1, SIZE)
+                scaled = Bitmap.createScaledBitmap(bmp, dw, dh, true)
+                padded = Bitmap.createBitmap(SIZE, SIZE, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(padded!!)
+                canvas.drawColor(Color.rgb(128, 128, 128))
+                val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+                canvas.drawBitmap(scaled!!, ((SIZE - dw) / 2f), ((SIZE - dh) / 2f), paint)
+            }
 
             val px = IntArray(SIZE * SIZE)
             padded!!.getPixels(px, 0, SIZE, 0, 0, SIZE, SIZE)
             val buf = ByteBuffer.allocateDirect(4 * SIZE * SIZE * 3).order(ByteOrder.nativeOrder())
             for (p in px) {
-                buf.putFloat(((p shr 16) and 255).toFloat())
-                buf.putFloat(((p shr 8) and 255).toFloat())
-                buf.putFloat((p and 255).toFloat())
+                val red = ((p shr 16) and 255).toFloat()
+                val green = ((p shr 8) and 255).toFloat()
+                val blue = (p and 255).toFloat()
+                if (activeCcsnInput) {
+                    buf.putFloat(red / 255f); buf.putFloat(green / 255f); buf.putFloat(blue / 255f)
+                } else {
+                    buf.putFloat(red); buf.putFloat(green); buf.putFloat(blue)
+                }
             }
             buf.rewind()
             val out = Array(1) { FloatArray(activeLabels.size) }
@@ -101,7 +117,7 @@ class CloudClassifier(private val modelFile: File) {
         } finally {
             // The source bitmap belongs to the caller; only temporary images are recycled.
             if (scaled != null && scaled !== bmp && !scaled!!.isRecycled) scaled!!.recycle()
-            if (padded != null && !padded!!.isRecycled) padded!!.recycle()
+            if (padded != null && padded !== scaled && padded !== bmp && !padded!!.isRecycled) padded!!.recycle()
         }
     }
 }
