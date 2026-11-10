@@ -1,0 +1,1 @@
+Add the explicit Compose LocalDensity import required to convert timeline width from dp to px for drag/trim calculations.

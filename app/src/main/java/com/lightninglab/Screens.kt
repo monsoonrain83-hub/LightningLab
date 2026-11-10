@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -1219,11 +1220,48 @@ private fun VideoTimelineTracks(
                 Text("FX", Modifier.width(58.dp), style = MaterialTheme.typography.labelSmall, color = Color(0xFFD6A7FF))
                 BoxWithConstraints(Modifier.weight(1f).height(27.dp).clip(RoundedCornerShape(6.dp)).background(Storm.surfaceTop)) {
                     val w = maxWidth
-                    Box(Modifier.offset(x = w * startFraction).width((w * widthFraction).coerceAtLeast(18.dp)).fillMaxHeight()
-                        .clip(RoundedCornerShape(5.dp)).background(if (vm.selectedVideoEffectId == effect.id) Color(0xFF8052A8) else Color(0xFF463A68))
-                        .clickable { vm.selectedVideoEffectId = effect.id }, contentAlignment = Alignment.Center) {
-                        Text(stringResource(VideoFx.filters.getOrNull(effect.filterIndex)?.nameRes ?: R.string.filter_none),
-                            color = Color.White, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                    val timelineWidthPx = with(LocalDensity.current) { w.toPx() }.coerceAtLeast(1f)
+                    val clipWidth = (w * widthFraction).coerceAtLeast(18.dp)
+                    Box(Modifier.offset(x = w * startFraction).width(clipWidth).fillMaxHeight()
+                        .clip(RoundedCornerShape(5.dp)).background(if (vm.selectedVideoEffectId == effect.id) Color(0xFF8052A8) else Color(0xFF463A68))) {
+                        Box(Modifier.fillMaxSize().pointerInput(effect.id, durationMs) {
+                            var dragTotal = 0f
+                            detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedVideoEffectId = effect.id },
+                                onDrag = { change, amount ->
+                                    change.consume(); dragTotal += amount.x
+                                    val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
+                                    vm.updateEffectClip(effect.id, effect.startMs + delta, effect.endMs + delta, recordHistory = false)
+                                }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                        }.clickable { vm.selectedVideoEffectId = effect.id }, contentAlignment = Alignment.Center) {
+                            Text(stringResource(VideoFx.filters.getOrNull(effect.filterIndex)?.nameRes ?: R.string.filter_none),
+                                color = Color.White, maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                        }
+                        Box(Modifier.align(Alignment.CenterStart).width(9.dp).fillMaxHeight()
+                            .pointerInput(effect.id, durationMs) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedVideoEffectId = effect.id },
+                                    onDrag = { change, amount ->
+                                        change.consume(); dragTotal += amount.x
+                                        val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
+                                        vm.updateEffectClip(effect.id, effect.startMs + delta, effect.endMs, recordHistory = false)
+                                    }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                            }) {
+                            Box(Modifier.align(Alignment.Center).width(3.dp).fillMaxHeight(0.65f).clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.8f)))
+                        }
+                        Box(Modifier.align(Alignment.CenterEnd).width(9.dp).fillMaxHeight()
+                            .pointerInput(effect.id, durationMs) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedVideoEffectId = effect.id },
+                                    onDrag = { change, amount ->
+                                        change.consume(); dragTotal += amount.x
+                                        val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
+                                        vm.updateEffectClip(effect.id, effect.startMs, effect.endMs + delta, recordHistory = false)
+                                    }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                            }) {
+                            Box(Modifier.align(Alignment.Center).width(3.dp).fillMaxHeight(0.65f).clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.8f)))
+                        }
                     }
                 }
                 TextButton(onClick = { vm.removeEffectClip(effect.id) }) { Text("×", color = Storm.muted) }
@@ -1232,8 +1270,8 @@ private fun VideoTimelineTracks(
                 val start = effect.startMs.coerceIn(0L, durationMs - 1L)
                 val end = effect.endMs.coerceIn(start + 1L, durationMs)
                 Text("بازه زمانی فیلتر: ${fmt(start)} تا ${fmt(end)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
-                RangeSlider(value = start.toFloat()..end.toFloat(), onValueChange = { vm.updateEffectClip(effect.id, it.start.toLong(), it.endInclusive.toLong()) },
-                    valueRange = 0f..durationMs.toFloat())
+                RangeSlider(value = start.toFloat()..end.toFloat(), onValueChange = { vm.updateEffectClip(effect.id, it.start.toLong(), it.endInclusive.toLong(), recordHistory = false) },
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..durationMs.toFloat())
             }
         }
         if (vm.overlayText.isNotBlank()) {
@@ -1265,21 +1303,48 @@ private fun VideoTimelineTracks(
                     style = MaterialTheme.typography.labelSmall, color = when (clip.kind) { "TEXT" -> Color(0xFF73D6E8); "IMAGE" -> Color(0xFFB7A0FF); else -> Color(0xFF8DD9A7) })
                 BoxWithConstraints(Modifier.weight(1f).height(27.dp).clip(RoundedCornerShape(6.dp)).background(Storm.surfaceTop)) {
                     val totalWidth = maxWidth
+                    val timelineWidthPx = with(LocalDensity.current) { totalWidth.toPx() }.coerceAtLeast(1f)
                     Box(Modifier.offset(x = totalWidth * startFraction).width((totalWidth * widthFraction).coerceAtLeast(18.dp))
                         .fillMaxHeight().clip(RoundedCornerShape(5.dp))
-                        .background(if (vm.selectedOverlayClipId == clip.id) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))
-                        .pointerInput(clip.id, durationMs) {
+                        .background(if (vm.selectedOverlayClipId == clip.id) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))) {
+                        Box(Modifier.fillMaxSize().pointerInput(clip.id, durationMs) {
                             var dragTotal = 0f
                             detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
                                 onDrag = { change, amount ->
                                     change.consume(); dragTotal += amount.x
-                                    val delta = (dragTotal / size.width.toFloat().coerceAtLeast(1f) * (clip.endMs - clip.startMs)).toLong()
+                                    val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
                                     vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
                                 }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                        }.clickable { vm.selectedOverlayClipId = clip.id }, contentAlignment = Alignment.Center) {
+                            Text(clip.content, Modifier.padding(horizontal = 8.dp), maxLines = 1, color = Color.White,
+                                style = MaterialTheme.typography.labelSmall)
                         }
-                        .clickable { vm.selectedOverlayClipId = clip.id }, contentAlignment = Alignment.Center) {
-                        Text(clip.content, Modifier.padding(horizontal = 5.dp), maxLines = 1, color = Color.White,
-                            style = MaterialTheme.typography.labelSmall)
+                        Box(Modifier.align(Alignment.CenterStart).width(9.dp).fillMaxHeight()
+                            .pointerInput(clip.id, durationMs) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
+                                    onDrag = { change, amount ->
+                                        change.consume(); dragTotal += amount.x
+                                        val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
+                                        vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs, recordHistory = false)
+                                    }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                            }) {
+                            Box(Modifier.align(Alignment.Center).width(3.dp).fillMaxHeight(0.65f).clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.8f)))
+                        }
+                        Box(Modifier.align(Alignment.CenterEnd).width(9.dp).fillMaxHeight()
+                            .pointerInput(clip.id, durationMs) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
+                                    onDrag = { change, amount ->
+                                        change.consume(); dragTotal += amount.x
+                                        val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
+                                        vm.updateOverlayClip(clip.id, clip.startMs, clip.endMs + delta, recordHistory = false)
+                                    }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
+                            }) {
+                            Box(Modifier.align(Alignment.Center).width(3.dp).fillMaxHeight(0.65f).clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.8f)))
+                        }
                     }
                 }
                 TextButton(onClick = { vm.removeOverlayClip(clip.id) }) { Text("×", color = Storm.muted) }
@@ -1288,11 +1353,11 @@ private fun VideoTimelineTracks(
                 val safeStart = clip.startMs.coerceIn(0L, durationMs - 1L)
                 val safeEnd = clip.endMs.coerceIn(safeStart + 1L, durationMs)
                 Text("شروع: ${fmt(safeStart)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
-                Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd) },
-                    valueRange = 0f..(durationMs - 1L).toFloat())
+                Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd, recordHistory = false) },
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..(durationMs - 1L).toFloat())
                 Text("پایان: ${fmt(safeEnd)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
-                Slider(value = safeEnd.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, safeStart, it.toLong()) },
-                    valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat())
+                Slider(value = safeEnd.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, safeStart, it.toLong(), recordHistory = false) },
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat())
                 Divider(color = Storm.hairline)
                 Text("فریم‌های کلیدی حرکت و شفافیت", style = MaterialTheme.typography.labelMedium, color = Storm.arc)
                 Text("زمان فریم: ${fmt(keyTime.toLong().coerceIn(safeStart, safeEnd))}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
