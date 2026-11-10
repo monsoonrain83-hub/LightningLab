@@ -446,6 +446,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val ids = selectedOverlayClipIds
         if (ids.size < 2 || videoOverlayClips.any { it.id in ids && it.locked }) return
         videoOverlayClips.removeAll { it.id in ids }
+        ids.forEach { videoOverlayBitmaps.remove(it) }
         selectedOverlayClipIds = emptySet()
         selectedOverlayClipId = null
         pushVideoHistory()
