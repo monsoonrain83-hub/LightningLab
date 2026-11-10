@@ -11,7 +11,7 @@ import kotlin.math.sqrt
  * clips, see docs/REAL_CLIP_FINDINGS.md).
  *
  * Streaming: frames (luma, ~320 px wide) are pushed in presentation order. For each frame:
- *  1. global translation to the previous frame is tracked (NCC on half-resolution gradients, +-5 px, sub-pixel),
+ *  1. global translation to the previous frame is tracked (NCC on half-resolution luma, +-5 px, sub-pixel),
  *     giving every frame a cumulative position, so any two nearby frames can be aligned;
  *  2. frames within +-[winMs] are warped onto the current frame (bilinear); per side the pixel-wise MINIMUM is the
  *     "background", and d = cur - max(minBefore, minAfter): only pixels brighter than BOTH sides survive.
@@ -26,7 +26,7 @@ import kotlin.math.sqrt
 class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 100L) {
     class Stat(val tMs: Long, val areaFrac: Float, val unpaired: Float, val longest: Int)
 
-    private class Fr(val t: Long, val l: FloatArray, val g: FloatArray) { var px = 0f; var py = 0f }
+    private class Fr(val t: Long, val l: FloatArray, val s: FloatArray) { var px = 0f; var py = 0f }
 
     private val n = w * h
     private val hw = w / 2
@@ -49,18 +49,14 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
         const val BORDER = 8
     }
 
-    private fun halfGrad(l: FloatArray): FloatArray {
-        val sm = FloatArray(hw * hh)
+    /** 2x2 mean luma retains signed texture; absolute gradients made repeated cloud edges ambiguous. */
+    private fun halfLuma(l: FloatArray): FloatArray {
+        val small = FloatArray(hw * hh)
         for (y in 0 until hh) for (x in 0 until hw) {
             val i = 2 * y * w + 2 * x
-            sm[y * hw + x] = 0.25f * (l[i] + l[i + 1] + l[i + w] + l[i + w + 1])
+            small[y * hw + x] = 0.25f * (l[i] + l[i + 1] + l[i + w] + l[i + w + 1])
         }
-        val g = FloatArray(hw * hh)
-        for (y in 1 until hh - 1) for (x in 1 until hw - 1) {
-            val i = y * hw + x
-            g[i] = abs(sm[i + 1] - sm[i - 1]) + abs(sm[i + hw] - sm[i - hw])
-        }
-        return g
+        return small
     }
 
     /** Returns [dx, dy] in half-resolution pixels such that cur(x+dx, y+dy) ~ prev(x, y). */
@@ -116,9 +112,9 @@ class DayLine(private val w: Int, private val h: Int, private val winMs: Long = 
 
     fun push(tMs: Long, luma: FloatArray) {
         if (luma.size != n) return
-        val f = Fr(tMs, luma, halfGrad(luma))
+        val f = Fr(tMs, luma, halfLuma(luma))
         prev?.let { p ->
-            val s = trackShift(p.g, f.g)
+            val s = trackShift(p.s, f.s)
             f.px = p.px + 2f * s[0]; f.py = p.py + 2f * s[1]
         }
         q.add(f); prev = f

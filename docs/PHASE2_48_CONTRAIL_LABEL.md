@@ -1,0 +1,1 @@
+Clarify the CCSN Contrail (Ct) class in reports as a separate dataset label, not a natural WMO genus. Add contract tests and update the AI roadmap for the imported 11-class model support.

@@ -8,7 +8,7 @@ This file distinguishes implemented runtime behavior from planned work. A taxono
 |---|---|---|
 | Offline heuristic cloud-cover/texture analysis | Implemented | Heuristic only; not a WMO genus classifier |
 | Frame-quality warnings | Implemented | RGB heuristics; warns about likely ground/vegetation and strong warm cast |
-| Optional on-device CCSN genus model | Implemented (runtime) | Requires a separately trained/imported `.tflite` file |
+| Optional on-device CCSN genus model | Implemented (runtime) | Supports the 10-genus in-app contract and user-imported 11-class CCSN model; CCSN requires TFLite 2.17+, its own RGB /255 resize contract, and remains an unvalidated pilot |
 | Model tensor validation | Implemented | NHWC RGB float32, output count, dimensions, data types |
 | Aspect-ratio-preserving model preprocessing | Implemented | Centered neutral padding, matching training script |
 | Safe model replacement | Implemented | Candidate validation and rollback to prior model |

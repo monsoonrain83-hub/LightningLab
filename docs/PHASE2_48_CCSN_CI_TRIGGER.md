@@ -1,0 +1,1 @@
+Trigger CI after CCSN runtime compatibility and detailed JVM test-report capture changes.

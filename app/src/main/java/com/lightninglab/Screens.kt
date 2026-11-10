@@ -658,6 +658,12 @@ fun VideoEditor(vm: MainVM) {
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) { vm.updateMusicSource(u); vm.musicName = null }
     }
+    val pickSubRip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) vm.importSubRip(u)
+    }
+    val saveSubRip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-subrip")) { u ->
+        if (u != null) vm.exportSubRip(u)
+    }
     val pickVideoImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.addVideoImageClip(u)
     }
@@ -924,6 +930,13 @@ fun VideoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volOrig = it }
                                     Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volMusic = it }
                                     Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volVoice = it }
+                                    Divider(color = Storm.outline, modifier = Modifier.padding(vertical = 8.dp))
+                                    Text("محو تدریجی موسیقی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Param("شروع موسیقی (ثانیه)", vm.fadeInMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInMusicMs = (it * 1000f).toLong() }
+                                    Param("پایان موسیقی (ثانیه)", vm.fadeOutMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeOutMusicMs = (it * 1000f).toLong() }
+                                    Text("محو تدریجی صدای ضبط‌شده", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Param("شروع صدا (ثانیه)", vm.fadeInVoiceMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInVoiceMs = (it * 1000f).toLong() }
+                                    Param("پایان صدا (ثانیه)", vm.fadeOutVoiceMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeOutVoiceMs = (it * 1000f).toLong() }
                                     Text(stringResource(R.string.vol_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                 }
                                 VTool.FILTER -> {
@@ -934,6 +947,17 @@ fun VideoEditor(vm: MainVM) {
                                     }
                                 }
                                 VTool.TEXT -> {
+                                    OutlinedButton(onClick = { pickSubRip.launch(arrayOf("application/x-subrip", "text/plain", "application/octet-stream")) },
+                                        enabled = vm.videoUri != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                        Text("واردکردن زیرنویس SRT")
+                                    }
+                                    OutlinedButton(onClick = { saveSubRip.launch("captions.srt") },
+                                        enabled = vm.videoOverlayClips.any { it.kind == "TEXT" }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("خروجی زیرنویس SRT")
+                                    }
+                                    if (vm.subtitleImportStatus.isNotBlank()) {
+                                        Text(vm.subtitleImportStatus, style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                                    }
                                     OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
                                         label = { Text(stringResource(R.string.overlay_text)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp),

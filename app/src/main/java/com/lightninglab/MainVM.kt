@@ -110,6 +110,7 @@ private data class VideoEditorSnapshot(
     val muteOriginal: Boolean, val brightness: Float, val contrast: Float, val rotate: Int,
     val flipH: Boolean, val flipV: Boolean, val crop: Float, val speed: Float,
     val filter: Int, val music: Uri?, val voice: Uri?, val volOrig: Float, val volMusic: Float, val volVoice: Float,
+    val fadeInMusicMs: Long, val fadeOutMusicMs: Long, val fadeInVoiceMs: Long, val fadeOutVoiceMs: Long,
     val overlayText: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
     val sticker: String?, val stickerSize: Int, val stickerPos: Int
 )
@@ -340,6 +341,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         segments.toList(), videoOverlayClips.toList(), videoEffectClips.toList(), videoMarkers.toList(), videoOverlayBitmaps.toMap(),
         selectedOverlayClipId, selectedVideoEffectId, muteOriginal, vBrightness, vContrast, vRotate,
         vFlipH, vFlipV, vCrop, vSpeed, vFilter, music, voice, volOrig, volMusic, volVoice,
+        fadeInMusicMs, fadeOutMusicMs, fadeInVoiceMs, fadeOutVoiceMs,
         overlayText, textColor, textSize, textPos, textBg, sticker, stickerSize, stickerPos
     )
     private fun updateVideoHistoryFlags() {
@@ -382,6 +384,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             if (music != s.music) { music = s.music; s.music?.let { analyzeWaveform(it, false) } ?: run { musicWaveform = emptyList() } }
             if (voice != s.voice) { voice = s.voice; s.voice?.let { analyzeWaveform(it, true) } ?: run { voiceWaveform = emptyList() } }
             volOrig = s.volOrig; volMusic = s.volMusic; volVoice = s.volVoice
+            fadeInMusicMs = s.fadeInMusicMs; fadeOutMusicMs = s.fadeOutMusicMs
+            fadeInVoiceMs = s.fadeInVoiceMs; fadeOutVoiceMs = s.fadeOutVoiceMs
             overlayText = s.overlayText; textColor = s.textColor; textSize = s.textSize; textPos = s.textPos; textBg = s.textBg
             sticker = s.sticker; stickerSize = s.stickerSize; stickerPos = s.stickerPos
             segReset(); segPush(); selSeg = -1
@@ -471,6 +475,72 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val start = playheadMs.coerceIn(0L, total - 1L)
         val end = (start + 5_000L).coerceAtMost(total).coerceAtLeast(start + 1L)
         return start to end
+    }
+
+
+    /** Exports all current text overlay clips as a standard .srt sidecar file. */
+    fun exportSubRip(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val cues = videoOverlayClips.filter { it.kind == "TEXT" }
+                    .map { SubtitleCue(it.startMs, it.endMs, it.content) }
+                if (cues.isEmpty()) {
+                    subtitleImportStatus = "هیچ لایهٔ متنی برای خروجی SRT وجود ندارد."
+                    return@launch
+                }
+                val srt = SubRip.serialize(cues)
+                withContext(Dispatchers.IO) {
+                    val output = app.contentResolver.openOutputStream(uri, "wt")
+                        ?: throw java.io.IOException("subtitle output cannot be opened")
+                    output.bufferedWriter(Charsets.UTF_8).use { it.write(srt) }
+                }
+                subtitleImportStatus = "${cues.size} زیرنویس در فایل SRT ذخیره شد."
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                val reason = e.message ?: "SRT"
+                subtitleImportStatus = "خطا در ذخیرهٔ SRT: $reason"
+            }
+        }
+    }
+
+    /** Imports timed SubRip captions as ordinary editable/exportable text overlay clips. */
+    var subtitleImportStatus by mutableStateOf("")
+    fun importSubRip(uri: Uri) {
+        if (busy) return
+        viewModelScope.launch {
+            try {
+                val cues = withContext(Dispatchers.IO) {
+                    val stream = app.contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException("subtitle file cannot be opened")
+                    stream.bufferedReader(Charsets.UTF_8).use { SubRip.parse(it.readText()) }
+                }
+                val total = ((if (segments.isEmpty()) videoDur else
+                    segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) /
+                    vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+                val imported = cues.mapNotNull { cue ->
+                    if (cue.startMs >= total) return@mapNotNull null
+                    val start = cue.startMs.coerceAtLeast(0L)
+                    val end = cue.endMs.coerceAtMost(total)
+                    if (end - start < TimelineMath.MIN_CLIP_MS) return@mapNotNull null
+                    VideoOverlayClip(
+                        nextVideoOverlayId++, "TEXT", cue.text, start, end,
+                        0xFFFFFFFF.toInt(), 1, 2, true,
+                        listOf(VideoOverlayKeyframe(start, 1f, 2), VideoOverlayKeyframe(end, 1f, 2))
+                    )
+                }
+                if (imported.isEmpty()) {
+                    subtitleImportStatus = "زیرنویس معتبر و هم‌زمان با طول ویدئو پیدا نشد."
+                    return@launch
+                }
+                videoOverlayClips.addAll(imported)
+                selectedOverlayClipId = imported.last().id
+                subtitleImportStatus = "${imported.size} زیرنویس وارد تایم‌لاین شد."
+                pushVideoHistory()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                subtitleImportStatus = "خطا در خواندن زیرنویس: ${e.message ?: "SRT"}"
+            }
+        }
     }
 
     fun addTextClip() {
@@ -564,6 +634,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var volOrig by mutableStateOf(1f)
     var volMusic by mutableStateOf(1f)
     var volVoice by mutableStateOf(1f)
+    var fadeInMusicMs by mutableStateOf(0L)
+    var fadeOutMusicMs by mutableStateOf(0L)
+    var fadeInVoiceMs by mutableStateOf(0L)
+    var fadeOutVoiceMs by mutableStateOf(0L)
     var videoW by mutableStateOf(0)
     var videoH by mutableStateOf(0)
     var vFilter by mutableStateOf(0)
@@ -1522,6 +1596,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val effectClipsSnapshot = videoEffectClips.toList()
         val markerSnapshot = videoMarkers.toList()
         val overlayBitmapsSnapshot = videoOverlayBitmaps.toMap()
+        val fadeInMusicSnapshot = fadeInMusicMs
+        val fadeOutMusicSnapshot = fadeOutMusicMs
+        val fadeInVoiceSnapshot = fadeInVoiceMs
+        val fadeOutVoiceSnapshot = fadeOutVoiceMs
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -1557,7 +1635,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
                         vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
                         sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice,
-                        overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot)), Charsets.UTF_8)
+                        overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot,
+                        fadeInMusicSnapshot, fadeOutMusicSnapshot, fadeInVoiceSnapshot, fadeOutVoiceSnapshot)), Charsets.UTF_8)
                     if (!manifest.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize project manifest")
                     // Publish only a complete project. A crash before this point leaves a hidden staging folder.
                     if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot publish completed project")
@@ -1595,6 +1674,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             videoEffectClips.clear(); videoEffectClips.addAll(p.effectClips.map { VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs) })
             nextVideoEffectId = (videoEffectClips.maxOfOrNull { it.id } ?: 0L) + 1L
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
+            fadeInMusicMs = p.fadeInMusicMs; fadeOutMusicMs = p.fadeOutMusicMs
+            fadeInVoiceMs = p.fadeInVoiceMs; fadeOutVoiceMs = p.fadeOutVoiceMs
             screen = Screen.VIDEO
             resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
@@ -1725,12 +1806,20 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
                 val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
-                for ((au, vol) in listOfNotNull(music?.let { it to volMusic }, voice?.let { it to volVoice })) {
-                    val end = min(total, audioDur(au, total))
+                val audioTracks = listOfNotNull(
+                    music?.let { Triple(it, volMusic, fadeInMusicMs to fadeOutMusicMs) },
+                    voice?.let { Triple(it, volVoice, fadeInVoiceMs to fadeOutVoiceMs) }
+                )
+                for ((au, vol, fades) in audioTracks) {
+                    val end = min(total, audioDur(au, total)).coerceAtLeast(1L)
                     val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
+                    val needsEnvelope = vol != 1f || fades.first > 0L || fades.second > 0L
+                    val processors = if (needsEnvelope) listOf<AudioProcessor>(
+                        FadeVolumeProcessor(vol, end, fades.first.coerceAtMost(end), fades.second.coerceAtMost(end))
+                    ) else emptyList()
                     seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true)
-                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()))
+                        .setEffects(Effects(processors, emptyList())).build()))
                 }
                 val done = CompletableDeferred<Throwable?>()
                 val t = Transformer.Builder(app)

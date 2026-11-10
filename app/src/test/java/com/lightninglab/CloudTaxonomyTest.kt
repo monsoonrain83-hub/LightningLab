@@ -12,6 +12,13 @@ class CloudTaxonomyTest {
         assertTrue(natural.containsAll(listOf("Ci", "Cc", "Cs", "Ac", "As", "Ns", "Sc", "St", "Cu", "Cb")))
     }
 
+    @Test fun contrailIsNotReportedAsANaturalWmoGenus() {
+        assertTrue(CloudInfo.isNaturalGenus("Ci"))
+        assertFalse(CloudInfo.isNaturalGenus("Ct"))
+        assertTrue(CloudInfo.isDatasetAuxiliaryClass("Ct"))
+        assertTrue(CloudInfo.genusName("Ct").contains("نه جنس WMO"))
+    }
+
     @Test fun speciesAreSeparatedFromVarieties() {
         assertTrue("castellanus" in CloudInfo.speciesByGenus.getValue("Ac"))
         assertTrue("undulatus" in CloudInfo.varieties)
@@ -19,7 +26,8 @@ class CloudTaxonomyTest {
     }
 
     @Test fun supplementaryFeaturesIncludeImportantConvectiveStructures() {
-        assertTrue(CloudInfo.supplementary.containsAll(listOf("arcus", "asperitas", "virga", "incus", "mamma", "pileus", "tuba")))
+        assertTrue(CloudInfo.supplementary.containsAll(listOf("arcus", "asperitas", "virga", "incus", "mamma", "tuba")))
+        assertTrue(CloudInfo.accessoryClouds.contains("pileus"))
         assertEquals("Mamma (Mammatus)", CloudInfo.displayFeature("mamma"))
     }
 }

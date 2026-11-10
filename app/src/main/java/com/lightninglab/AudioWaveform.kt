@@ -9,9 +9,34 @@ import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.max
 
+/** Small synchronized LRU for decoded PCM peak envelopes. */
+internal class WaveformCache(private val capacity: Int = 12) {
+    private val values = LinkedHashMap<String, List<Float>>(16, 0.75f, true)
+    @Synchronized fun get(key: String): List<Float>? = values[key]
+    @Synchronized fun put(key: String, samples: List<Float>) {
+        values[key] = samples.toList()
+        while (values.size > capacity.coerceAtLeast(1)) values.remove(values.keys.first())
+    }
+    @Synchronized fun clear() = values.clear()
+}
+
 /** Decodes an audio URI on a worker thread and returns normalized peak samples for a real waveform. */
 object AudioWaveform {
+    private val cache = WaveformCache(12)
+
     fun decode(context: Context, uri: Uri, bins: Int = 420): List<Float> {
+        val safeBins = bins.coerceIn(32, 2048)
+        val fileStamp = if (uri.scheme == "file") try {
+            java.io.File(uri.path!!).let { "|" + it.length() + "|" + it.lastModified() }
+        } catch (_: Exception) { "" } else ""
+        val key = uri.toString() + fileStamp + "|" + safeBins
+        cache.get(key)?.let { return it }
+        val decoded = decodeUncached(context, uri, safeBins)
+        cache.put(key, decoded)
+        return decoded
+    }
+
+    private fun decodeUncached(context: Context, uri: Uri, bins: Int): List<Float> {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
         try {
