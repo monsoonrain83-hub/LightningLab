@@ -338,6 +338,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val videoHistory = ArrayList<VideoEditorSnapshot>()
     private var videoHistoryIndex = -1
     private var restoringVideoHistory = false
+    private var timelineGestureDirty = false
     private fun captureVideoSnapshot() = VideoEditorSnapshot(
         segments.toList(), videoOverlayClips.toList(), videoEffectClips.toList(), videoMarkers.toList(), videoOverlayBitmaps.toMap(),
         selectedOverlayClipId, selectedVideoEffectId, muteOriginal, vBrightness, vContrast, vRotate,
@@ -475,7 +476,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val snappedEnd = TimelineMath.snapTime(end, anchors)
         val b = snappedEnd.coerceIn(a + minimum, total)
         val updated = videoEffectClips[i].copy(startMs = a, endMs = b)
-        if (updated != videoEffectClips[i]) { videoEffectClips[i] = updated; if (recordHistory) pushVideoHistory() }
+        if (updated != videoEffectClips[i]) {
+            videoEffectClips[i] = updated
+            if (recordHistory) pushVideoHistory() else timelineGestureDirty = true
+        }
     }
     fun removeEffectClip(id: Long) {
         if (videoEffectClips.any { it.id == id && it.locked }) return
@@ -623,9 +627,17 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val snappedEnd = TimelineMath.snapTime(end, anchors)
         val b = snappedEnd.coerceIn(a + 1L, limit)
         val updated = videoOverlayClips[i].copy(startMs = a, endMs = b, keyframes = videoOverlayClips[i].keyframes.map { it.copy(timeMs = it.timeMs.coerceIn(a, b)) }.distinctBy { it.timeMs }.sortedBy { it.timeMs })
-        if (updated != videoOverlayClips[i]) { videoOverlayClips[i] = updated; if (recordHistory) pushVideoHistory() }
+        if (updated != videoOverlayClips[i]) {
+            videoOverlayClips[i] = updated
+            if (recordHistory) pushVideoHistory() else timelineGestureDirty = true
+        }
     }
-    fun finishVideoTimelineGesture() = pushVideoHistory()
+    fun finishVideoTimelineGesture() {
+        if (timelineGestureDirty) {
+            timelineGestureDirty = false
+            pushVideoHistory()
+        }
+    }
     fun updateSelectedOverlayFromControls() {
         val id = selectedOverlayClipId ?: return
         val i = videoOverlayClips.indexOfFirst { it.id == id }; if (i < 0 || videoOverlayClips[i].locked) return

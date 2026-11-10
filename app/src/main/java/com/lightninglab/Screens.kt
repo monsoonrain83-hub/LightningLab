@@ -996,7 +996,7 @@ fun VideoEditor(vm: MainVM) {
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.text_bg), style = MaterialTheme.typography.bodyMedium)
                                     }
                                     Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addTextClip() },
-                                        enabled = (vm.selectedOverlayClipId != null || vm.overlayText.isNotBlank()) && vm.videoDur > 0L) {
+                                        enabled = (vm.selectedOverlayClipId?.let { id -> vm.videoOverlayClips.firstOrNull { it.id == id }?.locked != true } ?: vm.overlayText.isNotBlank()) && vm.videoDur > 0L) {
                                         Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن متن به تایم‌لاین")
                                     }
                                 }
@@ -1016,7 +1016,7 @@ fun VideoEditor(vm: MainVM) {
                                     ChoiceRow(listOf(R.string.pos_top, R.string.pos_center, R.string.pos_bottom).map { stringResource(it) },
                                         vm.stickerPos) { vm.stickerPos = it }
                                     Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addStickerClip() },
-                                        enabled = (vm.sticker != null || vm.selectedOverlayClipId != null) && vm.videoDur > 0L) {
+                                        enabled = (vm.selectedOverlayClipId?.let { id -> vm.videoOverlayClips.firstOrNull { it.id == id }?.locked != true } ?: (vm.sticker != null)) && vm.videoDur > 0L) {
                                         Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن استیکر به تایم‌لاین")
                                     }
                                 }
