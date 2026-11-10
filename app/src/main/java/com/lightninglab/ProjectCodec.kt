@@ -43,8 +43,8 @@ object ProjectCodec {
         o.put("text", p.text).put("tc", p.textColor).put("ts", p.textSize).put("tp", p.textPos).put("tb", p.textBg)
         o.put("stk", p.sticker ?: "").put("ss", p.stickerSize).put("sp", p.stickerPos)
         o.put("vo", p.volOrig.toDouble()).put("vm", p.volMusic.toDouble()).put("vv", p.volVoice.toDouble())
-        o.put("fim", p.fadeInMusicMs.coerceAtLeast(0L)).put("fom", p.fadeOutMusicMs.coerceAtLeast(0L))
-        o.put("fiv", p.fadeInVoiceMs.coerceAtLeast(0L)).put("fov", p.fadeOutVoiceMs.coerceAtLeast(0L))
+        o.put("fim", p.fadeInMusicMs.coerceIn(0L, 5_000L)).put("fom", p.fadeOutMusicMs.coerceIn(0L, 5_000L))
+        o.put("fiv", p.fadeInVoiceMs.coerceIn(0L, 5_000L)).put("fov", p.fadeOutVoiceMs.coerceIn(0L, 5_000L))
         o.put("effectClips", JSONArray().also { a -> p.effectClips.forEach { e ->
             a.put(JSONObject().put("id", e.id).put("filter", e.filterIndex).put("s", e.startMs).put("e", e.endMs))
         } })
@@ -93,8 +93,8 @@ object ProjectCodec {
                 (0 until (o.optJSONArray("markers")?.length().orZero())).mapNotNull { i ->
                     o.optJSONArray("markers")?.optLong(i)?.takeIf { it >= 0L }
                 }.distinct().sorted(),
-                o.optLong("fim", 0L).coerceAtLeast(0L), o.optLong("fom", 0L).coerceAtLeast(0L),
-                o.optLong("fiv", 0L).coerceAtLeast(0L), o.optLong("fov", 0L).coerceAtLeast(0L))
+                o.optLong("fim", 0L).coerceIn(0L, 5_000L), o.optLong("fom", 0L).coerceIn(0L, 5_000L),
+                o.optLong("fiv", 0L).coerceIn(0L, 5_000L), o.optLong("fov", 0L).coerceIn(0L, 5_000L))
         }
     } catch (e: Exception) { null }
 }

@@ -1595,6 +1595,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val effectClipsSnapshot = videoEffectClips.toList()
         val markerSnapshot = videoMarkers.toList()
         val overlayBitmapsSnapshot = videoOverlayBitmaps.toMap()
+        val fadeInMusicSnapshot = fadeInMusicMs
+        val fadeOutMusicSnapshot = fadeOutMusicMs
+        val fadeInVoiceSnapshot = fadeInVoiceMs
+        val fadeOutVoiceSnapshot = fadeOutVoiceMs
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -1630,7 +1634,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         name, "main.mp4", videoDur, segs, mu, vo, muteOriginal, vFilter, vSpeed, vBrightness, vContrast,
                         vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
                         sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice,
-                        overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot)), Charsets.UTF_8)
+                        overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot,
+                        fadeInMusicSnapshot, fadeOutMusicSnapshot, fadeInVoiceSnapshot, fadeOutVoiceSnapshot)), Charsets.UTF_8)
                     if (!manifest.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize project manifest")
                     // Publish only a complete project. A crash before this point leaves a hidden staging folder.
                     if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot publish completed project")
@@ -1668,6 +1673,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             videoEffectClips.clear(); videoEffectClips.addAll(p.effectClips.map { VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs) })
             nextVideoEffectId = (videoEffectClips.maxOfOrNull { it.id } ?: 0L) + 1L
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
+            fadeInMusicMs = p.fadeInMusicMs; fadeOutMusicMs = p.fadeOutMusicMs
+            fadeInVoiceMs = p.fadeInVoiceMs; fadeOutVoiceMs = p.fadeOutVoiceMs
             screen = Screen.VIDEO
             resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
