@@ -6,13 +6,13 @@ data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
 /** Defensive, dependency-free SRT parser. Invalid blocks are ignored; valid cues are sorted by time. */
 object SubRip {
     private val timeLine = Regex(
-        """^\\s*(\\d{1,2}):(\\d{2}):(\\d{2})[,.](\\d{1,3})\\s*-->\\s*(\\d{1,2}):(\\d{2}):(\\d{2})[,.](\\d{1,3})(?:\\s+.*)?$"""
+        """^\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})(?:\s+.*)?$"""
     )
 
     fun parse(source: String): List<SubtitleCue> {
         val normalized = source.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
         val cues = ArrayList<SubtitleCue>()
-        for (block in normalized.split(Regex("\\n[ \\t]*\\n+"))) {
+        for (block in normalized.split(Regex("\n[ \t]*\n+"))) {
             val lines = block.lines()
             val timeIndex = lines.indexOfFirst { timeLine.matches(it.trim()) }
             if (timeIndex < 0) continue
@@ -23,7 +23,7 @@ object SubRip {
             val text = lines.drop(timeIndex + 1).joinToString("\n").trim()
                 .replace(Regex("<[^>]*>"), "")
                 .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-                .replace("&quot;", "\\\"").replace("&apos;", "'")
+                .replace("&quot;", "\"").replace("&apos;", "'")
             if (text.isNotBlank()) cues += SubtitleCue(start, end, text)
         }
         return cues.sortedWith(compareBy<SubtitleCue> { it.startMs }.thenBy { it.endMs })
