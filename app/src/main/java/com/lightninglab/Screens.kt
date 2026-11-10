@@ -658,6 +658,9 @@ fun VideoEditor(vm: MainVM) {
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) { vm.updateMusicSource(u); vm.musicName = null }
     }
+    val pickSubRip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) vm.importSubRip(u)
+    }
     val pickVideoImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { u ->
         if (u != null) vm.addVideoImageClip(u)
     }
@@ -934,6 +937,13 @@ fun VideoEditor(vm: MainVM) {
                                     }
                                 }
                                 VTool.TEXT -> {
+                                    OutlinedButton(onClick = { pickSubRip.launch(arrayOf("application/x-subrip", "text/plain", "application/octet-stream")) },
+                                        enabled = vm.videoUri != null && !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                        Text("واردکردن زیرنویس SRT")
+                                    }
+                                    if (vm.subtitleImportStatus.isNotBlank()) {
+                                        Text(vm.subtitleImportStatus, style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                                    }
                                     OutlinedTextField(value = vm.overlayText, onValueChange = { vm.overlayText = it },
                                         label = { Text(stringResource(R.string.overlay_text)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp),

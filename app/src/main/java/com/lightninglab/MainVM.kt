@@ -473,6 +473,47 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         return start to end
     }
 
+
+    /** Imports timed SubRip captions as ordinary editable/exportable text overlay clips. */
+    var subtitleImportStatus by mutableStateOf("")
+    fun importSubRip(uri: Uri) {
+        if (busy) return
+        viewModelScope.launch {
+            try {
+                val cues = withContext(Dispatchers.IO) {
+                    val stream = app.contentResolver.openInputStream(uri)
+                        ?: throw java.io.IOException("subtitle file cannot be opened")
+                    stream.bufferedReader(Charsets.UTF_8).use { SubRip.parse(it.readText()) }
+                }
+                val total = ((if (segments.isEmpty()) videoDur else
+                    segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) /
+                    vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
+                val imported = cues.mapNotNull { cue ->
+                    if (cue.startMs >= total) return@mapNotNull null
+                    val start = cue.startMs.coerceAtLeast(0L)
+                    val end = cue.endMs.coerceAtMost(total)
+                    if (end - start < TimelineMath.MIN_CLIP_MS) return@mapNotNull null
+                    VideoOverlayClip(
+                        nextVideoOverlayId++, "TEXT", cue.text, start, end,
+                        0xFFFFFFFF.toInt(), 1, 2, true,
+                        listOf(VideoOverlayKeyframe(start, 1f, 2), VideoOverlayKeyframe(end, 1f, 2))
+                    )
+                }
+                if (imported.isEmpty()) {
+                    subtitleImportStatus = "زیرنویس معتبر و هم‌زمان با طول ویدئو پیدا نشد."
+                    return@launch
+                }
+                videoOverlayClips.addAll(imported)
+                selectedOverlayClipId = imported.last().id
+                subtitleImportStatus = "${imported.size} زیرنویس وارد تایم‌لاین شد."
+                pushVideoHistory()
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                subtitleImportStatus = "خطا در خواندن زیرنویس: ${e.message ?: "SRT"}"
+            }
+        }
+    }
+
     fun addTextClip() {
         val value = overlayText.trim(); if (value.isEmpty()) return
         val total = (if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)
