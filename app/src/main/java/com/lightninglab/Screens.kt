@@ -393,8 +393,8 @@ fun PhotoEditor(vm: MainVM) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
                     Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
-                    if (!healMode && histogram != null) {
-                        PhotoHistogramMini(histogram, Modifier.align(Alignment.BottomEnd).padding(8.dp))
+                    if (!healMode) {
+                        histogram?.let { data -> PhotoHistogramMini(data, Modifier.align(Alignment.BottomEnd).padding(8.dp)) }
                     }
                     if (healMode && !maskMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
                 }
