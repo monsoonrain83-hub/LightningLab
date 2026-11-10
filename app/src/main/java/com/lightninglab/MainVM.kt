@@ -111,6 +111,7 @@ private data class VideoEditorSnapshot(
     val flipH: Boolean, val flipV: Boolean, val crop: Float, val speed: Float,
     val filter: Int, val music: Uri?, val voice: Uri?, val volOrig: Float, val volMusic: Float, val volVoice: Float,
     val fadeInMusicMs: Long, val fadeOutMusicMs: Long, val fadeInVoiceMs: Long, val fadeOutVoiceMs: Long,
+    val muteMusic: Boolean, val muteVoice: Boolean, val soloAudioTrack: String,
     val overlayText: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
     val sticker: String?, val stickerSize: Int, val stickerPos: Int
 )
@@ -342,6 +343,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         selectedOverlayClipId, selectedVideoEffectId, muteOriginal, vBrightness, vContrast, vRotate,
         vFlipH, vFlipV, vCrop, vSpeed, vFilter, music, voice, volOrig, volMusic, volVoice,
         fadeInMusicMs, fadeOutMusicMs, fadeInVoiceMs, fadeOutVoiceMs,
+        muteMusic, muteVoice, soloAudioTrack,
         overlayText, textColor, textSize, textPos, textBg, sticker, stickerSize, stickerPos
     )
     private fun updateVideoHistoryFlags() {
@@ -386,6 +388,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             volOrig = s.volOrig; volMusic = s.volMusic; volVoice = s.volVoice
             fadeInMusicMs = s.fadeInMusicMs; fadeOutMusicMs = s.fadeOutMusicMs
             fadeInVoiceMs = s.fadeInVoiceMs; fadeOutVoiceMs = s.fadeOutVoiceMs
+            muteMusic = s.muteMusic; muteVoice = s.muteVoice; soloAudioTrack = s.soloAudioTrack
             overlayText = s.overlayText; textColor = s.textColor; textSize = s.textSize; textPos = s.textPos; textBg = s.textBg
             sticker = s.sticker; stickerSize = s.stickerSize; stickerPos = s.stickerPos
             segReset(); segPush(); selSeg = -1
@@ -638,6 +641,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var fadeOutMusicMs by mutableStateOf(0L)
     var fadeInVoiceMs by mutableStateOf(0L)
     var fadeOutVoiceMs by mutableStateOf(0L)
+    var muteMusic by mutableStateOf(false)
+    var muteVoice by mutableStateOf(false)
+    var soloAudioTrack by mutableStateOf(AudioTrackRouting.NONE)
     var videoW by mutableStateOf(0)
     var videoH by mutableStateOf(0)
     var vFilter by mutableStateOf(0)
@@ -1600,6 +1606,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val fadeOutMusicSnapshot = fadeOutMusicMs
         val fadeInVoiceSnapshot = fadeInVoiceMs
         val fadeOutVoiceSnapshot = fadeOutVoiceMs
+        val muteMusicSnapshot = muteMusic
+        val muteVoiceSnapshot = muteVoice
+        val soloAudioTrackSnapshot = soloAudioTrack
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -1636,7 +1645,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         vRotate, vFlipH, vFlipV, vCrop, overlayText, textColor, textSize, textPos, textBg,
                         sticker, stickerSize, stickerPos, volOrig, volMusic, volVoice,
                         overlayData, effectClipsSnapshot.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs) }, markerSnapshot,
-                        fadeInMusicSnapshot, fadeOutMusicSnapshot, fadeInVoiceSnapshot, fadeOutVoiceSnapshot)), Charsets.UTF_8)
+                        fadeInMusicSnapshot, fadeOutMusicSnapshot, fadeInVoiceSnapshot, fadeOutVoiceSnapshot,
+                        muteMusicSnapshot, muteVoiceSnapshot, soloAudioTrackSnapshot)), Charsets.UTF_8)
                     if (!manifest.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize project manifest")
                     // Publish only a complete project. A crash before this point leaves a hidden staging folder.
                     if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot publish completed project")
@@ -1676,6 +1686,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
             fadeInMusicMs = p.fadeInMusicMs; fadeOutMusicMs = p.fadeOutMusicMs
             fadeInVoiceMs = p.fadeInVoiceMs; fadeOutVoiceMs = p.fadeOutVoiceMs
+            muteMusic = p.muteMusic; muteVoice = p.muteVoice
+            soloAudioTrack = AudioTrackRouting.normalize(p.soloAudioTrack)
             screen = Screen.VIDEO
             resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
@@ -1798,7 +1810,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         if (overlays.isNotEmpty()) itemFx += OverlayEffect(ImmutableList.copyOf(overlays))
                         val mi = MediaItem.Builder().setUri(segment.uri ?: u).setClippingConfiguration(
                             MediaItem.ClippingConfiguration.Builder().setStartPositionMs(sourceA).setEndPositionMs(sourceB).build()).build()
-                        items += EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || vSpeed != 1f)
+                        items += EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || !AudioTrackRouting.include(AudioTrackRouting.ORIGINAL, false, soloAudioTrack) || vSpeed != 1f)
                             .setEffects(Effects(if (volOrig != 1f) listOf<AudioProcessor>(VolumeProcessor(volOrig)) else emptyList(), itemFx)).build()
                     }
                     timelineCursor += outputLength
@@ -1807,8 +1819,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 seqs += EditedMediaItemSequence(items)
                 val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
                 val audioTracks = listOfNotNull(
-                    music?.let { Triple(it, volMusic, fadeInMusicMs to fadeOutMusicMs) },
-                    voice?.let { Triple(it, volVoice, fadeInVoiceMs to fadeOutVoiceMs) }
+                    music?.takeIf { AudioTrackRouting.include(AudioTrackRouting.MUSIC, muteMusic, soloAudioTrack) }
+                        ?.let { Triple(it, volMusic, fadeInMusicMs to fadeOutMusicMs) },
+                    voice?.takeIf { AudioTrackRouting.include(AudioTrackRouting.VOICE, muteVoice, soloAudioTrack) }
+                        ?.let { Triple(it, volVoice, fadeInVoiceMs to fadeOutVoiceMs) }
                 )
                 for ((au, vol, fades) in audioTracks) {
                     val end = min(total, audioDur(au, total)).coerceAtLeast(1L)

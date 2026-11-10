@@ -930,6 +930,25 @@ fun VideoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volOrig = it }
                                     Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volMusic = it }
                                     Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volVoice = it }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("بی‌صدا کردن موسیقی", Modifier.weight(1f), color = Storm.text)
+                                        Switch(checked = vm.muteMusic, onCheckedChange = { vm.muteMusic = it; vm.commitVideoSettings() })
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("بی‌صدا کردن صدای ضبط‌شده", Modifier.weight(1f), color = Storm.text)
+                                        Switch(checked = vm.muteVoice, onCheckedChange = { vm.muteVoice = it; vm.commitVideoSettings() })
+                                    }
+                                    Text("Solo — پخش فقط یک ترک", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    ChoiceRow(listOf("همه ترک‌ها", "صدای ویدئو", "موسیقی", "صدای ضبط‌شده"),
+                                        when (vm.soloAudioTrack) { AudioTrackRouting.ORIGINAL -> 1; AudioTrackRouting.MUSIC -> 2; AudioTrackRouting.VOICE -> 3; else -> 0 }) {
+                                        vm.soloAudioTrack = when (it) {
+                                            1 -> AudioTrackRouting.ORIGINAL
+                                            2 -> if (vm.music != null) AudioTrackRouting.MUSIC else AudioTrackRouting.NONE
+                                            3 -> if (vm.voice != null) AudioTrackRouting.VOICE else AudioTrackRouting.NONE
+                                            else -> AudioTrackRouting.NONE
+                                        }
+                                        vm.commitVideoSettings()
+                                    }
                                     Divider(color = Storm.outline, modifier = Modifier.padding(vertical = 8.dp))
                                     Text("محو تدریجی موسیقی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
                                     Param("شروع موسیقی (ثانیه)", vm.fadeInMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInMusicMs = (it * 1000f).toLong() }

@@ -36,6 +36,16 @@ class ProjectCodecTest {
         assertEquals(0L, decoded.fadeOutVoiceMs)
     }
 
+    @Test fun audioMuteAndSoloSettingsRoundTripAndV5Defaults() {
+        val p = sample().copy(muteMusic = true, muteVoice = false, soloAudioTrack = "VOICE")
+        assertEquals(p, ProjectCodec.decode(ProjectCodec.encode(p)))
+        val v5 = """{"v":5,"name":"old5","video":"main.mp4","dur":1000,"segs":[{"s":0,"e":1000,"c":""}]}"""
+        val decoded = ProjectCodec.decode(v5)!!
+        assertEquals(false, decoded.muteMusic)
+        assertEquals(false, decoded.muteVoice)
+        assertEquals(AudioTrackRouting.NONE, decoded.soloAudioTrack)
+    }
+
     @Test fun corruptOrUnknownVersionIsRejected() {
         assertNull(ProjectCodec.decode("not json"))
         assertNull(ProjectCodec.decode("{\"v\":99,\"name\":\"x\"}"))
