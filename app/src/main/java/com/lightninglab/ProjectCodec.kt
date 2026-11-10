@@ -20,13 +20,15 @@ data class ProjectData(
     val volOrig: Float = 1f, val volMusic: Float = 1f, val volVoice: Float = 1f,
     val overlayClips: List<OverlayClipData> = emptyList(),
     val effectClips: List<EffectClipData> = emptyList(),
-    val markers: List<Long> = emptyList()
+    val markers: List<Long> = emptyList(),
+    val fadeInMusicMs: Long = 0L, val fadeOutMusicMs: Long = 0L,
+    val fadeInVoiceMs: Long = 0L, val fadeOutVoiceMs: Long = 0L
 )
 
 private fun Int?.orZero(): Int = this ?: 0
 
 object ProjectCodec {
-    const val VERSION = 4
+    const val VERSION = 5
 
     fun encode(p: ProjectData): String {
         val o = JSONObject()
@@ -41,6 +43,8 @@ object ProjectCodec {
         o.put("text", p.text).put("tc", p.textColor).put("ts", p.textSize).put("tp", p.textPos).put("tb", p.textBg)
         o.put("stk", p.sticker ?: "").put("ss", p.stickerSize).put("sp", p.stickerPos)
         o.put("vo", p.volOrig.toDouble()).put("vm", p.volMusic.toDouble()).put("vv", p.volVoice.toDouble())
+        o.put("fim", p.fadeInMusicMs.coerceAtLeast(0L)).put("fom", p.fadeOutMusicMs.coerceAtLeast(0L))
+        o.put("fiv", p.fadeInVoiceMs.coerceAtLeast(0L)).put("fov", p.fadeOutVoiceMs.coerceAtLeast(0L))
         o.put("effectClips", JSONArray().also { a -> p.effectClips.forEach { e ->
             a.put(JSONObject().put("id", e.id).put("filter", e.filterIndex).put("s", e.startMs).put("e", e.endMs))
         } })
@@ -88,7 +92,9 @@ object ProjectCodec {
                 },
                 (0 until (o.optJSONArray("markers")?.length().orZero())).mapNotNull { i ->
                     o.optJSONArray("markers")?.optLong(i)?.takeIf { it >= 0L }
-                }.distinct().sorted())
+                }.distinct().sorted(),
+                o.optLong("fim", 0L).coerceAtLeast(0L), o.optLong("fom", 0L).coerceAtLeast(0L),
+                o.optLong("fiv", 0L).coerceAtLeast(0L), o.optLong("fov", 0L).coerceAtLeast(0L))
         }
     } catch (e: Exception) { null }
 }

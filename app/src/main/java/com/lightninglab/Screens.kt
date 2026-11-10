@@ -930,6 +930,13 @@ fun VideoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volOrig = it }
                                     Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volMusic = it }
                                     Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volVoice = it }
+                                    Divider(color = Storm.outline, modifier = Modifier.padding(vertical = 8.dp))
+                                    Text("محو تدریجی موسیقی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Param("شروع موسیقی (ثانیه)", vm.fadeInMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInMusicMs = (it * 1000f).toLong() }
+                                    Param("پایان موسیقی (ثانیه)", vm.fadeOutMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeOutMusicMs = (it * 1000f).toLong() }
+                                    Text("محو تدریجی صدای ضبط‌شده", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    Param("شروع صدا (ثانیه)", vm.fadeInVoiceMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInVoiceMs = (it * 1000f).toLong() }
+                                    Param("پایان صدا (ثانیه)", vm.fadeOutVoiceMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeOutVoiceMs = (it * 1000f).toLong() }
                                     Text(stringResource(R.string.vol_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                 }
                                 VTool.FILTER -> {

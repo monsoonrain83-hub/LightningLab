@@ -110,6 +110,7 @@ private data class VideoEditorSnapshot(
     val muteOriginal: Boolean, val brightness: Float, val contrast: Float, val rotate: Int,
     val flipH: Boolean, val flipV: Boolean, val crop: Float, val speed: Float,
     val filter: Int, val music: Uri?, val voice: Uri?, val volOrig: Float, val volMusic: Float, val volVoice: Float,
+    val fadeInMusicMs: Long, val fadeOutMusicMs: Long, val fadeInVoiceMs: Long, val fadeOutVoiceMs: Long,
     val overlayText: String, val textColor: Int, val textSize: Int, val textPos: Int, val textBg: Boolean,
     val sticker: String?, val stickerSize: Int, val stickerPos: Int
 )
@@ -340,6 +341,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         segments.toList(), videoOverlayClips.toList(), videoEffectClips.toList(), videoMarkers.toList(), videoOverlayBitmaps.toMap(),
         selectedOverlayClipId, selectedVideoEffectId, muteOriginal, vBrightness, vContrast, vRotate,
         vFlipH, vFlipV, vCrop, vSpeed, vFilter, music, voice, volOrig, volMusic, volVoice,
+        fadeInMusicMs, fadeOutMusicMs, fadeInVoiceMs, fadeOutVoiceMs,
         overlayText, textColor, textSize, textPos, textBg, sticker, stickerSize, stickerPos
     )
     private fun updateVideoHistoryFlags() {
@@ -382,6 +384,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             if (music != s.music) { music = s.music; s.music?.let { analyzeWaveform(it, false) } ?: run { musicWaveform = emptyList() } }
             if (voice != s.voice) { voice = s.voice; s.voice?.let { analyzeWaveform(it, true) } ?: run { voiceWaveform = emptyList() } }
             volOrig = s.volOrig; volMusic = s.volMusic; volVoice = s.volVoice
+            fadeInMusicMs = s.fadeInMusicMs; fadeOutMusicMs = s.fadeOutMusicMs
+            fadeInVoiceMs = s.fadeInVoiceMs; fadeOutVoiceMs = s.fadeOutVoiceMs
             overlayText = s.overlayText; textColor = s.textColor; textSize = s.textSize; textPos = s.textPos; textBg = s.textBg
             sticker = s.sticker; stickerSize = s.stickerSize; stickerPos = s.stickerPos
             segReset(); segPush(); selSeg = -1
@@ -629,6 +633,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var volOrig by mutableStateOf(1f)
     var volMusic by mutableStateOf(1f)
     var volVoice by mutableStateOf(1f)
+    var fadeInMusicMs by mutableStateOf(0L)
+    var fadeOutMusicMs by mutableStateOf(0L)
+    var fadeInVoiceMs by mutableStateOf(0L)
+    var fadeOutVoiceMs by mutableStateOf(0L)
     var videoW by mutableStateOf(0)
     var videoH by mutableStateOf(0)
     var vFilter by mutableStateOf(0)
@@ -1790,12 +1798,20 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 val seqs = ArrayList<EditedMediaItemSequence>()
                 seqs += EditedMediaItemSequence(items)
                 val total = (segs.sumOf { it.endMs - it.startMs } / vSpeed).toLong()
-                for ((au, vol) in listOfNotNull(music?.let { it to volMusic }, voice?.let { it to volVoice })) {
-                    val end = min(total, audioDur(au, total))
+                val audioTracks = listOfNotNull(
+                    music?.let { Triple(it, volMusic, fadeInMusicMs to fadeOutMusicMs) },
+                    voice?.let { Triple(it, volVoice, fadeInVoiceMs to fadeOutVoiceMs) }
+                )
+                for ((au, vol, fades) in audioTracks) {
+                    val end = min(total, audioDur(au, total)).coerceAtLeast(1L)
                     val mi = MediaItem.Builder().setUri(au).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionMs(0).setEndPositionMs(end).build()).build()
+                    val needsEnvelope = vol != 1f || fades.first > 0L || fades.second > 0L
+                    val processors = if (needsEnvelope) listOf<AudioProcessor>(
+                        FadeVolumeProcessor(vol, end, fades.first.coerceAtMost(end), fades.second.coerceAtMost(end))
+                    ) else emptyList()
                     seqs += EditedMediaItemSequence(listOf(EditedMediaItem.Builder(mi).setRemoveVideo(true)
-                        .setEffects(Effects(if (vol != 1f) listOf<AudioProcessor>(VolumeProcessor(vol)) else emptyList(), emptyList())).build()))
+                        .setEffects(Effects(processors, emptyList())).build()))
                 }
                 val done = CompletableDeferred<Throwable?>()
                 val t = Transformer.Builder(app)

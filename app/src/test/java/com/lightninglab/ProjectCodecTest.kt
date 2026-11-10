@@ -27,6 +27,15 @@ class ProjectCodecTest {
         assertEquals(emptyList<Long>(), decoded.markers)
     }
 
+    @Test fun audioFadeSettingsRoundTripAndLegacyDefaultsRemainZero() {
+        val p = sample().copy(fadeInMusicMs = 450L, fadeOutMusicMs = 900L, fadeInVoiceMs = 300L, fadeOutVoiceMs = 700L)
+        assertEquals(p, ProjectCodec.decode(ProjectCodec.encode(p)))
+        val v4 = """{"v":4,"name":"old4","video":"main.mp4","dur":1000,"segs":[{"s":0,"e":1000,"c":""}]}"""
+        val decoded = ProjectCodec.decode(v4)!!
+        assertEquals(0L, decoded.fadeInMusicMs)
+        assertEquals(0L, decoded.fadeOutVoiceMs)
+    }
+
     @Test fun corruptOrUnknownVersionIsRejected() {
         assertNull(ProjectCodec.decode("not json"))
         assertNull(ProjectCodec.decode("{\"v\":99,\"name\":\"x\"}"))
