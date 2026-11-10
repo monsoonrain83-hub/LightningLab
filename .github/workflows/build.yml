@@ -18,17 +18,7 @@ jobs:
             cp -r "$SRC"/. .
             rm -f update.zip
             # Fix the three Int.coerceAtLeast call sites reported by run 186.
-            python3 - <<'PY'
-            p = "app/src/main/java/com/lightninglab/Screens.kt"
-            with open(p, encoding="utf-8") as f:
-                source = f.read()
-            broken = "size.width.coerceAtLeast(1f)"
-            if source.count(broken) < 3:
-                raise SystemExit("Expected three timeline ruler type errors were not found")
-            source = source.replace(broken, "size.width.coerceAtLeast(1)", 3)
-            with open(p, "w", encoding="utf-8") as f:
-                f.write(source)
-            PY
+            python3 -c 'from pathlib import Path; p=Path("app/src/main/java/com/lightninglab/Screens.kt"); s=p.read_text(); old="size.width.coerceAtLeast(1f)"; assert s.count(old) >= 3, "expected three timeline ruler errors"; p.write_text(s.replace(old, "size.width.coerceAtLeast(1)", 3))'
             git config user.name "lightninglab-bot"
             git config user.email "bot@users.noreply.github.com"
             git add -A
