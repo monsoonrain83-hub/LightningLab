@@ -7,7 +7,14 @@ object CloudInfo {
         "Ci" to "Cirrus", "Cs" to "Cirrostratus", "Cu" to "Cumulus",
         "Ns" to "Nimbostratus", "Sc" to "Stratocumulus", "St" to "Stratus")
 
-    fun genusName(code: String) = (GENERA[code] ?: code) + " (" + code + ")"
+    /** Contrails are a dataset class, not one of the ten natural WMO cloud genera. */
+    fun genusName(code: String): String = when (code) {
+        "Ct" -> "Contrail (Ct؛ کلاس جداگانه، نه جنس WMO)"
+        else -> (GENERA[code] ?: code) + " (" + code + ")"
+    }
+
+    fun isNaturalGenus(code: String): Boolean = code in GENERA
+    fun isDatasetAuxiliaryClass(code: String): Boolean = code == "Ct"
 
     /** Codes in CloudClassifier.LABELS order: the ten WMO genera. Contrails are not a genus and are handled separately. */
     val genusCodes = CloudClassifier.LABELS
