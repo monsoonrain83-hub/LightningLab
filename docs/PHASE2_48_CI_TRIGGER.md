@@ -1,0 +1,1 @@
+Trigger CI for r10.48: SRT subtitle import, parser unit tests, and mandatory JVM test stage before APK packaging.
