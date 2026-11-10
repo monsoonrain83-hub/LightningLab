@@ -1210,7 +1210,7 @@ private fun VideoTimelineTracks(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${fmt(vm.playheadMs)}  /  ${fmt(duration)}", style = MaterialTheme.typography.labelSmall,
                         color = Storm.bolt)
-                    Text("برای جابه‌جایی، خط‌کش را لمس یا بکشید", style = MaterialTheme.typography.labelSmall,
+                    Text("خط‌کش: جابه‌جایی پخش  •  کلیپ: کشیدن برای تغییر ترتیب", style = MaterialTheme.typography.labelSmall,
                         color = Storm.muted)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1227,9 +1227,23 @@ private fun VideoTimelineTracks(
                         Box(Modifier.weight(weight).fillMaxHeight()
                             .clip(RoundedCornerShape(5.dp))
                             .background(if (vm.selSeg == index) Color(0xFFDF713E) else Color(0xFF315C79))
-                            .clickable { vm.selSeg = index }, contentAlignment = Alignment.Center) {
-                            Text(if (seg.uri == null) "${index + 1}" else "${index + 1} +",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White)
+                            .clickable { vm.selSeg = index }
+                            .pointerInput(index, vm.segments.size) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selSeg = index },
+                                    onDrag = { change, amount -> change.consume(); dragTotal += amount.x },
+                                    onDragEnd = {
+                                        val threshold = size.width * 0.35f
+                                        val destination = when {
+                                            dragTotal > threshold -> index + 1
+                                            dragTotal < -threshold -> index - 1
+                                            else -> index
+                                        }.coerceIn(0, vm.segments.lastIndex)
+                                        if (destination != index) vm.moveSegment(index, destination)
+                                    })
+                            }, contentAlignment = Alignment.Center) {
+                            Text(if (seg.uri == null) "${index + 1}  ⋮⋮" else "${index + 1} +  ⋮⋮",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1)
                         }
                     }
                 }
