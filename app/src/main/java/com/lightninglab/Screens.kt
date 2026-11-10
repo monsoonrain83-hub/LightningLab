@@ -306,6 +306,13 @@ fun PhotoEditor(vm: MainVM) {
     val maskInverted = vm.photoMaskInverted
     val healMode = tab == PTab.REMOVE
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var histogram by remember { mutableStateOf<PhotoHistogramData?>(null) }
+    LaunchedEffect(shown, prev, vm.showOriginal, healMode, maskMode) {
+        val source = if (vm.showOriginal || (healMode && !maskMode)) prev else shown ?: prev
+        histogram = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            PhotoHistogram.compute(source)
+        }
+    }
     LaunchedEffect(vm.params, prev, layerSnapshot, shapeSnapshot, imageSnapshot, maskSnapshot, maskInverted) {
         shown = null
         if (prev != null) {
@@ -381,6 +388,9 @@ fun PhotoEditor(vm: MainVM) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
                     Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                    if (!healMode && histogram != null) {
+                        PhotoHistogramMini(histogram, Modifier.align(Alignment.BottomEnd).padding(8.dp))
+                    }
                     if (healMode && !maskMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
                 }
             }
