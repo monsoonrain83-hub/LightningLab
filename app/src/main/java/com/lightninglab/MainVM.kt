@@ -442,7 +442,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val clip = VideoEffectClip(nextVideoEffectId++, vFilter, 0L, total)
         videoEffectClips.add(clip); selectedVideoEffectId = clip.id; pushVideoHistory()
     }
-    fun updateEffectClip(id: Long, start: Long, end: Long) {
+    fun updateEffectClip(id: Long, start: Long, end: Long, recordHistory: Boolean = true) {
         val i = videoEffectClips.indexOfFirst { it.id == id }; if (i < 0) return
         val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong().coerceAtLeast(1L)
         val anchors = if (timelineSnapEnabled) buildList {
@@ -457,11 +457,12 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             videoOverlayClips.forEach { add(it.startMs); add(it.endMs) }
         } else emptyList()
         val snappedStart = TimelineMath.snapTime(start, anchors)
-        val a = snappedStart.coerceIn(0L, total - 1L)
+        val minimum = min(200L, total)
+        val a = snappedStart.coerceIn(0L, total - minimum)
         val snappedEnd = TimelineMath.snapTime(end, anchors)
-        val b = snappedEnd.coerceIn(a + 1L, total)
+        val b = snappedEnd.coerceIn(a + minimum, total)
         val updated = videoEffectClips[i].copy(startMs = a, endMs = b)
-        if (updated != videoEffectClips[i]) { videoEffectClips[i] = updated; pushVideoHistory() }
+        if (updated != videoEffectClips[i]) { videoEffectClips[i] = updated; if (recordHistory) pushVideoHistory() }
     }
     fun removeEffectClip(id: Long) { if (videoEffectClips.removeAll { it.id == id }) { if (selectedVideoEffectId == id) selectedVideoEffectId = null; pushVideoHistory() } }
 
