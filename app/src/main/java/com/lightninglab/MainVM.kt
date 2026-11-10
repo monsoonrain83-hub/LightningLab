@@ -490,10 +490,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         ?: throw java.io.IOException("subtitle output cannot be opened")
                     output.bufferedWriter(Charsets.UTF_8).use { it.write(srt) }
                 }
-                subtitleImportStatus = "\${cues.size} زیرنویس در فایل SRT ذخیره شد."
+                subtitleImportStatus = "${cues.size} زیرنویس در فایل SRT ذخیره شد."
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                subtitleImportStatus = "خطا در ذخیرهٔ SRT: \${e.message ?: "SRT"}"
+                subtitleImportStatus = "خطا در ذخیرهٔ SRT: ${e.message ?: "SRT"}"
             }
         }
     }
