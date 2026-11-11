@@ -740,10 +740,20 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     fun clearSegmentSelection() { selectedSegmentIndices = emptySet() }
     fun moveSelectedSegmentGroup(direction: Int): Boolean {
-        val reordered = TimelineMath.reorderContiguousGroup(segments.toList(), selectedSegmentIndices, direction) ?: return false
+        val selected = selectedSegmentIndices
+        val ordered = selected.sorted()
+        val first = ordered.firstOrNull() ?: return false
+        val last = ordered.last()
+        val reordered = TimelineMath.reorderContiguousGroup(segments.toList(), selected, direction) ?: return false
+        val previousSelection = selSeg
         segments.clear(); segments.addAll(reordered)
-        selectedSegmentIndices = selectedSegmentIndices.map { it + direction }.toSet()
-        selSeg = (selSeg + direction).coerceIn(0, segments.lastIndex)
+        selectedSegmentIndices = selected.map { it + direction }.toSet()
+        selSeg = when {
+            previousSelection in selected -> previousSelection + direction
+            direction < 0 && previousSelection == first - 1 -> last
+            direction > 0 && previousSelection == last + 1 -> first
+            else -> previousSelection
+        }.coerceIn(-1, segments.lastIndex)
         segPush(); pushVideoHistory()
         return true
     }
@@ -1551,7 +1561,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             val vh = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             if (rot == 90 || rot == 270) { videoW = vh; videoH = vw } else { videoW = vw; videoH = vh }
-            videoUri = u; playheadMs = 0L; segments.clear(); videoMarkers.clear(); videoOverlayClips.clear(); videoEffectClips.clear(); selectedVideoEffectId = null; nextVideoEffectId = 1L; videoOverlayBitmaps.values.forEach { if (busy) retiredVideoOverlayBitmaps.add(it) else if (!it.isRecycled) it.recycle() }; videoOverlayBitmaps.clear(); selectedOverlayClipId = null; nextVideoOverlayId = 1L; segReset(); selSeg = -1; infoRes = null; resetVideoHistory()
+            videoUri = u; playheadMs = 0L; clearSegmentSelection(); segments.clear(); videoMarkers.clear(); videoOverlayClips.clear(); videoEffectClips.clear(); selectedVideoEffectId = null; nextVideoEffectId = 1L; videoOverlayBitmaps.values.forEach { if (busy) retiredVideoOverlayBitmaps.add(it) else if (!it.isRecycled) it.recycle() }; videoOverlayBitmaps.clear(); selectedOverlayClipId = null; nextVideoOverlayId = 1L; segReset(); selSeg = -1; infoRes = null; resetVideoHistory()
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "video") } finally { r.release() }
     }
 
@@ -1771,6 +1781,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
             loadVideo(Uri.fromFile(File(dir, p.video)))
             if (videoUri == null) return
+            clearSegmentSelection()
             for (sg in p.segs) segments.add(Seg(sg.startMs, sg.endMs, sg.clip?.let { Uri.fromFile(File(dir, it)) }))
             videoMarkers.clear(); videoMarkers.addAll(p.markers)
             segReset(); segPush(); selSeg = -1
