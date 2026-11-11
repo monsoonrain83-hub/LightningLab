@@ -1159,7 +1159,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     false
                 }
             }
-            synopticModelReady = ok
+            synopticModelReady = if (ok) true else withContext(Dispatchers.IO) { cloudSynopticModel.load() }
             if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
