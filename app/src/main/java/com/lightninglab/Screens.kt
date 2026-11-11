@@ -1141,7 +1141,7 @@ fun VideoEditor(vm: MainVM) {
                                 VTool.EXPORT -> {
                                     Text("پروفایل خروجی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
                                     ChoiceRow(VideoExportProfile.values().map { it.labelFa }, vm.exportProfile.ordinal) {
-                                        vm.setExportProfile(VideoExportProfile.values()[it])
+                                        vm.chooseExportProfile(VideoExportProfile.values()[it])
                                     }
                                     val exportRate = vm.exportProfile.targetBitrate(vm.videoW, vm.videoH) / 1_000_000f
                                     Text("H.264 · حدود ${String.format(Locale.US, "%.1f", exportRate)} Mbps · بدون بزرگ‌نمایی اجباری",

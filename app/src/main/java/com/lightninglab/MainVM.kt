@@ -1883,7 +1883,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val exportPrefs by lazy { app.getSharedPreferences("video_export", 0) }
     var exportProfile by mutableStateOf(VideoExportProfile.fromId(exportPrefs.getString("profile", "SOURCE")))
         private set
-    fun setExportProfile(profile: VideoExportProfile) {
+    fun chooseExportProfile(profile: VideoExportProfile) {
         if (exportProfile != profile) {
             exportProfile = profile
             exportPrefs.edit().putString("profile", profile.name).apply()
