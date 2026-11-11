@@ -465,11 +465,16 @@ fun PhotoEditor(vm: MainVM) {
                                     val graphValues = (0 until PhotoToneCurves.POINTS).map { point ->
                                         p.rgbCurves.getOrElse(graphChannel * PhotoToneCurves.POINTS + point) { point / 4f }
                                     }
-                                    PhotoToneCurveGraph(graphValues, Modifier.fillMaxWidth().height(164.dp)) { point, v ->
-                                        val next = p.rgbCurves.toMutableList()
-                                        channels.forEach { channel -> next[channel * PhotoToneCurves.POINTS + point] = v }
-                                        vm.params = p.copy(rgbCurves = next)
-                                    }
+                                    PhotoToneCurveGraph(
+                                        graphValues,
+                                        Modifier.fillMaxWidth().height(164.dp),
+                                        onPointChange = { point, v ->
+                                            val next = p.rgbCurves.toMutableList()
+                                            channels.forEach { channel -> next[channel * PhotoToneCurves.POINTS + point] = v }
+                                            vm.params = p.copy(rgbCurves = next)
+                                        },
+                                        onGestureFinished = { vm.commit() }
+                                    )
                                     val labels = listOf("سایه عمیق", "سایه", "میانه", "روشنایی", "سفیدی")
                                     for (point in 0 until PhotoToneCurves.POINTS) {
                                         val value = if (curveChannel == 0) {

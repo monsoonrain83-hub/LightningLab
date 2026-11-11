@@ -25,10 +25,12 @@ import kotlin.math.abs
 fun PhotoToneCurveGraph(
     values: List<Float>,
     modifier: Modifier = Modifier,
-    onPointChange: (index: Int, value: Float) -> Unit
+    onPointChange: (index: Int, value: Float) -> Unit,
+    onGestureFinished: () -> Unit
 ) {
     val latestValues = rememberUpdatedState(values)
     val latestCallback = rememberUpdatedState(onPointChange)
+    val latestFinished = rememberUpdatedState(onGestureFinished)
     var activePoint by remember { mutableStateOf(-1) }
     Canvas(
         modifier.fillMaxWidth().height(164.dp).pointerInput(Unit) {
@@ -51,8 +53,8 @@ fun PhotoToneCurveGraph(
                         change.consume()
                     }
                 },
-                onDragEnd = { activePoint = -1 },
-                onDragCancel = { activePoint = -1 }
+                onDragEnd = { activePoint = -1; latestFinished.value() },
+                onDragCancel = { activePoint = -1; latestFinished.value() }
             )
         }
     ) {
