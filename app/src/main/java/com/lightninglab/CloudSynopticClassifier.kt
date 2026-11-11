@@ -22,15 +22,16 @@ class CloudSynopticClassifier(private val modelFile: File) {
         const val SIZE = 224
         const val HEADS = 3
         const val CLASSES = 11
-        val CODES = (0..9).map(Int::toString) + "/"
+        val CODES = (0..9).map { it.toString() } + "/"
 
         internal fun decodeOutput(values: FloatArray): CloudSynopticPredictions? {
             if (values.size != HEADS * CLASSES || values.any { !it.isFinite() || it !in 0f..1f }) return null
-            val ranked = (0 until HEADS).map { head ->
+            val ranked = ArrayList<List<Pair<String, Float>>>(HEADS)
+            for (head in 0 until HEADS) {
                 val scores = values.copyOfRange(head * CLASSES, (head + 1) * CLASSES)
                 val total = scores.sum()
                 if (!total.isFinite() || total !in 0.90f..1.10f) return null
-                CODES.indices.map { CODES[it] to scores[it] }.sortedByDescending { it.second }
+                ranked.add(CODES.indices.map { CODES[it] to scores[it] }.sortedByDescending { it.second })
             }
             return CloudSynopticPredictions(ranked[0], ranked[1], ranked[2])
         }
