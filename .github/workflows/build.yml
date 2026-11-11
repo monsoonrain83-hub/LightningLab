@@ -8,6 +8,7 @@ on:
       - 'settings.gradle.kts'
       - 'gradle/**'
       - 'tools/cloud_ai/**'
+      - 'tools/lightning_ai/**'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
@@ -42,6 +43,10 @@ jobs:
         run: python3 -m unittest discover -s tools/cloud_ai/tests -v
       - name: Compile cloud training utilities
         run: python3 -m compileall -q tools/cloud_ai
+      - name: Run lightning dataset preparation unit tests
+        run: python3 -m unittest discover -s tools/lightning_ai/tests -v
+      - name: Compile lightning AI utilities
+        run: python3 -m compileall -q tools/lightning_ai
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
