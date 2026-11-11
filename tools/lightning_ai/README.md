@@ -30,3 +30,26 @@ The script:
 - writes a CSV manifest and a JSON summary including skipped files and class counts.
 
 No model weights are included at this stage. A trained classifier must be validated on independent cameras/sites before any general-purpose claim.
+
+## Train an optional seven-label temporal TFLite classifier
+
+Install the training-only dependencies:
+
+```bash
+python3 -m pip install -r tools/lightning_ai/requirements-training.txt
+```
+
+Then run after preparing the manifest:
+
+```bash
+python3 tools/lightning_ai/train_brixton.py \
+  --manifest data/lightning/brixton_manifest.csv \
+  --root /path/to/extracted/brixton \
+  --out out/lightning_brixton
+```
+
+The training pipeline samples eight evenly spaced RGB frames per clip (224×224), uses a MobileNetV3Small frame encoder with temporal mean pooling, class weighting, chronological validation, and an untouched test split. It reports accuracy, macro-F1, per-class precision/recall, confusion matrix and multiclass Brier score, then exports a TFLite model and metadata.
+
+**TFLite contract:** input `[1,8,224,224,3]`, float32 RGB pixel values in `0..255`; output `[1,7]`, softmax in the label order defined by `model_contract.py`.
+
+Training requires the separately downloaded CC BY 4.0 video collection. The resulting classifier remains specific to the Brixton single-site camera domain until it passes external-camera/site evaluation. Do not treat it as a universal classifier.
