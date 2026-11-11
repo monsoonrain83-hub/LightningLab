@@ -461,9 +461,10 @@ fun PhotoEditor(vm: MainVM) {
                                     Text("منحنی تُن پنج‌نقطه‌ای؛ مقدار خروجی هر نقطه بین ۰ تا ۱۰۰٪ تنظیم می‌شود.",
                                         color = Storm.muted, style = MaterialTheme.typography.bodySmall)
                                     val channels = if (curveChannel == 0) listOf(0, 1, 2) else listOf(curveChannel - 1)
-                                    val graphChannel = if (curveChannel == 0) 0 else curveChannel - 1
                                     val graphValues = (0 until PhotoToneCurves.POINTS).map { point ->
-                                        p.rgbCurves.getOrElse(graphChannel * PhotoToneCurves.POINTS + point) { point / 4f }
+                                        if (curveChannel == 0) {
+                                            (0..2).map { channel -> p.rgbCurves.getOrElse(channel * PhotoToneCurves.POINTS + point) { point / 4f } }.average().toFloat()
+                                        } else p.rgbCurves.getOrElse((curveChannel - 1) * PhotoToneCurves.POINTS + point) { point / 4f }
                                     }
                                     PhotoToneCurveGraph(
                                         graphValues,
