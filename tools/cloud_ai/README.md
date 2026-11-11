@@ -64,3 +64,13 @@ python -m unittest discover -s tools/cloud_ai/tests -v
 
 The manifest contains per-image CL/CM/CH vote distributions and chronological train/validation/test partitions. This is data preparation only; a trained multi-head TFLite model and Android runtime integration remain separate deliverables.
 Dataset DOI: https://doi.org/10.5281/zenodo.21787669
+
+## Train the three-head CL/CM/CH synoptic model
+
+After preparing the Montenegro dataset, run:
+
+\`\`\`bash
+python tools/cloud_ai/train_montenegro_synoptic.py --manifest data/clouds/montenegro_synoptic/manifest.csv --out out/montenegro_synoptic --weights imagenet
+\`\`\`
+
+The script uses MobileNetV3Small, three softmax heads and the per-observer soft targets. It uses the chronological train/validation/test split, reports modal-observer macro-F1, soft cross-entropy, Brier score, per-class reports and confusion matrices, and exports cloud_synoptic_model.tflite with output shape [1,3,11]. This is an experimental single-site model; raw scores are not calibrated confidence and external camera/geographic validation is required.

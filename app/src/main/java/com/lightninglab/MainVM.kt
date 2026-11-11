@@ -986,6 +986,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---- optional TFLite cloud model + observer tags ----
     private val cloudModel by lazy { CloudClassifier(File(app.filesDir, "cloud_model.tflite")) }
+    private val cloudSynopticModel by lazy { CloudSynopticClassifier(File(app.filesDir, "cloud_synoptic_model.tflite")) }
+    var synopticModelReady by mutableStateOf(false)
+    var synopticPredictions by mutableStateOf<CloudSynopticPredictions?>(null)
     private val cloudFeatureModel by lazy { CloudFeatureClassifier(File(app.filesDir, "cloud_features.tflite")) }
     private val cloudSegmentationModel by lazy { CloudSegmentationModel(File(app.filesDir, "cloud_segmentation.tflite")) }
     private val atmosphericSegmentationModel by lazy { AtmosphericSegmentationModel(File(app.filesDir, "atmosphere_multiclass.tflite")) }
@@ -1050,6 +1053,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         atmosphericSegmentationReady = withContext(Dispatchers.IO) {
             ModelFileRecovery.loadOrRestore(File(app.filesDir, "atmosphere_multiclass.tflite"), File(app.filesDir, "atmosphere_multiclass.tflite.previous"), atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
         }
+        synopticModelReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_synoptic_model.tflite"), File(app.filesDir, "cloud_synoptic_model.tflite.previous"), cloudSynopticModel::close, cloudSynopticModel::load)
+        }
     } }
     fun importModel(u: Uri) {
         viewModelScope.launch {
@@ -1110,6 +1116,54 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
+    fun importSynopticModel(u: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "cloud_synoptic_model.tflite")
+                val temp = File(app.filesDir, "cloud_synoptic_model.tflite.importing")
+                val backup = File(app.filesDir, "cloud_synoptic_model.tflite.previous")
+                try {
+                    ModelFileRecovery.prepareForImport(target, backup, cloudSynopticModel::close, cloudSynopticModel::load)
+                    temp.delete(); backup.delete()
+                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                        temp.isFile && temp.length() > 0L
+                    } ?: false
+                    if (!copied) {
+                        temp.delete()
+                        false
+                    } else {
+                        cloudSynopticModel.close()
+                        val hadPrevious = target.exists()
+                        if (hadPrevious && !target.renameTo(backup)) {
+                            temp.delete(); cloudSynopticModel.load(); false
+                        } else if (!temp.renameTo(target)) {
+                            temp.delete()
+                            if (hadPrevious) backup.renameTo(target)
+                            cloudSynopticModel.load()
+                            false
+                        } else if (cloudSynopticModel.load()) {
+                            backup.delete()
+                            true
+                        } else {
+                            target.delete()
+                            if (hadPrevious) backup.renameTo(target)
+                            cloudSynopticModel.load()
+                            false
+                        }
+                    }
+                } catch (_: Throwable) {
+                    temp.delete()
+                    if (backup.exists()) { target.delete(); backup.renameTo(target) }
+                    cloudSynopticModel.load()
+                    false
+                }
+            }
+            synopticModelReady = if (ok) true else withContext(Dispatchers.IO) { cloudSynopticModel.load() }
+            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+        }
+    }
+
     fun importFeatureModel(u: Uri) {
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -1256,6 +1310,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     b to CloudAnalysis.analyze(px, b.width, b.height)
                 }
                 val ranked = withContext(Dispatchers.Default) { cloudModel.classify(bmp) }
+                val synoptic = if (synopticModelReady) withContext(Dispatchers.Default) { cloudSynopticModel.classify(bmp) } else null
                 val featureRanked = withContext(Dispatchers.Default) { cloudFeatureModel.classify(bmp) }
                 val regional = withContext(Dispatchers.Default) { CloudMultiScaleAnalyzer(cloudModel, cloudFeatureModel).analyze(bmp) }
                 val segmented = if (segmentationModelReady) withContext(Dispatchers.Default) { cloudSegmentationModel.segment(bmp) } else null
@@ -1263,6 +1318,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 // Keep model output as candidate evidence only. Its scores are not calibrated,
                 // so never silently convert the highest score into a confirmed WMO genus.
                 topK = ranked?.take(3) ?: emptyList(); genus = null
+                synopticPredictions = synoptic
                 featurePredictions = featureRanked?.filter { it.second >= 0.50f } ?: emptyList()
                 multiScaleReport = regional
                 segmentationResult = segmented
@@ -1605,7 +1661,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         photoImageLayers.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
         (videoBitmapPool + videoOverlayBitmaps.values + videoHistory.flatMap { it.overlayBitmaps.values }).distinct().forEach { if (!it.isRecycled) it.recycle() }
         retiredVideoOverlayBitmaps.forEach { if (!it.isRecycled) it.recycle() }
-        try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close() } catch (_: Exception) { }
+        try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close(); cloudSynopticModel.close() } catch (_: Exception) { }
         super.onCleared()
     }
 
