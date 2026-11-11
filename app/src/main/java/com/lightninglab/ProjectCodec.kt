@@ -4,10 +4,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class SegData(val startMs: Long, val endMs: Long, val clip: String?)
-data class EffectClipData(val id: Long, val filterIndex: Int, val startMs: Long, val endMs: Long)
+data class EffectClipData(val id: Long, val filterIndex: Int, val startMs: Long, val endMs: Long, val locked: Boolean = false)
 data class OverlayKeyframeData(val timeMs: Long, val alpha: Float, val position: Int)
 data class OverlayClipData(val id: Long, val kind: String, val content: String, val startMs: Long, val endMs: Long,
-    val color: Int, val size: Int, val position: Int, val background: Boolean, val keyframes: List<OverlayKeyframeData> = emptyList(), val assetFile: String? = null)
+    val color: Int, val size: Int, val position: Int, val background: Boolean, val keyframes: List<OverlayKeyframeData> = emptyList(), val assetFile: String? = null, val locked: Boolean = false)
 
 /** Editor state saved with a video project. File names are relative to the project folder. */
 data class ProjectData(
@@ -22,13 +22,14 @@ data class ProjectData(
     val effectClips: List<EffectClipData> = emptyList(),
     val markers: List<Long> = emptyList(),
     val fadeInMusicMs: Long = 0L, val fadeOutMusicMs: Long = 0L,
-    val fadeInVoiceMs: Long = 0L, val fadeOutVoiceMs: Long = 0L
+    val fadeInVoiceMs: Long = 0L, val fadeOutVoiceMs: Long = 0L,
+    val muteMusic: Boolean = false, val muteVoice: Boolean = false, val soloAudioTrack: String = "NONE"
 )
 
 private fun Int?.orZero(): Int = this ?: 0
 
 object ProjectCodec {
-    const val VERSION = 5
+    const val VERSION = 7
 
     fun encode(p: ProjectData): String {
         val o = JSONObject()
@@ -45,14 +46,15 @@ object ProjectCodec {
         o.put("vo", p.volOrig.toDouble()).put("vm", p.volMusic.toDouble()).put("vv", p.volVoice.toDouble())
         o.put("fim", p.fadeInMusicMs.coerceIn(0L, 5_000L)).put("fom", p.fadeOutMusicMs.coerceIn(0L, 5_000L))
         o.put("fiv", p.fadeInVoiceMs.coerceIn(0L, 5_000L)).put("fov", p.fadeOutVoiceMs.coerceIn(0L, 5_000L))
+        o.put("mm", p.muteMusic).put("mv", p.muteVoice).put("solo", AudioTrackRouting.normalize(p.soloAudioTrack))
         o.put("effectClips", JSONArray().also { a -> p.effectClips.forEach { e ->
-            a.put(JSONObject().put("id", e.id).put("filter", e.filterIndex).put("s", e.startMs).put("e", e.endMs))
+            a.put(JSONObject().put("id", e.id).put("filter", e.filterIndex).put("s", e.startMs).put("e", e.endMs).put("locked", e.locked))
         } })
         o.put("markers", JSONArray().also { a -> p.markers.distinct().sorted().forEach { a.put(it) } })
         o.put("overlayClips", JSONArray().also { a -> p.overlayClips.forEach { c ->
             a.put(JSONObject().put("id", c.id).put("kind", c.kind).put("content", c.content)
                 .put("s", c.startMs).put("e", c.endMs).put("color", c.color).put("size", c.size)
-                .put("pos", c.position).put("bg", c.background).put("asset", c.assetFile ?: "").put("keyframes", JSONArray().also { k -> c.keyframes.forEach { f -> k.put(JSONObject().put("t", f.timeMs).put("a", f.alpha.toDouble()).put("p", f.position)) } }))
+                .put("pos", c.position).put("bg", c.background).put("asset", c.assetFile ?: "").put("locked", c.locked).put("keyframes", JSONArray().also { k -> c.keyframes.forEach { f -> k.put(JSONObject().put("t", f.timeMs).put("a", f.alpha.toDouble()).put("p", f.position)) } }))
         } })
         return o.toString()
     }
@@ -83,18 +85,19 @@ object ProjectCodec {
                         (0 until (c.optJSONArray("keyframes")?.length() ?: 0)).mapNotNull { j ->
                             val k = c.optJSONArray("keyframes")?.optJSONObject(j) ?: return@mapNotNull null
                             OverlayKeyframeData(k.optLong("t", a).coerceIn(a, b), k.optDouble("a", 1.0).toFloat().coerceIn(0f, 1f), k.optInt("p", c.optInt("pos", 1)).coerceIn(0, 2))
-                        }.sortedBy { it.timeMs }, c.optString("asset", "").ifEmpty { null })
+                        }.sortedBy { it.timeMs }, c.optString("asset", "").ifEmpty { null }, c.optBoolean("locked", false))
                 },
                 (0 until (o.optJSONArray("effectClips")?.length().orZero())).mapNotNull { i ->
                     val e = o.optJSONArray("effectClips")?.optJSONObject(i) ?: return@mapNotNull null
                     val start = e.optLong("s", 0L); val end = e.optLong("e", 0L)
-                    if (end <= start) null else EffectClipData(e.optLong("id", i.toLong() + 1), e.optInt("filter", 0).coerceIn(0, 5), start, end)
+                    if (end <= start) null else EffectClipData(e.optLong("id", i.toLong() + 1), e.optInt("filter", 0).coerceIn(0, 5), start, end, e.optBoolean("locked", false))
                 },
                 (0 until (o.optJSONArray("markers")?.length().orZero())).mapNotNull { i ->
                     o.optJSONArray("markers")?.optLong(i)?.takeIf { it >= 0L }
                 }.distinct().sorted(),
                 o.optLong("fim", 0L).coerceIn(0L, 5_000L), o.optLong("fom", 0L).coerceIn(0L, 5_000L),
-                o.optLong("fiv", 0L).coerceIn(0L, 5_000L), o.optLong("fov", 0L).coerceIn(0L, 5_000L))
+                o.optLong("fiv", 0L).coerceIn(0L, 5_000L), o.optLong("fov", 0L).coerceIn(0L, 5_000L),
+                o.optBoolean("mm", false), o.optBoolean("mv", false), AudioTrackRouting.normalize(o.optString("solo", "NONE")))
         }
     } catch (e: Exception) { null }
 }

@@ -36,6 +36,29 @@ class ProjectCodecTest {
         assertEquals(0L, decoded.fadeOutVoiceMs)
     }
 
+    @Test fun audioMuteAndSoloSettingsRoundTripAndV5Defaults() {
+        val p = sample().copy(muteMusic = true, muteVoice = false, soloAudioTrack = "VOICE")
+        assertEquals(p, ProjectCodec.decode(ProjectCodec.encode(p)))
+        val v5 = """{"v":5,"name":"old5","video":"main.mp4","dur":1000,"segs":[{"s":0,"e":1000,"c":""}]}"""
+        val decoded = ProjectCodec.decode(v5)!!
+        assertEquals(false, decoded.muteMusic)
+        assertEquals(false, decoded.muteVoice)
+        assertEquals(AudioTrackRouting.NONE, decoded.soloAudioTrack)
+    }
+
+    @Test fun lockedOverlayAndEffectClipsRoundTripAndV6DefaultsToUnlocked() {
+        val base = sample()
+        val p = base.copy(
+            overlayClips = base.overlayClips.map { it.copy(locked = true) },
+            effectClips = base.effectClips.map { it.copy(locked = true) }
+        )
+        assertEquals(p, ProjectCodec.decode(ProjectCodec.encode(p)))
+        val v6 = """{"v":6,"name":"old6","video":"main.mp4","dur":1000,"segs":[{"s":0,"e":1000,"c":""}],"effectClips":[{"id":1,"filter":0,"s":0,"e":1000}],"overlayClips":[{"id":1,"kind":"TEXT","content":"A","s":0,"e":1000}]}"""
+        val decoded = ProjectCodec.decode(v6)!!
+        assertEquals(false, decoded.effectClips.single().locked)
+        assertEquals(false, decoded.overlayClips.single().locked)
+    }
+
     @Test fun corruptOrUnknownVersionIsRejected() {
         assertNull(ProjectCodec.decode("not json"))
         assertNull(ProjectCodec.decode("{\"v\":99,\"name\":\"x\"}"))

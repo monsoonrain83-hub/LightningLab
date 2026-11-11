@@ -306,6 +306,18 @@ fun PhotoEditor(vm: MainVM) {
     val maskInverted = vm.photoMaskInverted
     val healMode = tab == PTab.REMOVE
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var histogram by remember { mutableStateOf<PhotoHistogramData?>(null) }
+    LaunchedEffect(shown, prev, vm.showOriginal, healMode, maskMode) {
+        val source = if (vm.showOriginal || (healMode && !maskMode)) prev else shown ?: prev
+        histogram = if (source == null) null else {
+            val safeBitmap = source.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { PhotoHistogram.compute(safeBitmap) }
+            } finally {
+                if (!safeBitmap.isRecycled) safeBitmap.recycle()
+            }
+        }
+    }
     LaunchedEffect(vm.params, prev, layerSnapshot, shapeSnapshot, imageSnapshot, maskSnapshot, maskInverted) {
         shown = null
         if (prev != null) {
@@ -381,6 +393,10 @@ fun PhotoEditor(vm: MainVM) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
                     Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                    val histogramSnapshot = histogram
+                    if (!healMode) {
+                        histogramSnapshot?.let { data -> PhotoHistogramMini(data, Modifier.align(Alignment.BottomEnd).padding(8.dp)) }
+                    }
                     if (healMode && !maskMode) HealOverlay(vm.healCircles, brush, { vm.addHeal(it) })
                 }
             }
@@ -768,7 +784,7 @@ fun VideoEditor(vm: MainVM) {
                     if (clip.kind == "IMAGE") {
                         vm.videoOverlayBitmap(clip.id)?.let { bitmap ->
                             Image(bitmap.asImageBitmap(), null, Modifier.align(alignment).fillMaxWidth(0.42f).alpha(activeAlpha)
-                                .clickable { vm.selectedOverlayClipId = clip.id }, contentScale = ContentScale.Fit)
+                                .clickable { vm.selectOverlayClip(clip.id) }, contentScale = ContentScale.Fit)
                         }
                     } else {
                         Text(clip.content, Modifier.align(alignment).padding(12.dp).clip(RoundedCornerShape(8.dp))
@@ -930,6 +946,25 @@ fun VideoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.vol_original), vm.volOrig, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volOrig = it }
                                     Param(stringResource(R.string.vol_music), vm.volMusic, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volMusic = it }
                                     Param(stringResource(R.string.vol_voice), vm.volVoice, 0f..2f, onDone = { vm.commitVideoSettings() }) { vm.volVoice = it }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("بی‌صدا کردن موسیقی", Modifier.weight(1f), color = Storm.text)
+                                        Switch(checked = vm.muteMusic, onCheckedChange = { vm.muteMusic = it; vm.commitVideoSettings() })
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("بی‌صدا کردن صدای ضبط‌شده", Modifier.weight(1f), color = Storm.text)
+                                        Switch(checked = vm.muteVoice, onCheckedChange = { vm.muteVoice = it; vm.commitVideoSettings() })
+                                    }
+                                    Text("Solo — پخش فقط یک ترک", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    ChoiceRow(listOf("همه ترک‌ها", "صدای ویدئو", "موسیقی", "صدای ضبط‌شده"),
+                                        when (vm.soloAudioTrack) { AudioTrackRouting.ORIGINAL -> 1; AudioTrackRouting.MUSIC -> 2; AudioTrackRouting.VOICE -> 3; else -> 0 }) {
+                                        vm.soloAudioTrack = when (it) {
+                                            1 -> AudioTrackRouting.ORIGINAL
+                                            2 -> if (vm.music != null) AudioTrackRouting.MUSIC else AudioTrackRouting.NONE
+                                            3 -> if (vm.voice != null) AudioTrackRouting.VOICE else AudioTrackRouting.NONE
+                                            else -> AudioTrackRouting.NONE
+                                        }
+                                        vm.commitVideoSettings()
+                                    }
                                     Divider(color = Storm.outline, modifier = Modifier.padding(vertical = 8.dp))
                                     Text("محو تدریجی موسیقی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
                                     Param("شروع موسیقی (ثانیه)", vm.fadeInMusicMs / 1000f, 0f..5f, onDone = { vm.commitVideoSettings() }) { vm.fadeInMusicMs = (it * 1000f).toLong() }
@@ -977,7 +1012,7 @@ fun VideoEditor(vm: MainVM) {
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.text_bg), style = MaterialTheme.typography.bodyMedium)
                                     }
                                     Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addTextClip() },
-                                        enabled = (vm.selectedOverlayClipId != null || vm.overlayText.isNotBlank()) && vm.videoDur > 0L) {
+                                        enabled = (vm.selectedOverlayClipId?.let { id -> vm.videoOverlayClips.firstOrNull { it.id == id }?.locked != true } ?: vm.overlayText.isNotBlank()) && vm.videoDur > 0L) {
                                         Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن متن به تایم‌لاین")
                                     }
                                 }
@@ -997,7 +1032,7 @@ fun VideoEditor(vm: MainVM) {
                                     ChoiceRow(listOf(R.string.pos_top, R.string.pos_center, R.string.pos_bottom).map { stringResource(it) },
                                         vm.stickerPos) { vm.stickerPos = it }
                                     Button(onClick = { if (vm.selectedOverlayClipId != null) vm.updateSelectedOverlayFromControls() else vm.addStickerClip() },
-                                        enabled = (vm.sticker != null || vm.selectedOverlayClipId != null) && vm.videoDur > 0L) {
+                                        enabled = (vm.selectedOverlayClipId?.let { id -> vm.videoOverlayClips.firstOrNull { it.id == id }?.locked != true } ?: (vm.sticker != null)) && vm.videoDur > 0L) {
                                         Text(if (vm.selectedOverlayClipId != null) "اعمال تغییرات روی لایه انتخابی" else "افزودن استیکر به تایم‌لاین")
                                     }
                                 }
@@ -1191,7 +1226,7 @@ private fun VideoTimelineTracks(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${fmt(vm.playheadMs)}  /  ${fmt(duration)}", style = MaterialTheme.typography.labelSmall,
                         color = Storm.bolt)
-                    Text("برای جابه‌جایی، خط‌کش را لمس یا بکشید", style = MaterialTheme.typography.labelSmall,
+                    Text("خط‌کش: جابه‌جایی پخش  •  کلیپ: کشیدن برای تغییر ترتیب", style = MaterialTheme.typography.labelSmall,
                         color = Storm.muted)
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1208,9 +1243,23 @@ private fun VideoTimelineTracks(
                         Box(Modifier.weight(weight).fillMaxHeight()
                             .clip(RoundedCornerShape(5.dp))
                             .background(if (vm.selSeg == index) Color(0xFFDF713E) else Color(0xFF315C79))
-                            .clickable { vm.selSeg = index }, contentAlignment = Alignment.Center) {
-                            Text(if (seg.uri == null) "${index + 1}" else "${index + 1} +",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White)
+                            .clickable { vm.selSeg = index }
+                            .pointerInput(index, vm.segments.size) {
+                                var dragTotal = 0f
+                                detectDragGestures(onDragStart = { dragTotal = 0f; vm.selSeg = index },
+                                    onDrag = { change, amount -> change.consume(); dragTotal += amount.x },
+                                    onDragEnd = {
+                                        val threshold = size.width * 0.35f
+                                        val destination = when {
+                                            dragTotal > threshold -> index + 1
+                                            dragTotal < -threshold -> index - 1
+                                            else -> index
+                                        }.coerceIn(0, vm.segments.lastIndex)
+                                        if (destination != index) vm.moveSegment(index, destination)
+                                    })
+                            }, contentAlignment = Alignment.Center) {
+                            Text(if (seg.uri == null) "${index + 1}  ⋮⋮" else "${index + 1} +  ⋮⋮",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1)
                         }
                     }
                 }
@@ -1288,14 +1337,18 @@ private fun VideoTimelineTracks(
                         }
                     }
                 }
-                TextButton(onClick = { vm.removeEffectClip(effect.id) }) { Text("×", color = Storm.muted) }
+                TextButton(onClick = { vm.removeEffectClip(effect.id) }, enabled = !effect.locked) { Text("×", color = Storm.muted) }
             }
             if (vm.selectedVideoEffectId == effect.id) {
                 val start = effect.startMs.coerceIn(0L, durationMs - 1L)
                 val end = effect.endMs.coerceIn(start + 1L, durationMs)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("قفل کلیپ افکت", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Switch(checked = effect.locked, onCheckedChange = { vm.setEffectClipLocked(effect.id, it) })
+                }
                 Text("بازه زمانی فیلتر: ${fmt(start)} تا ${fmt(end)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 RangeSlider(value = start.toFloat()..end.toFloat(), onValueChange = { vm.updateEffectClip(effect.id, it.start.toLong(), it.endInclusive.toLong(), recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..durationMs.toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..durationMs.toFloat(), enabled = !effect.locked)
             }
         }
         if (vm.overlayText.isNotBlank()) {
@@ -1330,14 +1383,16 @@ private fun VideoTimelineTracks(
                     val timelineWidthPx = with(LocalDensity.current) { totalWidth.toPx() }.coerceAtLeast(1f)
                     Box(Modifier.offset(x = totalWidth * startFraction).width((totalWidth * widthFraction).coerceAtLeast(18.dp))
                         .fillMaxHeight().clip(RoundedCornerShape(5.dp))
-                        .background(if (vm.selectedOverlayClipId == clip.id) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))) {
+                        .background(if (vm.selectedOverlayClipId == clip.id || clip.id in vm.selectedOverlayClipIds) Color(0xFFDF713E) else if (clip.kind == "TEXT") Color(0xFF24505B) else if (clip.kind == "IMAGE") Color(0xFF463A68) else Color(0xFF244B3C))) {
                         Box(Modifier.fillMaxSize().pointerInput(clip.id, durationMs) {
                             var dragTotal = 0f
                             detectDragGestures(onDragStart = { dragTotal = 0f; vm.selectedOverlayClipId = clip.id },
                                 onDrag = { change, amount ->
                                     change.consume(); dragTotal += amount.x
                                     val delta = (dragTotal / timelineWidthPx * durationMs).toLong()
-                                    vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
+                                    if (clip.id in vm.selectedOverlayClipIds && vm.selectedOverlayClipIds.size > 1)
+                                        vm.moveOverlayGroup(clip.id, delta, recordHistory = false)
+                                    else vm.updateOverlayClip(clip.id, clip.startMs + delta, clip.endMs + delta, recordHistory = false)
                                 }, onDragEnd = { vm.finishVideoTimelineGesture() }, onDragCancel = { vm.finishVideoTimelineGesture() })
                         }.clickable { vm.selectedOverlayClipId = clip.id }, contentAlignment = Alignment.Center) {
                             Text(clip.content, Modifier.padding(horizontal = 8.dp), maxLines = 1, color = Color.White,
@@ -1371,17 +1426,36 @@ private fun VideoTimelineTracks(
                         }
                     }
                 }
-                TextButton(onClick = { vm.removeOverlayClip(clip.id) }) { Text("×", color = Storm.muted) }
+                TextButton(onClick = { vm.removeOverlayClip(clip.id) }, enabled = !clip.locked) { Text("×", color = Storm.muted) }
             }
             if (vm.selectedOverlayClipId == clip.id) {
                 val safeStart = clip.startMs.coerceIn(0L, durationMs - 1L)
                 val safeEnd = clip.endMs.coerceIn(safeStart + 1L, durationMs)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("قفل کلیپ", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Switch(checked = clip.locked, onCheckedChange = { vm.setOverlayClipLocked(clip.id, it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("انتخاب در گروه", Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Checkbox(checked = clip.id in vm.selectedOverlayClipIds, onCheckedChange = { vm.toggleOverlaySelection(clip.id) })
+                }
+                if (vm.selectedOverlayClipIds.size > 1 && vm.videoOverlayClips.any { it.id in vm.selectedOverlayClipIds && it.locked }) {
+                    Text("گروه شامل کلیپ قفل‌شده است؛ ابتدا قفل را بردارید.", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                }
+                if (vm.selectedOverlayClipIds.size > 1) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${vm.selectedOverlayClipIds.size} کلیپ انتخاب شده", Modifier.weight(1f), color = Storm.text, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { vm.removeSelectedOverlayClips() },
+                            enabled = vm.videoOverlayClips.none { it.id in vm.selectedOverlayClipIds && it.locked }) { Text("حذف گروه") }
+                        TextButton(onClick = { vm.clearOverlaySelection() }) { Text("لغو") }
+                    }
+                }
                 Text("شروع: ${fmt(safeStart)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = safeStart.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, it.toLong(), safeEnd, recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..(durationMs - 1L).toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = 0f..(durationMs - 1L).toFloat(), enabled = !clip.locked)
                 Text("پایان: ${fmt(safeEnd)}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = safeEnd.toFloat(), onValueChange = { vm.updateOverlayClip(clip.id, safeStart, it.toLong(), recordHistory = false) },
-                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat())
+                    onValueChangeFinished = { vm.finishVideoTimelineGesture() }, valueRange = (safeStart + 1L).toFloat()..durationMs.toFloat(), enabled = !clip.locked)
                 Divider(color = Storm.hairline)
                 Text("فریم‌های کلیدی حرکت و شفافیت", style = MaterialTheme.typography.labelMedium, color = Storm.arc)
                 Text("زمان فریم: ${fmt(keyTime.toLong().coerceIn(safeStart, safeEnd))}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
@@ -1390,7 +1464,7 @@ private fun VideoTimelineTracks(
                 Text("شفافیت: ${(keyAlpha * 100).toInt()}٪", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 Slider(value = keyAlpha, onValueChange = { keyAlpha = it }, valueRange = 0f..1f)
                 ChoiceRow(listOf("بالا", "وسط", "پایین"), keyPosition) { keyPosition = it }
-                Button(onClick = { vm.addOverlayKeyframe(clip.id, keyTime.toLong(), keyAlpha, keyPosition) },
+                Button(onClick = { vm.addOverlayKeyframe(clip.id, keyTime.toLong(), keyAlpha, keyPosition) }, enabled = !clip.locked,
                     modifier = Modifier.fillMaxWidth()) { Text("ثبت فریم کلیدی") }
                 if (clip.keyframes.isNotEmpty()) {
                     Text("فریم‌های ثبت‌شده", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
