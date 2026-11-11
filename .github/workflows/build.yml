@@ -8,6 +8,7 @@ on:
       - 'settings.gradle.kts'
       - 'gradle/**'
       - 'tools/cloud_ai/**'
+      - 'tools/lightning_ai/**'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
