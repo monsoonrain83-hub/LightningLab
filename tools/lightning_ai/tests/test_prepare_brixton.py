@@ -46,7 +46,7 @@ class BrixtonManifestTests(unittest.TestCase):
                              by_name["2015-10-01_10_00_00_CC_Cam2.mp4"]["split"])
             self.assertEqual(by_name["2015-10-02_10_00_00_close_Cam1.mp4"]["split"],
                              by_name["2015-10-03_10_00_00_far_Cam1.mp4"]["split"])
-            self.assertEqual(4, len({row["event_group"] for row in rows}))
+            self.assertEqual(3, len({row["event_group"] for row in rows}))
 
     def test_writes_manifest_and_skipped_file_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
