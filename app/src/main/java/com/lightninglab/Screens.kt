@@ -28,6 +28,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -301,6 +305,9 @@ fun PhotoEditor(vm: MainVM) {
     val prev = vm.photoPrev
     var tab by remember { mutableStateOf(PTab.LIGHT) }
     var showPhotoProjects by remember { mutableStateOf(false) }
+    var compareMode by remember { mutableStateOf(false) }
+    var comparePosition by remember(prev) { mutableStateOf(0.5f) }
+    LaunchedEffect(prev) { compareMode = false; comparePosition = 0.5f }
     if (showPhotoProjects) PhotoProjectsDialog(vm) { showPhotoProjects = false }
     var brush by remember { mutableStateOf(0.02f) }
     var layerDraft by remember { mutableStateOf("") }
@@ -361,6 +368,10 @@ fun PhotoEditor(vm: MainVM) {
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.nav_photo), onBack = { vm.screen = Screen.HOME }) {
             TextButton(onClick = { showPhotoProjects = true }) { Text("پروژه‌ها") }
+            TextButton(onClick = { compareMode = !compareMode; vm.showOriginal = false },
+                enabled = shown != null && !healMode && !maskMode) {
+                Text(if (compareMode) "بستن مقایسه" else "قبل / بعد")
+            }
             IconAction(Ic.UNDO, stringResource(R.string.undo), vm.canUndo) { vm.undo() }
             IconAction(Ic.REDO, stringResource(R.string.redo), vm.canRedo) { vm.redo() }
             IconAction(Ic.PHOTO, stringResource(R.string.pick_image), true) { pickReq() }
@@ -400,10 +411,23 @@ fun PhotoEditor(vm: MainVM) {
                             },
                             onDragEnd = { vm.finishPhotoLayerGesture() }
                         )
-                    } else if (!healMode) Modifier.pointerInput(Unit) {
+                    } else if (!healMode && !compareMode) Modifier.pointerInput(Unit) {
                         detectTapGestures(onPress = { vm.showOriginal = true; tryAwaitRelease(); vm.showOriginal = false })
                     } else Modifier)) {
-                    Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                    if (compareMode && shown != null && !healMode && !maskMode) {
+                        Image(shown!!.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                        Image(prev.asImageBitmap(), null, Modifier.matchParentSize().drawWithContent {
+                            val splitX = PhotoCompareMath.splitX(size.width, comparePosition)
+                            clipRect(right = splitX) { this@drawWithContent.drawContent() }
+                        }, contentScale = ContentScale.Fit)
+                        Canvas(Modifier.matchParentSize()) {
+                            val splitX = PhotoCompareMath.splitX(size.width, comparePosition)
+                            drawLine(Color.White, Offset(splitX, 0f), Offset(splitX, size.height), strokeWidth = 3.dp.toPx())
+                            drawCircle(Color.White, radius = 9.dp.toPx(), center = Offset(splitX, size.height / 2f))
+                        }
+                    } else {
+                        Image(bmp.asImageBitmap(), null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                    }
                     val histogramSnapshot = histogram
                     if (!healMode) {
                         histogramSnapshot?.let { data -> PhotoHistogramMini(data, Modifier.align(Alignment.BottomEnd).padding(8.dp)) }
@@ -416,8 +440,21 @@ fun PhotoEditor(vm: MainVM) {
                 shape = RoundedCornerShape(50), color = Color(0xAA101B2A),
                 border = BorderStroke(1.dp, Color(0x557EC8FF))
             ) {
-                Text(stringResource(if (vm.showOriginal) R.string.original_view else R.string.live_preview), color = Color(0xFFE1F2FF),
-                    style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                Text(if (compareMode) "قبل / بعد" else stringResource(if (vm.showOriginal) R.string.original_view else R.string.live_preview),
+                    color = Color(0xFFE1F2FF), style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+            }
+            if (compareMode && shown != null) {
+                Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                    shape = RoundedCornerShape(18.dp), color = Color(0xDD101B2A),
+                    border = BorderStroke(1.dp, Color(0x557EC8FF))) {
+                    Row(Modifier.padding(horizontal = 10.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("قبل", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                        Slider(value = comparePosition, onValueChange = { comparePosition = PhotoCompareMath.normalize(it) },
+                            modifier = Modifier.weight(1f))
+                        Text("بعد", color = Color.White, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
             Text(stringResource(if (healMode) R.string.heal_hint else R.string.hold_compare),
                 style = MaterialTheme.typography.labelSmall, color = Storm.text,
