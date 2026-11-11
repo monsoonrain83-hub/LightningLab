@@ -4,7 +4,21 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-data class LightningEvent(val id: Int, val startMs: Long, val endMs: Long, val bestMs: Long, val score: Float)
+enum class LightningVisualType(val labelFa: String, val noteFa: String) {
+    VISIBLE_CHANNEL("کانال روشن قابل‌مشاهده", "رد باریک روشن در تصویر دیده شده؛ تشخیص قطعی ابر-زمین یا درون‌ابری نیست"),
+    DIFFUSE_ILLUMINATION("روشن‌شدن گسترده ابر", "افزایش روشنایی در بخش بزرگی از میدان تصویر"),
+    LOCALIZED_FLASH("فلاش موضعی", "روشنایی در تعداد محدودی از نواحی تصویر متمرکز است"),
+    MULTI_STROKE_CLUSTER("چندپالسی", "چند قله روشنایی با افت میانی در یک خوشه زمانی دیده شده"),
+    UNCERTAIN("رخداد نامعین", "شواهد تصویری برای تعیین الگوی ظاهری کافی نیست")
+}
+
+data class LightningEvent(
+    val id: Int, val startMs: Long, val endMs: Long, val bestMs: Long, val score: Float,
+    val visualType: LightningVisualType = LightningVisualType.UNCERTAIN,
+    val visualEvidence: Float = 0f,
+    val spatialSpread: Float = 0f,
+    val pulseCount: Int = 1
+)
 
 /** One analysed frame: mean luma, GX*GY cell luma grid, and "thin bright line" fraction. No Android types. */
 class Sample(val tMs: Long, val mean: Float, val cells: FloatArray, val structure: Float)
@@ -112,6 +126,26 @@ object FlashAnalyzer {
     private fun frameScore(ms: List<Sample>, f: Frames, i: Int): Float =
         0.6f * min(1f, ms[i].structure * 40f) + 0.4f * min(1f, max(0f, f.best[i] - f.energy[i]) / 40f)
 
+    private fun spatialSpread(cells: FloatArray): Float {
+        if (cells.isEmpty()) return 0f
+        val sorted = cells.copyOf()
+        java.util.Arrays.sort(sorted)
+        // Use the lower quartile as the scene baseline: a broad flash can illuminate
+        // more than half the grid, making the median itself part of the flash.
+        val baseline = sorted[(sorted.size - 1) / 4]
+        val peak = sorted.last()
+        val threshold = baseline + max(3f, (peak - baseline) * 0.25f)
+        return cells.count { it >= threshold }.toFloat() / cells.size
+    }
+
+    private fun visualType(channelEvidence: Float, spread: Float, pulseCount: Int): LightningVisualType = when {
+        pulseCount > 1 -> LightningVisualType.MULTI_STROKE_CLUSTER
+        channelEvidence >= 0.55f -> LightningVisualType.VISIBLE_CHANNEL
+        spread >= 0.38f -> LightningVisualType.DIFFUSE_ILLUMINATION
+        spread <= 0.12f -> LightningVisualType.LOCALIZED_FLASH
+        else -> LightningVisualType.UNCERTAIN
+    }
+
     /** Splits one confirmed episode [s0, e0] into strokes at energy peaks separated by a clear dip. */
     private fun strokes(ms: List<Sample>, f: Frames, s0: Int, e0: Int, out: MutableList<LightningEvent>) {
         val fl = (s0..e0).filter { f.flagged[it] }
@@ -142,7 +176,13 @@ object FlashAnalyzer {
                 val sc = frameScore(ms, f, i)
                 if (sc > bs) { bs = sc; bi = i }
             }
-            out.add(LightningEvent(0, ms[st].tMs, ms[en].tMs, ms[bi].tMs, max(0f, bs)))
+            val channelEvidence = (ms[bi].structure * 60f).coerceIn(0f, 1f)
+            val spread = spatialSpread(ms[bi].cells)
+            out.add(LightningEvent(
+                0, ms[st].tMs, ms[en].tMs, ms[bi].tMs, max(0f, bs),
+                visualType(channelEvidence, spread, kept.size),
+                max(channelEvidence, spread).coerceIn(0f, 1f), spread, kept.size
+            ))
         }
     }
 
@@ -184,7 +224,11 @@ object FlashAnalyzer {
                     if (v > bv) { bv = v; bi = i }
                 }
                 val sc = min(1f, day!![bi].longest / 80f) * 0.8f + 0.2f * min(1f, ms[bi].structure * 40f)
-                out.add(LightningEvent(0, ms[s0].tMs, ms[e0].tMs, ms[bi].tMs, sc))
+                val channelEvidence = (day!![bi].longest / 80f).coerceIn(0f, 1f)
+                out.add(LightningEvent(
+                    0, ms[s0].tMs, ms[e0].tMs, ms[bi].tMs, sc,
+                    LightningVisualType.VISIBLE_CHANNEL, channelEvidence, 0f, 1
+                ))
             }
         }
         return out.sortedBy { it.startMs }.mapIndexed { i, e -> e.copy(id = i + 1) }
