@@ -1,7 +1,7 @@
 # LightningLab — نقشه‌راه جامع و وضعیت اجرایی
 
-آخرین نسخهٔ ادغام‌شده در main: **1.0-r10.60 / versionCode 67**.
-نسخهٔ در حال بررسی: **r10.61 / versionCode 68** در PR #17.
+آخرین نسخهٔ ادغام‌شده در main: **1.0-r10.61 / versionCode 68**.
+نسخهٔ در حال بررسی: **r10.62 در PR #20**.
 وضعیت مدل‌ها و قابلیت‌های علمی فقط با تست/ارزیابی مربوط به خودشان Done تلقی می‌شود؛ موفقیت build به‌تنهایی دقت علمی را ثابت نمی‌کند.
 
 ## اصول کیفیت
@@ -24,7 +24,8 @@
 - **r10.58:** کارت رخداد صاعقه با زمان شروع/پایان، تعداد پالس و گستردگی روشنایی؛ هشدار علمی دربارهٔ محدودیت تعیین CG/IC و قطبیت از RGB.
 - **r10.59:** پروفایل‌های خروجی H.264، رزولوشن Source/1080p/720p/480p، bitrate متناسب با تعداد پیکسل، حفظ نسبت تصویر، عدم upscale و ذخیرهٔ انتخاب کاربر؛ تست JVM و APK موفق.
 - **r10.60:** آماده‌سازی دیتاست ویدئویی Brixton (CC BY 4.0)، هفت برچسب رخداد، SHA-256، گروه‌بندی نماهای دوربین و محتوای تکراری، split زمانی train/validation/test؛ Python tests و compile، JVM tests و APK موفق.
-- **r10.61 در PR #17:** مقایسهٔ لغزشی قبل/بعد در Photo Studio، حفظ مقیاس دو تصویر و عدم تغییر source/history؛ منتظر CI نهایی.
+- **r10.61:** مقایسهٔ لغزشی قبل/بعد در Photo Studio، حفظ مقیاس دو تصویر و عدم تغییر source/history؛ JVM tests و APK build موفق.
+- **r10.62 در PR #20:** pipeline آموزش temporal TFLite برای هفت برچسب Brixton، هشت فریم RGB، MobileNetV3Small، class weighting، گزارش macro-F1/Brier/confusion matrix و قرارداد ثابت مدل؛ هنوز وزن آموزش‌دیده تولید یا روی Android ادغام نشده است.
 
 ## Video Studio
 
@@ -57,7 +58,7 @@
 - [ ] color wheels، local adjustment masks با feather/brush refinement و blend modes.
 - [ ] perspective correction، lens profile/correction و RAW/DNG.
 - [ ] clone/patch و object removal پیشرفته با کنترل لبه.
-- [ ] تأیید و merge مقایسهٔ لغزشی before/after در PR #17؛ histogram دقیق full-resolution برای export و metadata.
+- [ ] تأیید و merge مقایسهٔ لغزشی before/after در PR #18؛ histogram دقیق full-resolution برای export و metadata.
 - [ ] مدیریت حافظه، preview tile-based و تست عکس‌های بزرگ/RAW و خروجی PNG/JPEG.
 - [ ] UI instrumentation، تست لمس، دسترس‌پذیری و اندازه‌های مختلف نمایشگر.
 
@@ -91,6 +92,9 @@
 - [x] نمایش interval، pulse count، spatial spread و توضیح محدودیت score.
 
 ### باقی‌مانده
+- [ ] تکمیل CI و merge pipeline آموزش Brixton در PR #19؛ سپس تولید وزن‌های TFLite با اجرای واقعی روی دیتاست.
+- [ ] Android import/runtime برای قرارداد [1,8,224,224,3] → [1,7] و نمایش پیش‌بینی مدل در کنار شواهد heuristic.
+- [ ] ارزیابی مستقل چنددوربین/چندمکان و بررسی calibration قبل از فعال‌سازی برچسب مدل به‌عنوان نتیجهٔ قابل اتکا.
 - [ ] line/branch tracking و segmentation در رزولوشن بالاتر همراه تثبیت دوربین.
 - [ ] ردیابی leader/return stroke؛ برچسب CG/IC فقط در صورت شواهد کافی و اعتبارسنجی.
 - [ ] مدل ML با دیتاست ویدئویی مجاز و annotation متخصص؛ split مستقل بر اساس کلیپ/دوربین.
