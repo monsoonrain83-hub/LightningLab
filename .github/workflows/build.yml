@@ -40,6 +40,8 @@ jobs:
           ls app/src/main/java/com/lightninglab
       - name: Run cloud dataset preparation unit tests
         run: python3 -m unittest discover -s tools/cloud_ai/tests -v
+      - name: Compile cloud training utilities
+        run: python3 -m compileall -q tools/cloud_ai
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
