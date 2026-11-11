@@ -90,6 +90,31 @@ object TimelineMath {
     fun reorderIndex(size: Int, from: Int, to: Int): Int? =
         if (size > 0 && from in 0 until size && to in 0 until size && from != to) to else null
 
+    /** Move a contiguous selection one slot left/right without changing its internal order. */
+    fun <T> reorderContiguousGroup(items: List<T>, selectedIndices: Set<Int>, direction: Int): List<T>? {
+        if (direction != -1 && direction != 1) return null
+        if (selectedIndices.isEmpty() || selectedIndices.any { it !in items.indices }) return null
+        val indices = selectedIndices.sorted()
+        val first = indices.first()
+        val last = indices.last()
+        if (last - first + 1 != indices.size) return null
+        val result = items.toMutableList()
+        return when (direction) {
+            -1 -> {
+                if (first == 0) return null
+                val previous = result.removeAt(first - 1)
+                result.add(last, previous)
+                result
+            }
+            else -> {
+                if (last == items.lastIndex) return null
+                val next = result.removeAt(last + 1)
+                result.add(first, next)
+                result
+            }
+        }
+    }
+
     fun split(start: Long, end: Long, at: Long): Pair<LongArray, LongArray>? {
         if (at - start < MIN_CLIP_MS || end - at < MIN_CLIP_MS) return null
         return longArrayOf(start, at) to longArrayOf(at, end)

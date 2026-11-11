@@ -52,6 +52,19 @@ class TimelineMathTest {
         assertNull(TimelineMath.reorderIndex(4, -1, 2))
         assertNull(TimelineMath.reorderIndex(0, 0, 0))
     }
+    @Test fun contiguousGroupReorderPreservesInternalOrder() {
+        val items = listOf("A", "B", "C", "D", "E")
+        assertEquals(listOf("B", "C", "A", "D", "E"), TimelineMath.reorderContiguousGroup(items, setOf(1, 2), -1))
+        assertEquals(listOf("A", "D", "B", "C", "E"), TimelineMath.reorderContiguousGroup(items, setOf(1, 2), 1))
+    }
+    @Test fun groupReorderRejectsNonContiguousInvalidAndBoundaryMoves() {
+        val items = listOf(1, 2, 3, 4)
+        assertNull(TimelineMath.reorderContiguousGroup(items, setOf(0, 2), 1))
+        assertNull(TimelineMath.reorderContiguousGroup(items, setOf(0, 1), -1))
+        assertNull(TimelineMath.reorderContiguousGroup(items, setOf(2, 3), 1))
+        assertNull(TimelineMath.reorderContiguousGroup(items, setOf(1, 9), 1))
+        assertNull(TimelineMath.reorderContiguousGroup(items, setOf(1), 0))
+    }
     @Test fun rippleShiftClosesTheDeletedGap() {
         assertEquals(900L, TimelineMath.rippleShift(900, 1000, 500))
         assertEquals(1000L, TimelineMath.rippleShift(1200, 1000, 500))

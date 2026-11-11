@@ -872,6 +872,35 @@ fun VideoEditor(vm: MainVM) {
                                                 }
                                             }
                                         }
+                                        if (vm.segments.size > 1) {
+                                            Text("انتخاب گروهی قطعات", style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                vm.segments.forEachIndexed { index, _ ->
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Checkbox(checked = index in vm.selectedSegmentIndices,
+                                                            onCheckedChange = { vm.toggleSegmentSelection(index) })
+                                                        Text((index + 1).toString(), style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                                                    }
+                                                }
+                                            }
+                                            if (vm.selectedSegmentIndices.size > 1) {
+                                                val ordered = vm.selectedSegmentIndices.sorted()
+                                                val contiguous = ordered.last() - ordered.first() + 1 == ordered.size
+                                                if (!contiguous) Text("برای جابه‌جایی گروهی، قطعات باید پشت‌سرهم انتخاب شوند.",
+                                                    style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    OutlinedButton(enabled = contiguous && ordered.first() > 0,
+                                                        onClick = { vm.moveSelectedSegmentGroup(-1) }) { Text("← انتقال گروه") }
+                                                    OutlinedButton(enabled = contiguous && ordered.last() < vm.segments.lastIndex,
+                                                        onClick = { vm.moveSelectedSegmentGroup(1) }) { Text("انتقال گروه →") }
+                                                    OutlinedButton(onClick = { vm.deleteSelectedSegments() }) { Text("حذف گروه") }
+                                                    TextButton(onClick = { vm.clearSegmentSelection() }) { Text("لغو") }
+                                                }
+                                            } else if (vm.selectedSegmentIndices.size == 1) {
+                                                TextButton(onClick = { vm.clearSegmentSelection() }) { Text("لغو انتخاب گروه") }
+                                            }
+                                        }
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             Text(if (sel != null) "${vm.selSeg + 1}.  ${fmt(sel.startMs)} – ${fmt(sel.endMs)}" else "",
                                                 style = MaterialTheme.typography.bodySmall, color = Storm.muted, modifier = Modifier.weight(1f))
