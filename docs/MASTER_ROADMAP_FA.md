@@ -1,7 +1,7 @@
 # LightningLab — نقشه‌راه جامع و وضعیت اجرایی
 
-آخرین نسخهٔ ادغام‌شده در main: **1.0-r10.56 / versionCode 64**.
-نسخهٔ در حال بررسی: **r10.59 / versionCode 66** در PR #15.
+آخرین نسخهٔ ادغام‌شده در main: **1.0-r10.60 / versionCode 67**.
+نسخهٔ در حال بررسی: **r10.61 / versionCode 68** در PR #17.
 وضعیت مدل‌ها و قابلیت‌های علمی فقط با تست/ارزیابی مربوط به خودشان Done تلقی می‌شود؛ موفقیت build به‌تنهایی دقت علمی را ثابت نمی‌کند.
 
 ## اصول کیفیت
@@ -22,7 +22,9 @@
 - **r10.56:** نمودار تعاملی drag برای منحنی عکس، ادغام‌شده و CI موفق.
 - **r10.57:** runtime و pipeline آموزش مدل سه‌سر WMO برای CL/CM/CH با خروجی [1,3,11]؛ CI JVM/Python/APK موفق. وزن آموزش‌دیده هنوز باید از دادهٔ دارای مجوز تولید و اعتبارسنجی شود.
 - **r10.58:** کارت رخداد صاعقه با زمان شروع/پایان، تعداد پالس و گستردگی روشنایی؛ هشدار علمی دربارهٔ محدودیت تعیین CG/IC و قطبیت از RGB.
-- **r10.59 در PR #15:** پروفایل‌های خروجی H.264، رزولوشن Source/1080p/720p/480p، bitrate متناسب با تعداد پیکسل، حفظ نسبت تصویر، عدم upscale و ذخیرهٔ انتخاب کاربر؛ منتظر CI نهایی است.
+- **r10.59:** پروفایل‌های خروجی H.264، رزولوشن Source/1080p/720p/480p، bitrate متناسب با تعداد پیکسل، حفظ نسبت تصویر، عدم upscale و ذخیرهٔ انتخاب کاربر؛ تست JVM و APK موفق.
+- **r10.60:** آماده‌سازی دیتاست ویدئویی Brixton (CC BY 4.0)، هفت برچسب رخداد، SHA-256، گروه‌بندی نماهای دوربین و محتوای تکراری، split زمانی train/validation/test؛ Python tests و compile، JVM tests و APK موفق.
+- **r10.61 در PR #17:** مقایسهٔ لغزشی قبل/بعد در Photo Studio، حفظ مقیاس دو تصویر و عدم تغییر source/history؛ منتظر CI نهایی.
 
 ## Video Studio
 
@@ -32,7 +34,7 @@
 - [x] گروه‌بندی overlay و قطعات اصلی؛ reorder گروه پیوسته و حذف گروهی با Undo.
 - [x] waveform PCM/cache؛ SRT import/export؛ mute/solo و fade موسیقی/voice.
 - [x] preflight خروجی و H.264/AAC MP4.
-- [x] پروفایل‌های export با رزولوشن و bitrate در PR #15.
+- [x] پروفایل‌های export با رزولوشن و bitrate؛ H.264، حفظ نسبت تصویر و عدم upscale.
 
 ### باقی‌مانده
 - [ ] gain/fade/pan مستقل هر audio clip و waveform per-clip.
@@ -55,7 +57,7 @@
 - [ ] color wheels، local adjustment masks با feather/brush refinement و blend modes.
 - [ ] perspective correction، lens profile/correction و RAW/DNG.
 - [ ] clone/patch و object removal پیشرفته با کنترل لبه.
-- [ ] before/after slider، histogram دقیق full-resolution برای export و metadata.
+- [ ] تأیید و merge مقایسهٔ لغزشی before/after در PR #17؛ histogram دقیق full-resolution برای export و metadata.
 - [ ] مدیریت حافظه، preview tile-based و تست عکس‌های بزرگ/RAW و خروجی PNG/JPEG.
 - [ ] UI instrumentation، تست لمس، دسترس‌پذیری و اندازه‌های مختلف نمایشگر.
 
@@ -83,6 +85,7 @@
 
 ### تکمیل‌شده
 - [x] decode و scan ویدئو با MediaCodec، تحلیل زمانی و استخراج فریم برتر.
+- [x] pipeline آماده‌سازی Brixton: هفت برچسب، گروه‌بندی چند دوربین، SHA-256 و split زمانی؛ CI Python سبز.
 - [x] DayLine برای ساختارهای باریک روزانه و جداسازی پالس‌ها.
 - [x] دسته‌بندی ظاهری: visible channel، diffuse illumination، localized flash، multi-pulse و uncertain.
 - [x] نمایش interval، pulse count، spatial spread و توضیح محدودیت score.
