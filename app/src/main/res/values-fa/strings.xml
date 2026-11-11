@@ -25,7 +25,7 @@
     <string name="deselect_all">لغو انتخاب همه</string>
     <string name="auto_select">انتخاب خودکار بهترین‌ها</string>
     <string name="order_hint">فریم‌ها را به ترتیب انتخاب کنید: شماره ۱ پس‌زمینه است و بقیه فقط خط صاعقه‌شان اضافه می‌شود.</string>
-    <string name="heuristic_note">امتیاز فقط یک شاخص ابتکاری است، نه احتمال کالیبره‌شده.</string>
+    <string name="heuristic_note">امتیاز، شاخص ابتکاری الگوریتم است نه احتمال وقوع. تصویر به‌تنهایی برای تعیین قطعی صاعقه ابر-زمین/درون‌ابری، قطبیت یا مسیر الکتریکی کافی نیست؛ برچسب‌ها فقط الگوی ظاهری رخداد را توصیف می‌کنند.</string>
     <string name="save_frames">ذخیره فریم‌های انتخاب‌شده به‌صورت PNG جداگانه</string>
     <string name="frames_saved">%1$d فریم در Pictures/LightningLab ذخیره شد</string>
     <string name="method_lighten">Lighten</string>
