@@ -31,7 +31,8 @@ data class PhotoParams(
     val scurve: Float = 0f,      // -1..1 S-curve contrast (tone curve)
     val denoise: Float = 0f,     // 0..1 luminance noise reduction
     val vibrance: Float = 0f,    // -1..1 boosts weak colours more than strong ones
-    val hsl: List<Float> = List(21) { 0f }   // [hue x7][sat x7][lum x7]; bands red..purple
+    val hsl: List<Float> = List(21) { 0f },  // [hue x7][sat x7][lum x7]; bands red..purple
+    val rgbCurves: List<Float> = PhotoToneCurves.identity()
 )
 
 /** One removal mark: x,y normalised to image width/height, r normalised to image WIDTH. */
@@ -77,7 +78,7 @@ object PhotoEdit {
             } finally {
                 if (working !== src && !working.isRecycled) working.recycle()
             }
-            if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f && p.hsl.all { it == 0f }) return out
+            if (p.highlights == 0f && p.shadows == 0f && p.sharpness <= 0f && p.scurve == 0f && p.denoise <= 0f && p.vibrance == 0f && p.hsl.all { it == 0f } && PhotoToneCurves.isIdentity(p.rgbCurves)) return out
             return try { tonePass(out, p) } finally { if (!out.isRecycled) out.recycle() }
         } catch (t: Throwable) {
             if (working !== src && !working.isRecycled) working.recycle()
@@ -101,6 +102,10 @@ object PhotoEdit {
         val band = 512; val m = if (needTone) rBig else rSmall
         val twoPi = 2.0 * PI
         val hslOn = p.hsl.any { it != 0f }
+        val curvesOn = !PhotoToneCurves.isIdentity(p.rgbCurves)
+        val curveR = if (curvesOn) PhotoToneCurves.lut(p.rgbCurves, 0) else null
+        val curveG = if (curvesOn) PhotoToneCurves.lut(p.rgbCurves, 1) else null
+        val curveB = if (curvesOn) PhotoToneCurves.lut(p.rgbCurves, 2) else null
         val hueA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(it) { 0f } }
         val satA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(Hsl.BANDS + it) { 0f } }
         val lumA = FloatArray(Hsl.BANDS) { p.hsl.getOrElse(2 * Hsl.BANDS + it) { 0f } }
@@ -145,6 +150,7 @@ object PhotoEdit {
                     r = (a shr 16) and 255; g = (a shr 8) and 255; b = a and 255
                 }
                 if (p.scurve != 0f) { r = lut[r]; g = lut[g]; b = lut[b] }
+                if (curvesOn) { r = curveR!![r]; g = curveG!![g]; b = curveB!![b] }
                 out[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             }
             dst.setPixels(out, 0, w, 0, y0, w, y1 - y0)
