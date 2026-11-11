@@ -227,8 +227,12 @@ fun Results(vm: MainVM) {
                     Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (item.order > 0) "${item.order}" else "·", fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(22.dp))
-                        Text("#${item.event.id}  ${fmt(item.event.bestMs)}  ·  ${(item.event.score * 100).roundToInt()}",
-                            style = MaterialTheme.typography.bodySmall)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("#${item.event.id}  ${fmt(item.event.bestMs)}  ·  ${(item.event.score * 100).roundToInt()}",
+                                style = MaterialTheme.typography.bodySmall)
+                            Text(item.event.visualType.labelFa + "  ·  ${(item.event.visualEvidence * 100).roundToInt()}٪ نشانه تصویری",
+                                style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                        }
                     }
                 }
             }

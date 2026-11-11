@@ -30,6 +30,16 @@ class FlashAnalyzerTest {
 
     private fun noDay(k: Clip) = k.t.map { DayLine.Stat(it, 0f, 0f, 0) }
 
+    @Test fun localizedFlashGetsLocalizedVisualSignature() {
+        val k = clip(20); flash(k, 8000, 75f, cells = 3)
+        assertEquals(LightningVisualType.LOCALIZED_FLASH, run(k).single().visualType)
+    }
+
+    @Test fun broadIlluminationGetsDiffuseVisualSignature() {
+        val k = clip(20); flash(k, 8000, 75f, cells = 80)
+        assertEquals(LightningVisualType.DIFFUSE_ILLUMINATION, run(k).single().visualType)
+    }
+
     @Test fun nightTwoFlashes500msApartAreSeparate() {
         val k = clip(20); flash(k, 5000, 60f); flash(k, 5500, 80f)
         assertEquals(2, run(k).size)
@@ -94,6 +104,9 @@ class FlashAnalyzerTest {
         val i = k.t.indexOfFirst { it >= 10000 }
         for (j in 0 until 3) { k.c[i][j] += 90f; k.c[i + 1][j] += 90f }
         for (j in 0 until 3) { k.c[i + 4][j] += 90f; k.c[i + 5][j] += 90f }
-        assertEquals(2, run(k).size)
+        val events = run(k)
+        assertEquals(2, events.size)
+        assertEquals(LightningVisualType.MULTI_STROKE_CLUSTER, events.first().visualType)
+        assertEquals(2, events.first().pulseCount)
     }
 }
