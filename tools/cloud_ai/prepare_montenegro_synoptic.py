@@ -71,6 +71,7 @@ def prepare(record_dir, out):
 
     grouped = defaultdict(lambda: {key: [] for key in VARIABLES})
     seen_pairs = set()
+    annotators_by_id = defaultdict(set)
     for row in annotations:
         item_id, annotator = row.get("annotation_item_id", "").strip(), row.get("user_id", "").strip()
         if item_id not in by_id:
@@ -79,6 +80,7 @@ def prepare(record_dir, out):
         if pair in seen_pairs:
             raise ValueError("Duplicate image/annotator submission: " + repr(pair))
         seen_pairs.add(pair)
+        annotators_by_id[item_id].add(annotator)
         for code, column in VARIABLES.items():
             value = row.get(column, "").strip()
             if value and value not in CODES:
@@ -112,7 +114,7 @@ def prepare(record_dir, out):
             row = {"image_id": item_id, "image_path": "images/" + name,
                    "timestamp_local": item["timestamp"], "day": item["day"],
                    "split": day_split[item["day"]],
-                   "annotator_count": len({u for iid, u in seen_pairs if iid == item_id})}
+                   "annotator_count": len(annotators_by_id[item_id])}
             for code in VARIABLES:
                 dist, counts = soft_distribution(grouped[item_id][code])
                 row[code.lower()+"_soft_targets"] = json.dumps(dist, sort_keys=True)
@@ -133,7 +135,7 @@ def prepare(record_dir, out):
     attribution = ("Plamenac, Aleksandar; Tomovic, Savo (2026). A Multi-Annotator Ground-Based Sky Camera "
         "Dataset for Cloud Observation in Montenegro, Version 1.0.0. Zenodo. https://doi.org/"+DOI+
         ". Licensed under CC BY 4.0. Changes: extracted images and generated soft-label manifest.")
-    (out/"ATTRIBUTION.txt").write_text(attribution+"\\n", encoding="utf-8")
+    (out/"ATTRIBUTION.txt").write_text(attribution+chr(10), encoding="utf-8")
     split_days = {s: sorted(d for d, value in day_split.items() if value == s)
                   for s in ("train", "validation", "test")}
     report = {
@@ -150,7 +152,7 @@ def prepare(record_dir, out):
         "limitations": ["single camera/site", "autumn/early-winter only", "daylight-only acquisition",
             "rare classes and substantial expert disagreement", "chronological split does not establish geographic generalization"]
     }
-    (out/"dataset_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False)+"\\n", encoding="utf-8")
+    (out/"dataset_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False)+chr(10), encoding="utf-8")
     return report
 
 def main():
