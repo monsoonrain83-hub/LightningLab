@@ -277,7 +277,7 @@ fun Results(vm: MainVM) {
 private val aspects = listOf("Original" to 0f, "1:1" to 1f, "4:5" to 0.8f, "4:3" to 4f / 3f,
     "3:2" to 1.5f, "16:9" to 16f / 9f, "9:16" to 9f / 16f)
 
-private enum class PTab { LIGHT, COLOR, HSL, DETAIL, CROP, REMOVE, LAYERS, EXPORT }
+private enum class PTab { LIGHT, COLOR, HSL, CURVES, DETAIL, CROP, REMOVE, LAYERS, EXPORT }
 
 @Composable
 fun PhotoEditor(vm: MainVM) {
@@ -415,8 +415,8 @@ fun PhotoEditor(vm: MainVM) {
         }
         GlassPanel(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
             Column(Modifier.padding(top = 5.dp)) {
-                Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_hsl, R.string.tab_detail, R.string.tab_crop,
-                    R.string.tab_remove, R.string.tab_layers, R.string.tab_export).map { stringResource(it) }, tab.ordinal) { tab = PTab.values()[it] }
+                Tabs(listOf(R.string.tab_light, R.string.tab_color, R.string.tab_hsl, "منحنی RGB", R.string.tab_detail, R.string.tab_crop,
+                    R.string.tab_remove, R.string.tab_layers, R.string.tab_export).map { if (it is Int) stringResource(it) else it as String }, tab.ordinal) { tab = PTab.values()[it] }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 6.dp)) {
@@ -450,6 +450,28 @@ fun PhotoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.hsl_lum), p.hsl[2 * Hsl.BANDS + band], -1f..1f, vm::commit) {
                                         vm.params = p.copy(hsl = p.hsl.toMutableList().also { l -> l[2 * Hsl.BANDS + band] = it })
                                     }
+                                }
+                                PTab.CURVES -> {
+                                    var curveChannel by remember { mutableStateOf(0) }
+                                    ChoiceRow(listOf("RGB", "قرمز", "سبز", "آبی"), curveChannel) { curveChannel = it }
+                                    Text("منحنی تُن پنج‌نقطه‌ای؛ مقدار خروجی هر نقطه بین ۰ تا ۱۰۰٪ تنظیم می‌شود.",
+                                        color = Storm.muted, style = MaterialTheme.typography.bodySmall)
+                                    val channels = if (curveChannel == 0) listOf(0, 1, 2) else listOf(curveChannel - 1)
+                                    val labels = listOf("سایه عمیق", "سایه", "میانه", "روشنایی", "سفیدی")
+                                    for (point in 0 until PhotoToneCurves.POINTS) {
+                                        val value = if (curveChannel == 0) {
+                                            (0..2).map { channel -> p.rgbCurves.getOrElse(channel * PhotoToneCurves.POINTS + point) { point / 4f } }.average().toFloat()
+                                        } else p.rgbCurves.getOrElse((curveChannel - 1) * PhotoToneCurves.POINTS + point) { point / 4f }
+                                        Param(labels[point], value, 0f..1f, vm::commit) { v ->
+                                            val next = p.rgbCurves.toMutableList()
+                                            channels.forEach { channel -> next[channel * PhotoToneCurves.POINTS + point] = v }
+                                            vm.params = p.copy(rgbCurves = next)
+                                        }
+                                    }
+                                    OutlinedButton(onClick = {
+                                        vm.params = p.copy(rgbCurves = PhotoToneCurves.identity())
+                                        vm.commit()
+                                    }, modifier = Modifier.fillMaxWidth()) { Text("بازنشانی منحنی‌ها") }
                                 }
                                 PTab.DETAIL -> {
                                     Param(stringResource(R.string.sharpness), p.sharpness, 0f..1f, vm::commit) { vm.params = p.copy(sharpness = it) }

@@ -23,7 +23,8 @@ object PhotoProjectCodec {
             .put("rotate", q.rotate).put("flipH", q.flipH).put("flipV", q.flipV).put("aspect", q.aspect.toDouble())
             .put("highlights", q.highlights.toDouble()).put("shadows", q.shadows.toDouble()).put("sharpness", q.sharpness.toDouble())
             .put("scurve", q.scurve.toDouble()).put("denoise", q.denoise.toDouble()).put("vibrance", q.vibrance.toDouble())
-            .put("hsl", JSONArray().also { a -> q.hsl.forEach { a.put(it.toDouble()) } }))
+            .put("hsl", JSONArray().also { a -> q.hsl.forEach { a.put(it.toDouble()) } })
+            .put("rgbCurves", JSONArray().also { a -> q.rgbCurves.forEach { a.put(it.toDouble()) } }))
         o.put("texts", JSONArray().also { a -> p.texts.forEach { t -> a.put(JSONObject().put("id", t.id).put("name", t.name).put("text", t.text)
             .put("x", t.x.toDouble()).put("y", t.y.toDouble()).put("size", t.size.toDouble()).put("color", t.color).put("opacity", t.opacity.toDouble())
             .put("visible", t.visible).put("bold", t.bold).put("z", t.z).put("rotation", t.rotation.toDouble())) } })
@@ -42,11 +43,15 @@ object PhotoProjectCodec {
         val q = o.getJSONObject("params")
         val hslArray = q.optJSONArray("hsl")
         val hsl = (0 until 21).map { i -> hslArray?.optDouble(i, 0.0)?.toFloat() ?: 0f }
+        val curveArray = q.optJSONArray("rgbCurves")
+        val rgbCurves = PhotoToneCurves.identity().mapIndexed { i, fallback ->
+            (curveArray?.optDouble(i, fallback.toDouble())?.toFloat() ?: fallback).coerceIn(0f, 1f)
+        }
         val params = PhotoParams(q.optDouble("exposure", 0.0).toFloat(), q.optDouble("brightness", 0.0).toFloat(),
             q.optDouble("contrast", 0.0).toFloat(), q.optDouble("saturation", 0.0).toFloat(), q.optDouble("warmth", 0.0).toFloat(),
             q.optInt("rotate", 0), q.optBoolean("flipH", false), q.optBoolean("flipV", false), q.optDouble("aspect", 0.0).toFloat(),
             q.optDouble("highlights", 0.0).toFloat(), q.optDouble("shadows", 0.0).toFloat(), q.optDouble("sharpness", 0.0).toFloat(),
-            q.optDouble("scurve", 0.0).toFloat(), q.optDouble("denoise", 0.0).toFloat(), q.optDouble("vibrance", 0.0).toFloat(), hsl)
+            q.optDouble("scurve", 0.0).toFloat(), q.optDouble("denoise", 0.0).toFloat(), q.optDouble("vibrance", 0.0).toFloat(), hsl, rgbCurves)
         fun array(name: String) = o.optJSONArray(name) ?: JSONArray()
         val texts = (0 until array("texts").length()).mapNotNull { i -> array("texts").optJSONObject(i)?.let { t -> PhotoTextData(
             t.optLong("id"), t.optString("name"), t.optString("text"), t.optDouble("x", .5).toFloat(), t.optDouble("y", .5).toFloat(),
