@@ -7,6 +7,7 @@ on:
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle/**'
+      - 'tools/cloud_ai/**'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
@@ -37,6 +38,8 @@ jobs:
           fi
           echo "--- Kotlin sources in build ---"
           ls app/src/main/java/com/lightninglab
+      - name: Run cloud dataset preparation unit tests
+        run: python3 -m unittest discover -s tools/cloud_ai/tests -v
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
