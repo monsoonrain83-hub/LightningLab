@@ -733,12 +733,41 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var stickerSize by mutableStateOf(1)
     var stickerPos by mutableStateOf(1)
     var selSeg by mutableStateOf(-1)
+    var selectedSegmentIndices by mutableStateOf<Set<Int>>(emptySet())
+    fun toggleSegmentSelection(index: Int) {
+        if (index !in segments.indices) return
+        selectedSegmentIndices = if (index in selectedSegmentIndices) selectedSegmentIndices - index else selectedSegmentIndices + index
+    }
+    fun clearSegmentSelection() { selectedSegmentIndices = emptySet() }
+    fun moveSelectedSegmentGroup(direction: Int): Boolean {
+        val reordered = TimelineMath.reorderContiguousGroup(segments.toList(), selectedSegmentIndices, direction) ?: return false
+        segments.clear(); segments.addAll(reordered)
+        selectedSegmentIndices = selectedSegmentIndices.map { it + direction }.toSet()
+        selSeg = (selSeg + direction).coerceIn(0, segments.lastIndex)
+        segPush(); pushVideoHistory()
+        return true
+    }
+    fun deleteSelectedSegments(): Boolean {
+        if (selectedSegmentIndices.isEmpty() || selectedSegmentIndices.any { it !in segments.indices }) return false
+        val removedBeforeSelection = selectedSegmentIndices.count { it < selSeg }
+        selectedSegmentIndices.sortedDescending().forEach { segments.removeAt(it) }
+        selectedSegmentIndices = emptySet()
+        selSeg = when {
+            segments.isEmpty() -> -1
+            selSeg < 0 -> -1
+            else -> (selSeg - removedBeforeSelection).coerceIn(0, segments.lastIndex)
+        }
+        segPush(); pushVideoHistory()
+        return true
+    }
     fun duplicateSeg(i: Int) {
+        clearSegmentSelection()
         if (i !in segments.indices) return
         segments.add(i + 1, segments[i].copy()); segPush(); selSeg = i + 1; pushVideoHistory()
     }
     /** Reorder two clips in the output sequence without changing their source in/out points. */
     fun moveSegment(from: Int, to: Int): Boolean {
+        clearSegmentSelection()
         val destination = TimelineMath.reorderIndex(segments.size, from, to) ?: return false
         val item = segments.removeAt(from)
         segments.add(destination, item)
@@ -758,6 +787,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     /** Split the selected source segment at the current output playhead. */
     fun splitSelectedSegmentAtPlayhead(): Boolean {
+        clearSegmentSelection()
         val i = selSeg
         if (i !in segments.indices) return false
         val speed = vSpeed.coerceAtLeast(0.05f)
@@ -902,8 +932,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         segHist += segments.toList(); segHi = segHist.size - 1; segFlags()
     }
     private fun segRestore() { segments.clear(); segments.addAll(segHist[segHi]); segFlags() }
-    fun addSeg(sg: Seg) { segments += sg; segPush(); pushVideoHistory() }
-    fun removeSeg(i: Int) { if (i in segments.indices) { segments.removeAt(i); segPush(); pushVideoHistory() } }
+    fun addSeg(sg: Seg) { clearSegmentSelection(); segments += sg; segPush(); pushVideoHistory() }
+    fun removeSeg(i: Int) { if (i in segments.indices) { clearSegmentSelection(); segments.removeAt(i); segPush(); pushVideoHistory() } }
     fun addVideoMarker(timeMs: Long = playheadMs) {
         val total = ((if (segments.isEmpty()) videoDur else segments.sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) }) / vSpeed.coerceAtLeast(0.05f)).toLong()
         val marker = timeMs.coerceIn(0L, total.coerceAtLeast(0L))
@@ -917,6 +947,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         val cutStart = (segments.take(index).sumOf { (it.endMs - it.startMs).coerceAtLeast(0L) } / speed).toLong()
         val cutDuration = ((removed.endMs - removed.startMs).coerceAtLeast(0L) / speed).toLong()
         if (cutDuration <= 0L) return false
+        clearSegmentSelection()
         segments.removeAt(index)
         fun shift(t: Long) = TimelineMath.rippleShift(t, cutStart, cutDuration)
         val overlays = videoOverlayClips.mapNotNull { clip ->
@@ -939,7 +970,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         segPush(); pushVideoHistory()
         return true
     }
-    fun clearSegs() { if (segments.isNotEmpty()) { segments.clear(); segPush(); pushVideoHistory() } }
+    fun clearSegs() { if (segments.isNotEmpty()) { clearSegmentSelection(); segments.clear(); selSeg = -1; segPush(); pushVideoHistory() } }
     fun undoSeg() = undoVideoEdit()
     fun redoSeg() = redoVideoEdit()
 
