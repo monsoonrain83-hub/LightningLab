@@ -43,6 +43,9 @@ fun WeatherScreen(vm: MainVM) {
     val pickFeatureModel = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) vm.importFeatureModel(u)
     }
+    val pickSynopticModel = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
+        if (u != null) vm.importSynopticModel(u)
+    }
     val pickSegmentationModel = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) vm.importSegmentationModel(u)
     }
@@ -174,6 +177,21 @@ fun WeatherScreen(vm: MainVM) {
                         style = MaterialTheme.typography.bodyMedium)
                     Text(stringResource(R.string.wx_disclaimer), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                 }
+                vm.synopticPredictions?.let { result ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("کدهای سینوپتیکی WMO — سه تراز ابر", style = MaterialTheme.typography.titleSmall)
+                        Text("سه سر مستقل CL/CM/CH؛ امتیاز خام مدل است و درصد اطمینان کالیبره‌شده نیست.",
+                            style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                        listOf("CL" to result.cl, "CM" to result.cm, "CH" to result.ch).forEach { pair ->
+                            val level = pair.first
+                            val description = pair.second.take(3).joinToString("  |  ") { candidate ->
+                                candidate.first + ": " + CloudSynopticInfo.label(level, candidate.first) +
+                                    " (" + String.format(Locale.US, "%.2f", candidate.second) + ")"
+                            }
+                            Text(level + ": " + description, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 if (vm.topK.isNotEmpty()) {
                     Panel {
                         Text("نامزدهای مدل (امتیاز خام؛ نه درصد اطمینان)", style = MaterialTheme.typography.titleSmall)
@@ -285,6 +303,12 @@ fun WeatherScreen(vm: MainVM) {
                 Text(stringResource(if (vm.modelReady) R.string.model_replace else R.string.model_import))
             }
             if (!vm.modelReady) Text(stringResource(R.string.model_none_hint), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+            OutlinedButton(onClick = { pickSynopticModel.launch("*/*") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(if (vm.synopticModelReady) "جایگزینی مدل سینوپتیکی CL/CM/CH" else "واردکردن مدل سینوپتیکی CL/CM/CH")
+            }
+            if (!vm.synopticModelReady) Text(
+                "مدل سه‌خروجی CL/CM/CH همراه APK نیست. پس از آموزش با train_montenegro_synoptic.py فایل cloud_synoptic_model.tflite را وارد کنید.",
+                style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             OutlinedButton(onClick = { pickFeatureModel.launch("*/*") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Text(if (vm.featureModelReady) "جایگزینی مدل ویژگی‌های ساختاری" else "واردکردن مدل ویژگی‌های ساختاری")
             }
