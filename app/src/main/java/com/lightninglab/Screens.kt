@@ -210,6 +210,7 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.selectAll() }) { Text(stringResource(R.string.select_all)) }
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
+                Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
                 Text(stringResource(R.string.order_hint), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.heuristic_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             }
@@ -228,10 +229,14 @@ fun Results(vm: MainVM) {
                         Text(if (item.order > 0) "${item.order}" else "·", fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(22.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("#${item.event.id}  ${fmt(item.event.bestMs)}  ·  ${(item.event.score * 100).roundToInt()}",
+                            Text("#${item.event.id}  ${fmt(item.event.bestMs)}  ·  امتیاز الگوریتم ${(item.event.score * 100).roundToInt()}",
                                 style = MaterialTheme.typography.bodySmall)
-                            Text(item.event.visualType.labelFa + "  ·  ${(item.event.visualEvidence * 100).roundToInt()}٪ نشانه تصویری",
+                            Text(item.event.visualType.labelFa + "  ·  ${(item.event.visualEvidence * 100).roundToInt()}٪ شواهد ظاهری",
                                 style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                            Text("بازه: ${fmt(item.event.startMs)} تا ${fmt(item.event.endMs)}",
+                                style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                            Text("${item.event.pulseCount} پالس  ·  گستردگی روشنایی ${(item.event.spatialSpread * 100).roundToInt()}٪",
+                                style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                         }
                     }
                 }
