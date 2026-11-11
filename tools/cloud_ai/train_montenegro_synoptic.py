@@ -114,7 +114,8 @@ def main():
                 target_names=LABELS, output_dict=True, zero_division=0),
             "confusion_matrix": confusion_matrix(truth, guess, labels=list(range(CLASSES))).tolist()
         }
-    model.save(out / "cloud_synoptic.keras")
+    (out / "cloud_synoptic_architecture.json").write_text(model.to_json() + "\\n", encoding="utf-8")
+    model.save_weights(out / "cloud_synoptic.weights.h5")
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     (out / "cloud_synoptic_model.tflite").write_bytes(converter.convert())
     contract = {
