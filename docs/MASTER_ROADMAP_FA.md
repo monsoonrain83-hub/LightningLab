@@ -1,85 +1,97 @@
 # LightningLab — نقشه‌راه جامع و وضعیت اجرایی
 
-آخرین نسخهٔ ادغام‌شده در \`main\`: **r10.49 / versionCode 59**.
-نسخهٔ کاری: **r10.51 / versionCode 61** در شاخهٔ \`feature/audio-track-mute-solo-r10-50\`.
-تا سبزشدن کامل تست‌ها و APK روی آخرین commit این شاخه، r10.51 نباید merge شود.
+آخرین نسخهٔ اپ ادغام‌شده در main: **1.0-r10.54 / versionCode 63**.
+نسخهٔ در حال توسعه: **r10.56** (نمودار تعاملی منحنی RGB) در PR #11.
+آخرین APK تأییدشده از main: r10.54؛ build و JVM tests در GitHub Actions موفق بوده‌اند.
 
-## اصول ثابت
+## اصول کیفیت
 - Kotlin + Jetpack Compose، Android، اجرای عادی آفلاین، فارسی/RTL، رابط Glassmorphism با عمق سه‌بعدی کنترل‌شده.
 - هیچ قابلیت موجود حذف یا با mock/placeholder جایگزین نشود.
 - خروجی heuristic، مدل و برچسب دستی از هم جدا بمانند؛ score خام مدل احتمال کالیبره‌شده نیست.
 - وزن مدل/داده فقط با provenance و مجوز روشن در مخزن عمومی قرار بگیرد.
 - هر قابلیت جدید باید تست داشته باشد؛ JVM tests و APK build در GitHub Actions اجباری‌اند.
+- برای مدل‌های هواشناسی، آزمون خارجی مستقل و گزارش per-class لازم است؛ صرف موفقیت build به معنی صحت علمی نیست.
 
-## نسخه‌های ادغام‌شده
-- **r10.46:** بازیابی سورس واقعی از artifactهای GitHub Actions، رفع خطاهای Kotlin تایم‌لاین، اصلاح مسیر ثبت سورس و حفظ snapshot بیلد.
-- **r10.47:** دستگیره‌های مستقیم trim چپ/راست برای overlay و effect، drag جابه‌جایی بر اساس عرض کل timeline، تجمیع Undo gesture و حداقل طول ۲۰۰ms برای effect.
-- **r10.49:** SRT import/export، سازگاری مدل ۱۱کلاسهٔ CCSN با preprocessing مستقل، تفکیک Contrail از جنس‌های WMO، اصلاح DayLine jitter registration، Fade-in/Fade-out موسیقی و voice، ذخیرهٔ پروژه با ProjectCodec v5، cache موج صوتی.
-- **CI:** اجرای \`testDebugUnitTest\` پیش از APK؛ گزارش XML/HTML تست‌ها حتی در شکست artifact می‌شود. ZIP workflow دیگر patch قدیمی Kotlin را روی سورس جدید اعمال نمی‌کند و docs-only commitها بیلد بیهوده راه نمی‌اندازند.
-- **اعتبار r10.49:** ۹۶ تست JVM، صفر شکست، صفر skipped؛ APK شاخهٔ main ساخته و تأیید شده است.
+## نسخه‌ها و تغییرات ادغام‌شده
+- **r10.46–r10.49:** بازیابی سورس، اصلاح pipeline بیلد، SRT، مدل‌های ابر، DayLine، fade صوت، waveform cache و پروژه‌های ویدئو.
+- **r10.51:** کنترل مستقل mute/solo برای صدای اصلی، موسیقی و voice؛ قفل overlay/effect؛ مرتب‌سازی قطعات ویدئو؛ انتخاب و جابه‌جایی گروهی overlay؛ هیستوگرام RGB/luma عکس.
+- **r10.52:** انتخاب چند قطعهٔ اصلی ویدئو، جابه‌جایی گروهی قطعات پیوسته و حذف گروهی؛ تست JVM و APK موفق.
+- **r10.53:** منحنی‌های پنج‌نقطه‌ای مستقل R/G/B و RGB مشترک؛ LUT 256 سطح؛ ذخیره در PhotoProjectCodec و سازگاری پروژه‌های قبلی؛ تست و APK موفق.
+- **r10.54:** دسته‌بندی نشانه‌های ظاهری رخداد رعدوبرق در ویدئو: کانال باریک، روشن‌شدن گسترده، فلاش موضعی، خوشه چندپالسی و نامعین؛ تست و APK موفق. این طبقه‌بندی heuristic است، نه تشخیص قطعی نوع فیزیکی صاعقه.
+- **r10.55:** pipeline آماده‌سازی دادهٔ چندناظر WMO از Montenegro dataset با مجوز CC BY 4.0؛ حفظ رأی مستقل مشاهده‌گران به صورت soft-label برای CL/CM/CH؛ split زمانی؛ گزارش entropy و تست‌های Python در CI. این مرحله داده‌سازی است و هنوز مدل آموزش‌دیده یا inference اندروید نیست.
+- **r10.56:** نمودار تعاملی drag برای منحنی عکس، در انتظار سبزشدن تست و APK.
+- **CI:** تست‌های JVM قبل از APK؛ گزارش‌های تست و source snapshot به‌صورت artifact نگهداری می‌شوند. از r10.55 تست Python ابزارهای داده نیز اجرا می‌شود.
 
-## وضعیت کاری r10.51
-- [x] ورود و خروج SRT؛ cueها به کلیپ‌های متنی قابل‌ویرایش تبدیل و دوباره به SRT صادر می‌شوند.
-- [x] parser/serializer تست‌شده: comma/dot، چندخطی، BOM، cue settings، entityها و round-trip.
-- [x] مدل ۱۰کلاسهٔ داخلی و مدل CCSN ۱۱کلاسه با امضای tensor و preprocessing جداگانه.
-- [x] Contrail (Ct) به‌عنوان برچسب دیتاستی جدا از ۱۰ جنس طبیعی WMO.
-- [x] اصلاح هم‌ترازی DayLine؛ تست صحنهٔ jitter بدون صاعقه و نگه‌داشتن صاعقهٔ باریک سبز.
-- [x] Fade-in/Fade-out مستقل موسیقی و صدای ضبط‌شده؛ Undo/Redo و ProjectCodec v5.
-- [x] mute مستقل موسیقی و voice، mute صدای اصلی و Solo برای سه مسیر؛ ProjectCodec v6.
-- [x] قفل overlay/effect برای جلوگیری از drag، trim، حذف و تغییر keyframe؛ ProjectCodec v7.
-- [x] drag reorder قطعات اصلی ویدئو؛ لمس کوتاه همچنان انتخاب می‌کند و خط‌کش playhead را جابه‌جا می‌کند.
-- [x] انتخاب چندگانه، جابه‌جایی گروهی با snap، حذف گروهی و محافظت در برابر عضو قفل‌شده.
-- [x] هیستوگرام RGB/luma در preview ادیتور عکس، محاسبهٔ background از snapshot امن.
-- [x] cache موج PCM با LRU محدود و تست‌های eviction.
-- [x] snapshotهای قبلی r10.51 (قفل/ترتیب ویدئو) تست و APK build موفق داشته‌اند.
-- [ ] سبزشدن تست و APK روی آخرین commit شامل group overlay و histogram.
-- [ ] ادغام r10.51 در main و ساخت APK نهایی از commit ادغام‌شده.
+## Creative Studio
 
-## Creative Studio — موارد باز
-
-### Video
-- [x] جابه‌جایی و trim مستقیم کلیپ‌های overlay/effect.
-- [x] reorder قطعات اصلی ویدئو، lock overlay/effect، multi-select/group برای overlay.
-- [x] waveform واقعی PCM و cache موج.
-- [x] mute/solo موسیقی، voice و صدای اصلی؛ fade موسیقی/voice.
-- [x] زیرنویس SRT import/export.
-- [ ] multi-select/group برای قطعات اصلی video و عملیات گروهی trim/delete.
-- [ ] gain/fade/pan مستقل برای هر کلیپ صوتی و waveform per-clip cache.
+### Video Editor
+- [x] preview مبتنی بر Media3، seek/playhead، speed، split، trim و segment reorder.
+- [x] drag و trim مستقیم overlay/effect، lock، keyframeهای موجود و snap.
+- [x] انتخاب گروهی overlay، جابه‌جایی و حذف گروهی با محافظت از کلیپ قفل‌شده.
+- [x] انتخاب گروهی قطعات اصلی ویدئو، reorder گروه پیوسته و حذف گروهی.
+- [x] waveform PCM با cache؛ SRT import/export؛ mute/solo و fade موسیقی/voice.
+- [ ] multi-select گروهی برای قطعات اصلی با drag آزاد، ripple group trim/delete و undo واحد.
+- [ ] gain/fade/pan مستقل برای هر کلیپ صوتی و waveform per-clip.
 - [ ] transitions واقعی بین کلیپ‌ها؛ speed ramp/reverse/freeze.
-- [ ] keyframe کامل برای position/scale/rotation/opacity و audio automation.
-- [ ] masking/chroma key، LUT/color wheels و ابزارهای پیشرفتهٔ رنگ ویدئو.
-- [ ] export presets با resolution/FPS/bitrate، preflight، queue، verification و recovery.
-- [ ] autosave و بازیابی پروژه پس از crash؛ backup اتمیک و جلوگیری از کپی تکراری رسانه‌های بزرگ.
-- [ ] instrumentation و تست دستگاه واقعی برای فایل‌های بلند، خراب، لغو export و lifecycle.
+- [ ] keyframe کامل position/scale/rotation/opacity و audio automation.
+- [ ] masking/chroma key، LUT و color wheels و ابزارهای پیشرفتهٔ رنگ ویدئو.
+- [ ] export presets برای resolution/FPS/bitrate، queue، verification، resume و recovery.
+- [ ] autosave، بازیابی crash، backup اتمیک و جلوگیری از کپی تکراری رسانه‌های بزرگ.
+- [ ] تست instrumentation/UI و دستگاه واقعی برای فایل بلند/خراب، لغو export، lifecycle، حافظه و performance.
+- [ ] پاک‌سازی معماری: استخراج VideoEditor از Screens.kt به ماژول مستقل بدون تغییر رفتار؛ VideoEditorScreen.kt فعلاً placeholder است و نباید به‌عنوان editor فعال معرفی شود.
 
-### Photo
-- [x] ابزارهای نور، رنگ، HSL، crop/rotate، healing، mask و layerهای متن/شکل/تصویر موجود.
-- [x] هیستوگرام RGB و luma در preview.
-- [ ] curves واقعی با control point و کانال RGB مستقل.
-- [ ] color wheels و local adjustment masks با blend modes.
-- [ ] perspective correction، lens profile/correction، RAW/DNG.
-- [ ] clone/patch و object removal پیشرفته‌تر.
-- [ ] before/after slider، histogram دقیق full-resolution برای export و metadata.
-- [ ] تست memory/performance روی عکس‌های بزرگ و export PNG/JPEG.
+### Photo Editor
+- [x] نور، رنگ، HSL، crop/rotate، healing، mask، لایه‌های متن/شکل/تصویر.
+- [x] هیستوگرام RGB/luma در preview.
+- [x] منحنی‌های non-destructive پنج‌نقطه‌ای RGB، ذخیره در پروژه و LUT سریع.
+- [ ] ادغام و تأیید نمودار drag منحنی r10.56.
+- [ ] color wheels، local adjustment masks با feather/brush refinement و blend modes.
+- [ ] perspective correction، lens profile/correction و RAW/DNG.
+- [ ] clone/patch و object removal پیشرفته‌تر با کیفیت مرزی بهتر.
+- [ ] before/after slider، histogram دقیق full-resolution برای export، metadata و export presets.
+- [ ] مدیریت حافظه، preview tile-based و تست عکس‌های بزرگ/RAW و خروجی PNG/JPEG.
+- [ ] UI instrumentation و آزمون لمس/دسترس‌پذیری در اندازه‌های مختلف نمایشگر.
 
 ## Atmospheric Intelligence / Cloud Atlas
-- [x] runtime داخلی برای ۱۰ جنس طبیعی WMO.
-- [x] runtime سازگار با مدل واردشدهٔ CCSN یازده‌کلاسه، شامل Contrail.
-- [ ] تست عملی import/inference مدل CCSN روی Android واقعی؛ تأیید tensor names/shapes و latency/RAM.
-- [ ] ارزیابی مستقل روی test set بدون leakage/near-duplicate؛ macro-F1، per-class precision/recall، confusion matrix و calibration.
-- [ ] baseline جدید ۱۰ جنس WMO با dataset RGB دارای مجوز روشن و split مستقل.
-- [ ] مدل چندبرچسبی ویژگی‌های ساختاری با annotation متخصص و کلاس unknown/uncertain.
+
+### آنچه در سورس وجود دارد
+- [x] runtime مدل ده جنس طبیعی WMO و قرارداد جداگانهٔ مدل قدیمی ۱۱کلاسه CCSN.
+- [x] مدل جنس و مدل ویژگی ساختاری/segmentation به‌صورت import اختیاری.
+- [x] تحلیل rule-based پوشش، اکتا و بافت؛ با هشدار روشن که جایگزین طبقه‌بند جنس نیست.
+- [x] تحلیل ویدئویی نمونه‌برداری زمانی، consensus و روند تغییر پوشش/جنس.
+
+### داده و مدل — موارد باز
+- [x] pipeline CCAiM ده‌کلاسه (۹۱۶ تصویر) برای baseline؛ داده کوچک و نامتوازن است و به‌تنهایی production-ready نیست.
+- [x] pipeline آماده‌سازی Montenegro multi-annotator: ۲٬۵۲۲ تصویر، ۱۱٬۱۹۱ annotation، CL/CM/CH، soft labels و split زمانی؛ مجوز CC BY 4.0.
+- [ ] آموزش multi-head CL/CM/CH با توزیع رأی مشاهده‌گران و خروجی TFLite [1,3,11]؛ سپس runtime اندروید و UI سه‌سطحی.
+- [ ] ارزیابی temporal holdout و آزمون خارجی جغرافیایی؛ macro-F1، per-class precision/recall، confusion matrix، Brier/calibration و مقایسه با توافق متخصصان.
+- [ ] گسترش دادهٔ فصلی/جغرافیایی و دوربین‌های متفاوت؛ دیتاست Montenegro تک‌مکان، پاییز/اوایل زمستان و روزانه است.
+- [ ] baseline ده جنس WMO با دادهٔ دارای مجوز و split مستقل؛ عدم نگاشت اجباری گروه‌های ترکیبی به جنس‌ها.
+- [ ] مدل چندبرچسبی گونه/واریته و ویژگی‌های ساختاری با annotation متخصص و کلاس unknown/uncertain.
 - [ ] segmentation چندکلاسه با ماسک انسانی و mIoU/Dice؛ وزن‌های مستقل و قرارداد runtime مستقل.
-- [ ] temporal consensus با timestamp/camera alignment و محدودیت‌های علمی روشن.
+- [ ] آزمون واقعی import/inference روی Android و سنجش latency/RAM/thermal.
 - [ ] بازبینی یکپارچه UI داشبورد، Cloud Atlas، AI Recognition و Atmospheric Analysis.
 
+## Lightning / Thunderstorm Video Analysis
+- [x] decode و scan ویدئو با MediaCodec، تحلیل فریم‌های زمانی، فیلتر shake/scene-cut و استخراج بهترین فریم.
+- [x] DayLine برای ساختارهای باریک روزانه و جداسازی پالس‌ها.
+- [x] دسته‌بندی نشانه‌های تصویری: visible channel، diffuse illumination، localized flash، multi-pulse و uncertain.
+- [ ] تشخیص ساختار کانال شاخه‌ای با segmentation/line tracking در رزولوشن بالاتر و تثبیت حرکت دوربین.
+- [ ] ردیابی زمانی leader/return-stroke و تفکیک intra-cloud / cloud-to-ground فقط در شرایطی که دادهٔ ویدئویی شواهد کافی داشته باشد.
+- [ ] مدل یادگیری ماشین با دیتاست ویدئویی مجاز و annotation متخصص؛ train/validation/test مستقل بر اساس کلیپ/دوربین.
+- [ ] برآورد شدت/انرژی فیزیکی یا قطبیت ممنوع است مگر با حسگر/دادهٔ مستقل معتبر؛ score فعلی صرفاً heuristic است.
+- [ ] export گزارش رخدادها (CSV/JSON)، thumbnail و timestamp دقیق؛ ابزار بازبینی دستی و اصلاح برچسب.
+- [ ] benchmark روی ویدئوهای روز/شب، handheld، rolling shutter، باران، نور خودرو و scene cuts.
+
 ## کیفیت و تحویل
-- [ ] تمام JVM tests روی آخرین commit سبز؛ regression برای parser، model contract، DayLine، timeline، codecs، waveform و export.
-- [ ] Android instrumentation/UI tests و تست دستگاه واقعی؛ حافظه، crash، performance و accessibility.
-- [ ] ZIP کامل سورس از همان commit بیلدشده + APK + گزارش فارسی + SHA256.
+- [ ] تمام JVM و Python tests روی آخرین commit سبز؛ regression برای parser، مدل‌ها، DayLine، timeline، codecs، waveform و export.
+- [ ] Android instrumentation/UI tests و تست دستگاه واقعی؛ حافظه، crash، performance، accessibility و rotation.
+- [ ] ZIP کامل سورس دقیقاً از commit APK + APK + گزارش فارسی + SHA256 برای هر release.
 - [ ] وضعیت هر قابلیت فقط بعد از شواهد build/test/device به Done تغییر کند.
 
-## موانع/وابستگی‌ها
-- فایل وزن CCSN واردشده: مخزن مبدأ مجوز بازتوزیع روشن ندارد؛ فایل وزن در repo عمومی/APK bundle نمی‌شود و از Import کاربر بارگذاری می‌شود.
-- دقت علمی هیچ مدل تا ارزیابی مستقل گزارش نشده است.
+## موانع و محدودیت‌های شناخته‌شده
+- فایل وزن CCSN واردشده در گذشته مجوز بازتوزیع روشن ندارد؛ در مخزن عمومی/APK bundle نمی‌شود.
+- فعلاً مدل وزن‌دار production-ready برای همهٔ جنس‌ها/گونه‌ها همراه APK نیست؛ runtime import به‌تنهایی مدل آموزش‌دیده ایجاد نمی‌کند.
+- Montenegro dataset تحت CC BY 4.0 است، اما single-site و محدود به پاییز/اوایل زمستان و روز است؛ برای تعمیم به اقلیم‌ها/دوربین‌های دیگر کافی نیست.
+- ویدئوی RGB معمولی همیشه امکان تشخیص قطعی CG/IC، قطبیت یا ساختار الکتریکی را نمی‌دهد.
 - GitHub Actions جای تست واقعی روی گوشی را نمی‌گیرد؛ آزمون دستگاه فیزیکی همچنان لازم است.
