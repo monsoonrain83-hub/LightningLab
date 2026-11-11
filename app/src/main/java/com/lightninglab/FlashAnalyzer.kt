@@ -130,9 +130,11 @@ object FlashAnalyzer {
         if (cells.isEmpty()) return 0f
         val sorted = cells.copyOf()
         java.util.Arrays.sort(sorted)
-        val median = sorted[sorted.size / 2]
+        // Use the lower quartile as the scene baseline: a broad flash can illuminate
+        // more than half the grid, making the median itself part of the flash.
+        val baseline = sorted[(sorted.size - 1) / 4]
         val peak = sorted.last()
-        val threshold = median + max(3f, (peak - median) * 0.25f)
+        val threshold = baseline + max(3f, (peak - baseline) * 0.25f)
         return cells.count { it >= threshold }.toFloat() / cells.size
     }
 
