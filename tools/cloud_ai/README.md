@@ -47,3 +47,20 @@ No model binary is committed in this phase: TensorFlow and the full image data a
 ## Android preprocessing contract
 
 The app and training pipeline both preserve source-image aspect ratio and center-pad to 224×224 using neutral grey (RGB 127.5/128). Do not replace this with a square stretch or change the pad color without retraining. The app validates a float32 input tensor shaped `[1,224,224,3]` and a float32 output tensor containing ten WMO genera (or the supported legacy eleven-label format). Output scores are checked for finite, non-negative values and normalized before display.
+
+
+## Multi-observer WMO synoptic dataset (CC BY 4.0)
+
+A second source is available from Zenodo: A Multi-Annotator Ground-Based Sky Camera Dataset for Cloud Observation in Montenegro (2,522 ground-camera images, 11,191 annotations, nine professional observers). It records WMO synoptic CL, CM and CH codes, including detailed low/middle/high cloud forms. License: CC BY 4.0; preserve attribution and note modifications.
+
+This is not a drop-in replacement for the ten-genus CCAiM model. It is a separate three-head synoptic task. Preserve observer disagreement as soft targets; "/" means that the observer could not determine the cloud level. The dataset is single-site, autumn/early-winter and daylight-only. Its README warns against random image splits because adjacent observations are correlated.
+
+After downloading the four source files (images.zip, annotation_items.csv, annotations.csv, LICENSE.txt) from Zenodo into data/clouds/montenegro_raw, run:
+
+\`\`\`bash
+python tools/cloud_ai/prepare_montenegro_synoptic.py --record-dir data/clouds/montenegro_raw --out data/clouds/montenegro_synoptic
+python -m unittest discover -s tools/cloud_ai/tests -v
+\`\`\`
+
+The manifest contains per-image CL/CM/CH vote distributions and chronological train/validation/test partitions. This is data preparation only; a trained multi-head TFLite model and Android runtime integration remain separate deliverables.
+Dataset DOI: https://doi.org/10.5281/zenodo.21787669

@@ -1,34 +1,35 @@
 # Lightning Lab — cloud image data sources (Phase 2)
 
-## Selected starter source
+## CCAiM starter source
 
 **CCAiM-CloudsDataset** — https://huggingface.co/datasets/serbekun/CCAiM-CloudsDataset
 
 - Dataset card declares MIT; 916 ground-based images; 10 WMO genera.
-- Reported distribution on the dataset card: Cirrus 102, Cirrocumulus 33, Cirrostratus 42, Altocumulus 96, Altostratus 63, Nimbostratus 17, Stratocumulus 94, Stratus 38, Cumulus 398, Cumulonimbus 33.
-- This is highly imbalanced and small, especially Nimbostratus and Cumulonimbus. It is a pipeline smoke-test / initial fine-tuning source, not enough by itself to claim operational accuracy.
-- The card states MIT. Preserve attribution and re-check the live card and upstream provenance before redistributing a trained model or images.
-- Preparation: `python tools/cloud_ai/prepare_ccaim.py --out data/clouds/ccaim`
+- Highly imbalanced and small; useful for a baseline and pipeline smoke test, not operational claims.
 
-## Candidate requiring a license check before use
+## Multi-observer WMO synoptic source
 
-**WEBCAM ground-based cloud image dataset** — https://github.com/MarcusCoteFIT/webcam-ground-based-cloud-image-dataset
+**A Multi-Annotator Ground-Based Sky Camera Dataset for Cloud Observation in Montenegro** — https://zenodo.org/records/21787669
 
-- Repository describes more than 15,500 labelled images in nine categories, including Cumulonimbus, Cirrus, fair-weather Cumulus, towering Cumulus, Altocumulus, Stratus, precipitation, obscuration and clear sky.
-- This is promising for improving sample count and real-world variability. However, a clear reusable image/data license was not established from the repository information reviewed for this phase. Do not bundle, mirror, or train on it for a distributed product until the dataset terms are checked and permission is clear.
-- Labels are not identical to the ten-genus taxonomy; e.g. TCu is a Cumulus subtype and precipitation/obscuration/clear are not cloud genera. Any mapping must preserve original labels and document the mapping.
+- 2,522 ground-based images and 11,191 annotations from nine professional observers; most images have four to five independent judgements.
+- WMO synoptic variables include total cover, low-cloud amount/base height, and CL, CM, CH cloud-type codes. These codes provide more detailed low/middle/high cloud forms.
+- License CC BY 4.0. Attribution: Plamenac, Aleksandar; Tomovic, Savo (2026), Zenodo DOI 10.5281/zenodo.21787669.
+- Preserve observer disagreement as soft targets. "/" is an explicit not-determinable label, not missing data.
+- Single site, autumn/early-winter and daylight-only. The dataset README warns that adjacent images are correlated; split chronologically by day.
+- This is a separate three-head synoptic task. Do not remap its labels into the CCAiM ten-genus classes.
 
-## Other sources reviewed but not selected as training inputs yet
+## Other candidates
 
-- CCSN / CloudNet ground-based images: https://github.com/upuil/CCSN-Database — access instructions are provided by the authors; terms must be checked directly before use.
-- Cloud-ImVN 1.0: https://data.mendeley.com/datasets/vwdd9grvdp — 2,100 images, six categories, CC BY 4.0. Useful as a supplementary benchmark, but its six labels do not map one-to-one to all ten genera.
-- CUMULO: https://github.com/FrontierDevelopmentLab/CUMULO — more than 300k annotated multispectral satellite samples, but it is a satellite/layer-classification dataset, not ordinary phone photographs of the sky. Do not mix it into the ground-photo classifier without a separate modality-specific model.
+- WEBCAM — https://github.com/MarcusCoteFIT/webcam-ground-based-cloud-image-dataset — 15,500+ images in nine aviation-weather categories; reusable license and label mapping need review.
+- TJNU GCD — https://github.com/shuangliutjnu/TJNU-Ground-based-Cloud-Dataset — 19,000 images in seven composite categories; access agreement applies.
+- GOA-ALLSKY — 7,467 all-sky images for okta cloud-cover classification; not a direct genus/species dataset.
+- WMO 30-class research: https://doi.org/10.1029/2024EA004112. Multi-label classification and observer disagreement are important; source imagery terms must be checked before reuse.
 
-## Scientific and methodological constraints
+## Constraints
 
-1. The initial classifier predicts only the ten WMO cloud genera: Ac, As, Cb, Cc, Ci, Cs, Cu, Ns, Sc, St.
-2. Contrails are not a WMO genus. They should be handled as a separate phenomenon/classifier, not inserted as an eleventh genus.
-3. Species, varieties, and supplementary features (e.g. incus, mamma, virga) are not trained in this phase because the selected starter source does not provide reliable multi-label annotations for them.
-4. Ground photos and satellite products are different domains. Do not combine them in one training split or report a single accuracy across them.
-5. Test metrics must be reported per class. Aggregate accuracy alone hides the severe class imbalance.
-6. A single photograph cannot establish exact cloud-base altitude, CAPE, vertical wind shear, precipitation rate, or imminent severe-weather risk. The app must label such quantities as unavailable unless supported by independent observations/model data.
+1. Keep ten-genus classification separate from CL/CM/CH synoptic coding.
+2. Contrails are not a WMO genus; handle separately.
+3. Species, varieties and structural features require their own labels and validation.
+4. Ground RGB, all-sky fisheye, satellite and infrared are different domains.
+5. Report per-class precision/recall/F1, macro-F1, confusion matrices, calibration and held-out temporal/geographic tests.
+6. Never infer exact cloud-base altitude, CAPE, wind shear, rainfall rate or severe-weather risk from one RGB photo.
