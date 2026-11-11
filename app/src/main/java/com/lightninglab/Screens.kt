@@ -459,7 +459,9 @@ fun PhotoEditor(vm: MainVM) {
                                     val channels = if (curveChannel == 0) listOf(0, 1, 2) else listOf(curveChannel - 1)
                                     val labels = listOf("سایه عمیق", "سایه", "میانه", "روشنایی", "سفیدی")
                                     for (point in 0 until PhotoToneCurves.POINTS) {
-                                        val value = p.rgbCurves.getOrElse(point) { point / 4f }
+                                        val value = if (curveChannel == 0) {
+                                            (0..2).map { channel -> p.rgbCurves.getOrElse(channel * PhotoToneCurves.POINTS + point) { point / 4f } }.average().toFloat()
+                                        } else p.rgbCurves.getOrElse((curveChannel - 1) * PhotoToneCurves.POINTS + point) { point / 4f }
                                         Param(labels[point], value, 0f..1f, vm::commit) { v ->
                                             val next = p.rgbCurves.toMutableList()
                                             channels.forEach { channel -> next[channel * PhotoToneCurves.POINTS + point] = v }
