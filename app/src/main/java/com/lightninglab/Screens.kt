@@ -1,5 +1,7 @@
 package com.lightninglab
 
+import java.util.Locale
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1137,6 +1139,13 @@ fun VideoEditor(vm: MainVM) {
                                     Param(stringResource(R.string.contrast), vm.vContrast, -1f..1f, onDone = { vm.commitVideoSettings() }) { vm.vContrast = it }
                                 }
                                 VTool.EXPORT -> {
+                                    Text("پروفایل خروجی", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    ChoiceRow(VideoExportProfile.values().map { it.labelFa }, vm.exportProfile.ordinal) {
+                                        vm.chooseExportProfile(VideoExportProfile.values()[it])
+                                    }
+                                    val exportRate = vm.exportProfile.targetBitrate(vm.videoW, vm.videoH) / 1_000_000f
+                                    Text("H.264 · حدود ${String.format(Locale.US, "%.1f", exportRate)} Mbps · بدون بزرگ‌نمایی اجباری",
+                                        style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                                     Button(onClick = { if (vm.runVideoExportPreflight()) vm.exportVideo() }, enabled = !vm.busy,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.export_video)) }
                                     vm.exportPreflightIssues.forEach { issue ->

@@ -26,6 +26,7 @@ import androidx.media3.effect.Brightness
 import androidx.media3.effect.Contrast
 import androidx.media3.effect.Crop
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.Presentation
 import androidx.media3.effect.SpeedChangeEffect
 import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
@@ -46,6 +47,8 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.DefaultEncoderFactory
+import androidx.media3.transformer.VideoEncoderSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -1877,6 +1880,17 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { fallback } finally { r.release() }
     }
 
+    private val exportPrefs by lazy { app.getSharedPreferences("video_export", 0) }
+    var exportProfile by mutableStateOf(VideoExportProfile.fromId(exportPrefs.getString("profile", "SOURCE")))
+        private set
+    fun chooseExportProfile(profile: VideoExportProfile) {
+        if (exportProfile != profile) {
+            exportProfile = profile
+            exportPrefs.edit().putString("profile", profile.name).apply()
+            exportPreflightIssues = emptyList()
+        }
+    }
+
     var exportPreflightIssues by mutableStateOf<List<String>>(emptyList())
 
     /** Checks the project before expensive rendering and reports actionable issues in Persian. */
@@ -1981,6 +1995,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                             }
                         }
                         if (overlays.isNotEmpty()) itemFx += OverlayEffect(ImmutableList.copyOf(overlays))
+                        val exportHeight = exportProfile.effectiveHeight(videoW, videoH)
+                        if (exportHeight < videoH) itemFx += Presentation.createForHeight(exportHeight)
                         val mi = MediaItem.Builder().setUri(segment.uri ?: u).setClippingConfiguration(
                             MediaItem.ClippingConfiguration.Builder().setStartPositionMs(sourceA).setEndPositionMs(sourceB).build()).build()
                         items += EditedMediaItem.Builder(mi).setRemoveAudio(muteOriginal || !AudioTrackRouting.include(AudioTrackRouting.ORIGINAL, false, soloAudioTrack) || vSpeed != 1f)
@@ -2009,7 +2025,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         .setEffects(Effects(processors, emptyList())).build()))
                 }
                 val done = CompletableDeferred<Throwable?>()
+                val requestedVideoSettings = VideoEncoderSettings.Builder()
+                    .setBitrate(exportProfile.targetBitrate(videoW, videoH))
+                    .build()
+                val encoderFactory = DefaultEncoderFactory.Builder(app)
+                    .setRequestedVideoEncoderSettings(requestedVideoSettings)
+                    .build()
                 val t = Transformer.Builder(app)
+                    .setEncoderFactory(encoderFactory)
                     .setVideoMimeType(MimeTypes.VIDEO_H264).setAudioMimeType(MimeTypes.AUDIO_AAC)
                     .addListener(object : Transformer.Listener {
                         override fun onCompleted(composition: Composition, exportResult: ExportResult) { done.complete(null) }
