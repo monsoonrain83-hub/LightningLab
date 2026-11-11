@@ -369,7 +369,7 @@ fun PhotoEditor(vm: MainVM) {
         TopBar(stringResource(R.string.nav_photo), onBack = { vm.screen = Screen.HOME }) {
             TextButton(onClick = { showPhotoProjects = true }) { Text("پروژه‌ها") }
             TextButton(onClick = { compareMode = !compareMode; vm.showOriginal = false },
-                enabled = shown != null && !healMode && !maskMode) {
+                enabled = shown != null && !healMode && !maskMode && selectedLayerId == null) {
                 Text(if (compareMode) "بستن مقایسه" else "قبل / بعد")
             }
             IconAction(Ic.UNDO, stringResource(R.string.undo), vm.canUndo) { vm.undo() }
@@ -440,11 +440,11 @@ fun PhotoEditor(vm: MainVM) {
                 shape = RoundedCornerShape(50), color = Color(0xAA101B2A),
                 border = BorderStroke(1.dp, Color(0x557EC8FF))
             ) {
-                Text(if (compareMode) "قبل / بعد" else stringResource(if (vm.showOriginal) R.string.original_view else R.string.live_preview),
+                Text(if (compareMode && !healMode && !maskMode) "قبل / بعد" else stringResource(if (vm.showOriginal) R.string.original_view else R.string.live_preview),
                     color = Color(0xFFE1F2FF), style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
             }
-            if (compareMode && shown != null) {
+            if (compareMode && shown != null && !healMode && !maskMode && selectedLayerId == null) {
                 Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
                     shape = RoundedCornerShape(18.dp), color = Color(0xDD101B2A),
                     border = BorderStroke(1.dp, Color(0x557EC8FF))) {
