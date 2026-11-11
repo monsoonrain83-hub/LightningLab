@@ -118,7 +118,9 @@ def build_and_train(args) -> dict:
     train_seq = ClipSequence(partitions["train"], shuffle=True)
     validation_seq = ClipSequence(partitions["validation"], shuffle=False)
     test_seq = ClipSequence(partitions["test"], shuffle=False)
-    counts = np.sum([train_seq[i][1].sum(axis=0) for i in range(len(train_seq))], axis=0)
+    counts = np.zeros(len(LABELS), dtype=np.float64)
+    for row in partitions["train"]:
+        counts[label_index[row["label"]]] += 1
     if np.any(counts == 0):
         raise ValueError("At least one class has no training examples.")
     class_weights = {i: float(len(train_seq.items) / (len(LABELS) * counts[i])) for i in range(len(LABELS))}
