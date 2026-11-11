@@ -1,5 +1,7 @@
 package com.lightninglab
 
+import java.util.Locale
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
