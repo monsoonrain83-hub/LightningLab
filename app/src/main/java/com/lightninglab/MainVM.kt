@@ -1491,6 +1491,26 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Save an auditable evidence report to an Android user-selected document URI. */
+    fun exportLightningEvidence(destination: Uri, json: Boolean) {
+        val snapshot = items.map { it.event }
+        if (snapshot.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = if (json) LightningEvidenceReport.json(snapshot) else LightningEvidenceReport.csv(snapshot)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use {
+                        it.write(payload.toByteArray(Charsets.UTF_8))
+                        it.flush()
+                    } ?: throw java.io.IOException("Cannot write selected document")
+                }
+                infoRes = null
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
     fun cancel() { job?.cancel(); busy = false }
 
     fun toggle(i: Int) {
