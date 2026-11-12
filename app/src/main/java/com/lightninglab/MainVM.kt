@@ -1428,6 +1428,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     var wxBitmap by mutableStateOf<Bitmap?>(null)
     var wx by mutableStateOf<CloudAnalysis.Result?>(null)
+    fun exportSkyPhotoCsv(destination: Uri) {
+        val observation = wx ?: return
+        val ranked = topK.toList()
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = SkyPhotoEvidence.csv(observation, ranked)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use { out ->
+                        out.write(payload.toByteArray(Charsets.UTF_8))
+                        out.flush()
+                    } ?: throw java.io.IOException("Cannot write sky photo CSV")
+                }
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: "sky CSV")
+            }
+        }
+    }
+
     fun analyzeSky(u: Uri) {
         viewModelScope.launch {
             try {
