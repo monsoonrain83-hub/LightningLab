@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -27,6 +28,16 @@ def read_manifest(path: Path, root: Path) -> tuple[list[dict], dict[str, list[di
         clip = (root / row["relative_path"]).resolve()
         if root.resolve() not in clip.parents or not clip.is_file():
             raise FileNotFoundError(f"Missing or unsafe video path: {row['relative_path']}")
+        # Refuse stale or modified datasets before expensive training.
+        expected_hash = (row.get("sha256") or "").lower()
+        if len(expected_hash) != 64 or any(c not in "0123456789abcdef" for c in expected_hash):
+            raise ValueError(f"Missing or invalid SHA-256: {row['relative_path']}")
+        digest = hashlib.sha256()
+        with clip.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest() != expected_hash:
+            raise ValueError(f"Video SHA-256 mismatch: {row['relative_path']}")
         row["_absolute_path"] = str(clip)
     partitions = {split: [row for row in rows if row["split"] == split]
                   for split in ("train", "validation", "test")}
@@ -41,6 +52,11 @@ def build_and_train(args) -> dict:
     import cv2
     import numpy as np
     import tensorflow as tf
+    import random
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    tf.keras.utils.set_random_seed(args.seed)
     from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
     rows, partitions = read_manifest(args.manifest, args.root)
@@ -179,6 +195,10 @@ def build_and_train(args) -> dict:
         raise RuntimeError(f"TFLite contract mismatch: {input_shape} -> {output_shape}")
     metadata = model_metadata()
     metadata.update({
+        "seed": args.seed,
+        "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
+        "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
+        "tensorflow_version": tf.__version__,
         "input_shape": input_shape,
         "output_shape": output_shape,
         "training_clips": len(partitions["train"]),
@@ -196,6 +216,7 @@ def main() -> None:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     args = parser.parse_args()
