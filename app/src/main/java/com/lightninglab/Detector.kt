@@ -175,6 +175,38 @@ class Detector(private val ctx: Context) {
         return FlashAnalyzer.analyze(sc.s, sensitivity, minSepMs, sc.day)
     }
 
+    /**
+     * Decode a whole temporal window with one retriever instance rather than reopening the
+     * same video for each frame. Ownership of returned bitmaps belongs to the caller.
+     * On error, recycle everything to avoid leaking large direct allocations.
+     */
+    fun temporalFrames(uri: Uri, timesMs: LongArray, maxSide: Int, cancelled: () -> Boolean): List<Bitmap> {
+        require(timesMs.size in 1..32 && maxSide in 1..2048)
+        val frames = ArrayList<Bitmap>(timesMs.size)
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(ctx, uri)
+            val (w, h) = dims(retriever, maxSide)
+            for (time in timesMs) {
+                if (cancelled()) return emptyList<Bitmap>().also {
+                    frames.forEach { bitmap -> if (!bitmap.isRecycled) bitmap.recycle() }
+                }
+                val micros = Math.multiplyExact(time.coerceAtLeast(0L), 1000L)
+                val bitmap = retriever.getScaledFrameAtTime(micros, OPTION_CLOSEST, w, h)
+                    ?: return emptyList<Bitmap>().also {
+                        frames.forEach { b -> if (!b.isRecycled) b.recycle() }
+                    }
+                frames.add(bitmap)
+            }
+            return frames
+        } catch (_: Exception) {
+            frames.forEach { if (!it.isRecycled) it.recycle() }
+            return emptyList()
+        } finally {
+            retriever.release()
+        }
+    }
+
     /** Decode one frame; scaled so the longer side is at most maxSide (use a huge value for full resolution). */
     fun frame(uri: Uri, tMs: Long, maxSide: Int): Bitmap? {
         val r = MediaMetadataRetriever()
