@@ -55,6 +55,9 @@ fun WeatherScreen(vm: MainVM) {
     val pickCloudVideo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) vm.analyzeCloudVideo(u)
     }
+    val exportPhotoEvidence = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { u ->
+        if (u != null) vm.exportSkyPhotoCsv(u)
+    }
     val exportVideoEvidence = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { u ->
         if (u != null) vm.exportSkyVideoCsv(u)
     }
@@ -180,6 +183,10 @@ fun WeatherScreen(vm: MainVM) {
             }
             vm.wx?.let { r ->
                 Panel {
+                    OutlinedButton(onClick = { exportPhotoEvidence.launch("LightningLab_sky_photo_evidence.csv") }) {
+                        Text("خروجی CSV شواهد عکس آسمان")
+                    }
+
                     Text(stringResource(R.string.wx_report, (r.cover * 100).roundToInt(), r.oktas,
                         String.format(Locale.US, "%.1f", r.texture), r.cloudLuma.roundToInt(), stringResource(kindRes(r.kind))),
                         style = MaterialTheme.typography.bodyMedium)
