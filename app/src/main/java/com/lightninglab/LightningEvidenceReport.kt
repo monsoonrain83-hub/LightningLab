@@ -52,7 +52,11 @@ object LightningEvidenceReport {
                 .append(",\"visual_evidence\":").append(number(e.visualEvidence))
                 .append(",\"spatial_spread\":").append(number(e.spatialSpread))
                 .append(",\"pulse_count\":").append(e.pulseCount)
-                .append('}')
+            predictions[e.id]?.firstOrNull()?.let { prediction ->
+                append(",\"model_label\":").append(quote(prediction.first))
+                    .append(",\"model_softmax_uncalibrated\":").append(number(prediction.second))
+            }
+            append('}')
         }
         append("]}")
     }
