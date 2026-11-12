@@ -892,15 +892,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---- photo presets (adjustment sliders only) ----
     private val prefs get() = app.getSharedPreferences("lightninglab", android.content.Context.MODE_PRIVATE)
-    fun savePreset() {
+    fun savePreset(slot: Int = 1) {
         val p = params
-        prefs.edit().putString("photo_preset", listOf(p.exposure, p.brightness, p.contrast, p.saturation, p.warmth,
-            p.highlights, p.shadows, p.sharpness, p.scurve, p.denoise, p.vibrance).joinToString(",")).apply()
+        val values = listOf(p.exposure, p.brightness, p.contrast, p.saturation, p.warmth,
+            p.highlights, p.shadows, p.sharpness, p.scurve, p.denoise, p.vibrance)
+        prefs.edit().putString(PhotoLookSlots.key(slot), PhotoLookSlots.encode(values)).apply()
         info(R.string.preset_saved)
     }
-    fun loadPreset() {
-        val v = prefs.getString("photo_preset", null)?.split(",")?.mapNotNull { it.toFloatOrNull() }
-        if (v == null || v.size < 11) { info(R.string.preset_none); return }
+    fun loadPreset(slot: Int = 1) {
+        val v = PhotoLookSlots.decode(prefs.getString(PhotoLookSlots.key(slot), null))
+        if (v == null) { info(R.string.preset_none); return }
         params = params.copy(exposure = v[0], brightness = v[1], contrast = v[2], saturation = v[3], warmth = v[4],
             highlights = v[5], shadows = v[6], sharpness = v[7], scurve = v[8], denoise = v[9], vibrance = v[10])
         commit()
