@@ -1793,6 +1793,23 @@ fun ProjectsDialog(vm: MainVM, onDismiss: () -> Unit) {
                 Button(onClick = { vm.saveProject(); onDismiss() }, enabled = vm.videoUri != null && !vm.busy,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(stringResource(R.string.save_project)) }
                 Text(stringResource(R.string.project_copy_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                if (vm.hasVideoDraft()) {
+                    Text("پیش‌نویس خودکار ویدئو", style = MaterialTheme.typography.titleSmall)
+                    Text("تنظیمات و لایه‌ها بازیابی می‌شوند؛ فایل‌های اصلی باید همچنان در دسترس باشند.",
+                        style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = { vm.recoverVideoDraft(); onDismiss() },
+                            enabled = !vm.busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Text("بازیابی")
+                        }
+                        OutlinedButton(onClick = { vm.discardVideoDraft() },
+                            enabled = !vm.busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Text("حذف پیش‌نویس")
+                        }
+                    }
+                }
+                vm.videoDraftStatus?.let { Text(it, color = Storm.muted, style = MaterialTheme.typography.bodySmall) }
+
                 if (list.isEmpty()) Text(stringResource(R.string.no_projects), style = MaterialTheme.typography.bodyMedium)
                 list.forEach { p ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
