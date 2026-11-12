@@ -355,6 +355,7 @@ fun PhotoEditor(vm: MainVM) {
     }
     val prev = vm.photoPrev
     var tab by remember { mutableStateOf(PTab.LIGHT) }
+    var selectedLookSlot by remember { mutableIntStateOf(1) }
     var showPhotoProjects by remember { mutableStateOf(false) }
     var compareMode by remember { mutableStateOf(false) }
     var comparePosition by remember(prev) { mutableStateOf(0.5f) }
@@ -759,9 +760,13 @@ fun PhotoEditor(vm: MainVM) {
                                         Switch(vm.watermark, { vm.watermark = it })
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.watermark), style = MaterialTheme.typography.bodyMedium)
                                     }
+                                    Text("ظاهرهای ذخیره‌شده", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    ChoiceRow(listOf("ظاهر ۱", "ظاهر ۲", "ظاهر ۳"), selectedLookSlot - 1) {
+                                        selectedLookSlot = it + 1
+                                    }
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(onClick = { vm.savePreset() }) { Text(stringResource(R.string.preset_save)) }
-                                        OutlinedButton(onClick = { vm.loadPreset() }) { Text(stringResource(R.string.preset_load)) }
+                                        OutlinedButton(onClick = { vm.savePreset(selectedLookSlot) }) { Text(stringResource(R.string.preset_save)) }
+                                        OutlinedButton(onClick = { vm.loadPreset(selectedLookSlot) }) { Text(stringResource(R.string.preset_load)) }
                                         OutlinedButton(onClick = { vm.params = PhotoParams(); vm.commit() }) { Text(stringResource(R.string.reset)) }
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
