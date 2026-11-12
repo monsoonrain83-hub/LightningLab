@@ -31,6 +31,19 @@ class LightningEvidenceReportTest {
         assertEquals(60L, rows.getJSONObject(1).getLong("duration_ms"))
     }
 
+    @Test fun modelPredictionsAppearOnlyWhenPresent() {
+        val pred = mapOf(1 to listOf("close" to 0.75f))
+        val obj = JSONObject(LightningEvidenceReport.json(events, pred))
+        val first = obj.getJSONArray("events").getJSONObject(0)
+        val second = obj.getJSONArray("events").getJSONObject(1)
+        assertEquals("close", first.getString("model_label"))
+        assertEquals(0.75, first.getDouble("model_softmax_uncalibrated"), 0.0001)
+        assertFalse(second.has("model_label"))
+        val csv = LightningEvidenceReport.csv(events, pred)
+        assertTrue(csv.lines()[0].contains("model_softmax_uncalibrated"))
+        assertTrue(csv.contains("\\"close\\",0.750000"))
+    }
+
     @Test fun emptyReportIsWellFormed() {
         assertEquals(0, JSONObject(LightningEvidenceReport.json(emptyList()))
             .getJSONArray("events").length())
