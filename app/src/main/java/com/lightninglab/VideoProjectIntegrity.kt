@@ -20,6 +20,13 @@ internal object VideoProjectIntegrity {
         id.length in 2..128 && id.startsWith("p") && safeFile.matches(id) &&
             !id.contains("..")
 
+    fun projectDirectory(parent: File, id: String): File? {
+        if (!safeProjectId(id)) return null
+        val root = parent.canonicalFile
+        val child = File(root, id).canonicalFile
+        return child.takeIf { it.parentFile == root }
+    }
+
     fun assetNames(project: ProjectData): Set<String> = buildSet {
         add(project.video)
         project.segs.mapNotNullTo(this) { it.clip }
