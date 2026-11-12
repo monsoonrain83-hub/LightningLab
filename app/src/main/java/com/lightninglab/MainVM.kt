@@ -549,12 +549,22 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private var musicWaveformJob: Job? = null
     private var voiceWaveformJob: Job? = null
     private var waveformTasks = 0
+    /** Take a durable read grant if the picker/provider offers one. */
+    private fun retainMediaPermission(uri: Uri) {
+        if (uri.scheme != "content") return
+        try { app.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        catch (_: SecurityException) { /* Some providers only grant ephemeral access. */ }
+        catch (_: IllegalArgumentException) { /* Provider does not offer persistable grants. */ }
+    }
+
     fun updateMusicSource(u: Uri?) {
+        u?.let(::retainMediaPermission)
         music = u; pushVideoHistory()
         if (u == null) { musicWaveformJob?.cancel(); musicWaveform = emptyList(); musicName = null }
         else analyzeWaveform(u, false)
     }
     fun updateVoiceSource(u: Uri?) {
+        u?.let(::retainMediaPermission)
         voice = u; pushVideoHistory()
         if (u == null) { voiceWaveformJob?.cancel(); voiceWaveform = emptyList() }
         else analyzeWaveform(u, true)
@@ -969,6 +979,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Appends a whole extra video as its own section (joined after the others on export). */
     fun addClip(c: Uri) {
+        retainMediaPermission(c)
         viewModelScope.launch {
             try {
                 val d = withContext(Dispatchers.IO) {
@@ -1928,6 +1939,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---------------- video editor ----------------
     fun loadVideo(u: Uri) {
+        retainMediaPermission(u)
         val r = MediaMetadataRetriever()
         try {
             r.setDataSource(app, u)
