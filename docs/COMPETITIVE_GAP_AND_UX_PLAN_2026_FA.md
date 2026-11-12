@@ -1,6 +1,12 @@
 # LightningLab — Competitive capability audit and UX engineering plan
 **Research date:** 2026-11-12 | **Baseline:** main r10.66 (versionCode 73) | **Next milestone:** r10.67
 
+## Professional software and scientific standards also reviewed
+- CapCut official keyframe docs: https://www.capcut.com/tools/keyframe-animation — animated position/scale/rotation/opacity and speed curves; not copied or implied present.
+- Adobe Lightroom mobile official mask docs (2026): https://helpx.adobe.com/lightroom/mobile/masks-and-selective-adjustments/create-masks.html — local sky/subject/background masks; gradients; color and luminance range.
+- WMO International Cloud Atlas No. 407: https://cloudatlas.wmo.int/en/home.html — cloud genera and the broader taxonomy of hydrometeors, lithometeors, photometeors and electrometeors. A camera-only visual classification remains an **unconfirmed observation candidate**, not a substitute for instrumented meteorological observation.
+- Android Media3 Transformer official: https://developer.android.com/media/implement/editing-app — native export and effect semantics.
+
 ## Research methodology and boundaries
 Sources are publicly available GitHub README files and official Android documentation. Feature claims refer to what the upstream projects **document**, not to independently reproduced performance. No upstream implementation code has been copied into LightningLab. MIT/Apache dependencies may be integrated later with notices; GPL projects (such as CalibRaw/CropTop) must be treated as **feature references only** unless the whole distribution's obligations have been reviewed. Some upstream tools describe prototype/stub functionality; we do not equate a claimed feature with real validated operation.
 
