@@ -16,7 +16,7 @@ class LightningTemporalModelTest {
         assertEquals(8, times.size)
         assertEquals(500L, times.first())
         assertEquals(1700L, times.last())
-        assertTrue(times.zipWithNext().all { (a, b) -> a <= b })
+        assertTrue(times.asList().zipWithNext().all { (a: Long, b: Long) -> a <= b })
     }
 
     @Test fun sampleTimesClampAtVideoBoundaries() {
