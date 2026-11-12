@@ -63,6 +63,12 @@ class VideoProjectIntegrityTest {
         assertFalse(VideoProjectIntegrity.verify(dir, p))
     }
 
+    @Test fun canonicalProjectDirectoryMustRemainUnderRoot() = inTemp { dir ->
+        val valid = VideoProjectIntegrity.projectDirectory(dir, "p1734291000000")
+        assertEquals(File(dir, "p1734291000000").canonicalFile, valid)
+        assertNull(VideoProjectIntegrity.projectDirectory(dir, "../outside"))
+    }
+
     @Test fun strictProjectIdentifiersProtectDeletion() {
         assertTrue(VideoProjectIntegrity.safeProjectId("p1734291000000"))
         assertFalse(VideoProjectIntegrity.safeProjectId("../"))
