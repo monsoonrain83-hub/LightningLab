@@ -206,6 +206,12 @@ fun About(vm: MainVM) {
 
 @Composable
 fun Results(vm: MainVM) {
+    val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {
+        if (it != null) vm.exportLightningEvidence(it, json = false)
+    }
+    val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
+        if (it != null) vm.exportLightningEvidence(it, json = true)
+    }
     LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.fillMaxSize().padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -217,6 +223,14 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { exportCsv.launch("LightningLab_evidence.csv") }, enabled = vm.items.isNotEmpty() && !vm.busy) {
+                        Text("گزارش CSV")
+                    }
+                    OutlinedButton(onClick = { exportJson.launch("LightningLab_evidence.json") }, enabled = vm.items.isNotEmpty() && !vm.busy) {
+                        Text("گزارش JSON")
+                    }
+                }
                 Text(stringResource(R.string.order_hint), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.heuristic_note), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
             }
