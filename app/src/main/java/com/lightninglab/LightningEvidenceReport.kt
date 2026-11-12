@@ -15,19 +15,26 @@ object LightningEvidenceReport {
     private fun csvField(value: String): String =
         "\"" + value.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ") + "\""
 
-    fun csv(events: List<LightningEvent>): String = buildString {
-        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source\n")
+    fun csv(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap()): String = buildString {
+        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source,model_label,model_softmax_uncalibrated\n")
         for (e in events.sortedWith(compareBy<LightningEvent> { it.startMs }.thenBy { it.id })) {
             append(SCHEMA_VERSION).append(',').append(e.id).append(',')
                 .append(e.startMs).append(',').append(e.endMs).append(',').append(e.bestMs).append(',')
                 .append((e.endMs - e.startMs).coerceAtLeast(0L)).append(',')
                 .append(number(e.score)).append(',').append(csvField(e.visualType.name)).append(',')
                 .append(number(e.visualEvidence)).append(',').append(number(e.spatialSpread)).append(',')
-                .append(e.pulseCount).append(",visual_heuristic\n")
+                .append(e.pulseCount).append(",visual_heuristic,")
+            val prediction = predictions[e.id]?.firstOrNull()
+            if (prediction != null) {
+                append(csvField(prediction.first)).append(',').append(number(prediction.second))
+            } else {
+                append(',')
+            }
+            append('\n')
         }
     }
 
-    fun json(events: List<LightningEvent>): String = buildString {
+    fun json(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap()): String = buildString {
         append("{\"schema_version\":").append(SCHEMA_VERSION)
             .append(",\"source\":\"visual_heuristic\"")
             .append(",\"scientific_caveat\":")
