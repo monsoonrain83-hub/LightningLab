@@ -69,7 +69,8 @@ internal object VideoProjectIntegrity {
      * Never mutate editor state until this passes. A missing index is permitted
      * only for legacy projects; an existing malformed index is always rejected.
      */
-    fun verify(dir: File, project: ProjectData): Boolean = try {
+    fun verify(dir: File, project: ProjectData): Boolean {
+        return try {
         if (!dir.isDirectory) return false
         val names = (assetNames(project) + "project.json").sorted()
         for (name in names) {
@@ -94,5 +95,6 @@ internal object VideoProjectIntegrity {
                 file.length() != entry.getLong("size") || sha256(file) != expected) return false
         }
         checked.size == names.size
-    } catch (_: Exception) { false }
+        } catch (_: Exception) { false }
+    }
 }
