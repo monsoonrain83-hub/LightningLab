@@ -206,6 +206,9 @@ fun About(vm: MainVM) {
 
 @Composable
 fun Results(vm: MainVM) {
+    val pickTemporalModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        if (it != null) vm.importLightningTemporalModel(it)
+    }
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {
         if (it != null) vm.exportLightningEvidence(it, json = false)
     }
@@ -223,6 +226,20 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { pickTemporalModel.launch(arrayOf("*/*")) }, enabled = !vm.busy) {
+                        Text(if (vm.lightningTemporalReady) "تعویض مدل زمانی" else "ورود مدل زمانی TFLite")
+                    }
+                    OutlinedButton(onClick = { vm.classifyLightningEvents() },
+                        enabled = vm.lightningTemporalReady && vm.items.isNotEmpty() && !vm.busy) {
+                        Text("تحلیل زمانی با مدل")
+                    }
+                }
+                Text(if (vm.lightningTemporalReady)
+                    "مدل اختیاری آماده است؛ امتیازهای مدل مستقل از تشخیص تصویری هستند."
+                    else "مدل زمانی آموزش‌دیده نصب نیست؛ تحلیل تصویری فعلی بدون مدل کار می‌کند.",
+                    style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { exportCsv.launch("LightningLab_evidence.csv") }, enabled = vm.items.isNotEmpty() && !vm.busy) {
                         Text("گزارش CSV")
@@ -253,6 +270,10 @@ fun Results(vm: MainVM) {
                                 style = MaterialTheme.typography.bodySmall)
                             Text(item.event.visualType.labelFa + "  ·  ${(item.event.visualEvidence * 100).roundToInt()}٪ شواهد ظاهری",
                                 style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                            vm.temporalScores[item.event.id]?.firstOrNull()?.let { prediction ->
+                                Text("برچسب مدل: ${prediction.first} · امتیاز softmax ${(prediction.second * 100).roundToInt()}٪ (کالیبره‌نشده)",
+                                    style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                            }
                             Text("بازه: ${fmt(item.event.startMs)} تا ${fmt(item.event.endMs)}",
                                 style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                             Text("${item.event.pulseCount} پالس  ·  گستردگی روشنایی ${(item.event.spatialSpread * 100).roundToInt()}٪",
