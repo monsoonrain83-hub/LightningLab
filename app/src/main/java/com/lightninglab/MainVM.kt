@@ -1459,6 +1459,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var cloudVideoBusy by mutableStateOf(false)
     var cloudVideoProgress by mutableStateOf(0f)
     var cloudVideoReport by mutableStateOf<CloudVideoReport?>(null)
+    /** Export existing frame observations; human interpretation remains separate from model output. */
+    fun exportSkyVideoCsv(destination: Uri) {
+        val snapshot = cloudVideoReport ?: return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = SkyVideoEvidence.csv(snapshot)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use { out ->
+                        out.write(payload.toByteArray(Charsets.UTF_8))
+                        out.flush()
+                    } ?: throw java.io.IOException("Cannot write CSV document")
+                }
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: "CSV export")
+            }
+        }
+    }
+
 
     fun analyzeCloudVideo(uri: Uri) {
         if (cloudVideoBusy) return
