@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Stable, offline evidence export. Scores are heuristic, not calibrated probabilities. */
 object LightningEvidenceReport {
-    const val SCHEMA_VERSION = 1
+    const val SCHEMA_VERSION = 2
     private fun number(value: Float): String =
         if (value.isFinite()) String.format(Locale.US, "%.6f", value) else "null"
 
