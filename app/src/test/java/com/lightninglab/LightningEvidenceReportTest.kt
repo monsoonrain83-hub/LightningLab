@@ -15,14 +15,14 @@ class LightningEvidenceReportTest {
         val lines = csv.lines().filter { it.isNotEmpty() }
         assertEquals(3, lines.size)
         assertTrue(lines[0].contains("duration_ms"))
-        assertTrue(lines[1].startsWith("1,1,10,45,30,35,"))
-        assertTrue(lines[2].startsWith("1,2,120,180,160,60,"))
+        assertTrue(lines[1].startsWith("2,1,10,45,30,35,"))
+        assertTrue(lines[2].startsWith("2,2,120,180,160,60,"))
         assertTrue(lines[2].contains("visual_heuristic"))
     }
 
     @Test fun jsonParsesAndPreservesScientificCaveat() {
         val result = JSONObject(LightningEvidenceReport.json(events))
-        assertEquals(1, result.getInt("schema_version"))
+        assertEquals(2, result.getInt("schema_version"))
         assertEquals("visual_heuristic", result.getString("source"))
         assertTrue(result.getString("scientific_caveat").contains("CG/IC"))
         val rows = result.getJSONArray("events")
