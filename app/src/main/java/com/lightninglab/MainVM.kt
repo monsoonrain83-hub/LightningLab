@@ -1601,11 +1601,12 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     /** Save an auditable evidence report to an Android user-selected document URI. */
     fun exportLightningEvidence(destination: Uri, json: Boolean) {
         val snapshot = items.map { it.event }
+        val predictionSnapshot = temporalScores.toMap()
         if (snapshot.isEmpty()) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val payload = if (json) LightningEvidenceReport.json(snapshot) else LightningEvidenceReport.csv(snapshot)
+                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot)
                     app.contentResolver.openOutputStream(destination, "wt")?.use {
                         it.write(payload.toByteArray(Charsets.UTF_8))
                         it.flush()
