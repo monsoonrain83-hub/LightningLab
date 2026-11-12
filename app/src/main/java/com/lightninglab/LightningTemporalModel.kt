@@ -26,7 +26,7 @@ class LightningTemporalModel(private val file: File) {
 
         fun sampleTimes(startMs: Long, endMs: Long, durationMs: Long): LongArray {
             require(startMs >= 0L && endMs >= startMs && durationMs >= 0L)
-            val start = (startMs - 500L).coerceAtLeast(0L)
+            val start = (startMs - 500L).coerceIn(0L, durationMs)
             val end = (endMs + 500L).coerceAtMost(durationMs).coerceAtLeast(start)
             return LongArray(FRAMES) { i -> start + (end - start) * i / (FRAMES - 1) }
         }
