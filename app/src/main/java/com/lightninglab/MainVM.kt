@@ -1957,6 +1957,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         fadeInMusicSnapshot, fadeOutMusicSnapshot, fadeInVoiceSnapshot, fadeOutVoiceSnapshot,
                         muteMusicSnapshot, muteVoiceSnapshot, soloAudioTrackSnapshot)), Charsets.UTF_8)
                     if (!manifest.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize project manifest")
+                    val completed = ProjectCodec.decode(File(dir, "project.json").readText(Charsets.UTF_8))
+                        ?: throw java.io.IOException("Saved project failed schema validation")
+                    VideoProjectIntegrity.writeIndex(dir, completed)
+                    if (!VideoProjectIntegrity.verify(dir, completed))
+                        throw java.io.IOException("Project media integrity validation failed")
                     // Publish only a complete project. A crash before this point leaves a hidden staging folder.
                     if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot publish completed project")
                 }
@@ -1970,8 +1975,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     fun loadProject(id: String) {
         try {
-            val dir = File(projectsDir, id)
+            val dir = VideoProjectIntegrity.projectDirectory(projectsDir, id) ?: run {
+                info(R.string.error_generic, "invalid project path"); return
+            }
             val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
+            if (!VideoProjectIntegrity.verify(dir, p)) {
+                info(R.string.error_generic, "project files are damaged or missing"); return
+            }
             loadVideo(Uri.fromFile(File(dir, p.video)))
             if (videoUri == null) return
             clearSegmentSelection()
@@ -2003,7 +2013,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) { info(R.string.error_generic, e.message ?: "project") }
     }
 
-    fun deleteProject(id: String) { File(projectsDir, id).deleteRecursively() }
+    fun deleteProject(id: String) {
+        val dir = VideoProjectIntegrity.projectDirectory(projectsDir, id) ?: run {
+            info(R.string.error_generic, "invalid project path")
+            return
+        }
+        dir.deleteRecursively()
+    }
 
     /** Duration of an audio file in ms, or `fallback` if unreadable. */
     private fun audioDur(u: Uri, fallback: Long): Long {
