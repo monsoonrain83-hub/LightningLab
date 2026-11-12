@@ -10,6 +10,13 @@ on:
       - 'tools/cloud_ai/**'
       - 'tools/lightning_ai/**'
       - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
   workflow_dispatch:
 permissions:
   contents: write
