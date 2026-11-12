@@ -1975,10 +1975,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     fun loadProject(id: String) {
         try {
-            if (!VideoProjectIntegrity.safeProjectId(id)) {
-                info(R.string.error_generic, "invalid project identifier"); return
+            val dir = VideoProjectIntegrity.projectDirectory(projectsDir, id) ?: run {
+                info(R.string.error_generic, "invalid project path"); return
             }
-            val dir = File(projectsDir, id)
             val p = ProjectCodec.decode(File(dir, "project.json").readText()) ?: run { info(R.string.error_generic, "project"); return }
             if (!VideoProjectIntegrity.verify(dir, p)) {
                 info(R.string.error_generic, "project files are damaged or missing"); return
@@ -2015,11 +2014,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteProject(id: String) {
-        if (!VideoProjectIntegrity.safeProjectId(id)) {
-            info(R.string.error_generic, "invalid project identifier")
+        val dir = VideoProjectIntegrity.projectDirectory(projectsDir, id) ?: run {
+            info(R.string.error_generic, "invalid project path")
             return
         }
-        File(projectsDir, id).deleteRecursively()
+        dir.deleteRecursively()
     }
 
     /** Duration of an audio file in ms, or `fallback` if unreadable. */
