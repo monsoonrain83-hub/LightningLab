@@ -2038,6 +2038,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val manifestTemp = File(dir, "project.json.tmp")
                     manifestTemp.writeText(PhotoProjectCodec.encode(data), Charsets.UTF_8)
                     if (!manifestTemp.renameTo(File(dir, "project.json"))) throw java.io.IOException("cannot finalize photo project manifest")
+                    PhotoProjectIntegrity.write(dir, data)
+                    if (!PhotoProjectIntegrity.verify(dir, data)) throw java.io.IOException("photo project verification failed")
                     if (!dir.renameTo(finalDir)) throw java.io.IOException("cannot finalize photo project folder")
                 }
                 info(R.string.project_saved)
@@ -2052,8 +2054,12 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val loaded = withContext(Dispatchers.IO) {
-                    val dir = File(photoProjectsDir, id)
-                    val data = PhotoProjectCodec.decode(File(dir, "project.json").readText()) ?: throw java.io.IOException("invalid photo project")
+                    val dir = PhotoProjectIntegrity.directory(photoProjectsDir, id)
+                        ?: throw java.io.IOException("invalid photo project path")
+                    val manifest = File(dir, "project.json")
+                    if (!manifest.isFile || manifest.length() > 2_000_000L) throw java.io.IOException("invalid photo manifest")
+                    val data = PhotoProjectCodec.decode(manifest.readText(Charsets.UTF_8)) ?: throw java.io.IOException("invalid photo project")
+                    if (!PhotoProjectIntegrity.verify(dir, data)) throw java.io.IOException("photo project assets are missing or corrupt")
                     val source = BitmapFactory.decodeFile(File(dir, data.source).absolutePath) ?: throw java.io.IOException("missing source image")
                     val images = data.images.map { item ->
                         val bmp = BitmapFactory.decodeFile(File(dir, item.file).absolutePath) ?: throw java.io.IOException("missing layer image ${item.file}")
@@ -2079,7 +2085,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun deletePhotoProject(id: String) { File(photoProjectsDir, id).deleteRecursively() }
+    fun deletePhotoProject(id: String) {
+        val dir = PhotoProjectIntegrity.directory(photoProjectsDir, id) ?: run {
+            info(R.string.error_generic, "invalid photo project path")
+            return
+        }
+        if (dir.exists() && !dir.deleteRecursively()) info(R.string.error_generic, "could not delete photo project")
+    }
 
     // ---- video projects (the source files are COPIED into app storage: picker URIs do not survive restarts) ----
     class ProjectInfo(val id: String, val name: String, val modified: Long)
