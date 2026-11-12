@@ -226,6 +226,10 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
+                val reviewCounts = vm.reviewCounts()
+                Text("بازبینی انسانی: ${reviewCounts[LightningReview.CONFIRMED] ?: 0} تأیید · ${reviewCounts[LightningReview.REJECTED] ?: 0} رد · ${reviewCounts[LightningReview.UNCERTAIN] ?: 0} نامشخص",
+                    style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickTemporalModel.launch(arrayOf("*/*")) }, enabled = !vm.busy) {
                         Text(if (vm.lightningTemporalReady) "تعویض مدل زمانی" else "ورود مدل زمانی TFLite")
@@ -278,6 +282,18 @@ fun Results(vm: MainVM) {
                                 style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                             Text("${item.event.pulseCount} پالس  ·  گستردگی روشنایی ${(item.event.spatialSpread * 100).roundToInt()}٪",
                                 style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                            val review = vm.lightningReviews[item.event.id] ?: LightningReview.UNREVIEWED
+                            Text("نظر بازبین: ${review.labelFa}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf(LightningReview.CONFIRMED, LightningReview.REJECTED, LightningReview.UNCERTAIN).forEach { choice ->
+                                    FilterChip(
+                                        selected = review == choice,
+                                        onClick = { vm.reviewLightningEvent(item.event.id, if (review == choice) LightningReview.UNREVIEWED else choice) },
+                                        label = { Text(choice.labelFa, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+
                         }
                     }
                 }
