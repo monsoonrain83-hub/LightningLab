@@ -26,6 +26,8 @@ def validate_manifest_rows(rows: Iterable[dict]) -> tuple[int, dict[str, int]]:
     """Reject unknown labels/splits and event groups crossing data partitions."""
     allowed_splits = {"train", "validation", "test"}
     group_split: dict[str, str] = {}
+    hash_split: dict[str, str] = {}
+    path_split: dict[str, str] = {}
     counts = {split: 0 for split in allowed_splits}
     total = 0
     for row in rows:
@@ -41,6 +43,20 @@ def validate_manifest_rows(rows: Iterable[dict]) -> tuple[int, dict[str, int]]:
         previous = group_split.setdefault(group, split)
         if previous != split:
             raise ValueError(f"Event group {group!r} leaks across splits")
+        # Identical payloads or paths must never cross train/validation/test,
+        # even when a hand-edited manifest assigns different event groups.
+        digest = (row.get("sha256") or "").strip().lower()
+        if digest:
+            if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError("Invalid sha256 digest in manifest")
+            previous_hash_split = hash_split.setdefault(digest, split)
+            if previous_hash_split != split:
+                raise ValueError(f"Identical clip payload leaks across splits: {digest}")
+        path = (row.get("relative_path") or "").strip()
+        if path:
+            previous_path_split = path_split.setdefault(path, split)
+            if previous_path_split != split:
+                raise ValueError(f"Clip path leaks across splits: {path}")
         counts[split] += 1
         total += 1
     return total, counts
