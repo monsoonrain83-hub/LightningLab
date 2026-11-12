@@ -100,7 +100,7 @@ fun Home(vm: MainVM) {
                 }
                 Surface(Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(50),
                     color = Color(0xAA0C1725), border = BorderStroke(1.dp, Color(0x557EC8FF))) {
-                    Text("AI  •  OFFLINE", Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    Text("OFFLINE • مدل اختیاری", Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         color = Color(0xFFB9D8F6), style = MaterialTheme.typography.labelSmall)
                 }
             }
