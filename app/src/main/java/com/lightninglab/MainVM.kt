@@ -995,7 +995,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Imports an externally trained model, retaining the last known-good model on failure. */
     fun importLightningTemporalModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
+            try {
             val ok = withContext(Dispatchers.IO) {
                 val target = File(app.filesDir, "lightning_temporal.tflite")
                 val backup = File(app.filesDir, "lightning_temporal.tflite.previous")
@@ -1040,6 +1043,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             lightningTemporalReady = withContext(Dispatchers.IO) { temporalLightningModel.load() }
             temporalScores.clear()
             info(if (ok) R.string.model_loaded else R.string.model_invalid)
+            } finally {
+                busy = false
+            }
         }
     }
 
