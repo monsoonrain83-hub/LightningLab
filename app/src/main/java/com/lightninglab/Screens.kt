@@ -1234,6 +1234,11 @@ fun VideoEditor(vm: MainVM) {
                                     val exportRate = vm.exportProfile.targetBitrate(vm.videoW, vm.videoH) / 1_000_000f
                                     Text("H.264 · حدود ${String.format(Locale.US, "%.1f", exportRate)} Mbps · بدون بزرگ‌نمایی اجباری",
                                         style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                    Text("مدت برآوردی خروجی: ${vm.videoExportDurationMs() / 1000} ثانیه · حجم تقریبی: ${(vm.videoExportEstimatedBytes() / (1024.0 * 1024.0)).roundToInt()} مگابایت",
+                                        style = MaterialTheme.typography.bodySmall, color = Storm.arc)
+                                    Text("حجم نهایی به کدک، کیفیت و محتوای ویدئو وابسته است.",
+                                        style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+
                                     Button(onClick = { if (vm.runVideoExportPreflight()) vm.exportVideo() }, enabled = !vm.busy,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.export_video)) }
                                     vm.exportPreflightIssues.forEach { issue ->
