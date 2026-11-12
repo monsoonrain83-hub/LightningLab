@@ -2071,6 +2071,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     var exportPreflightIssues by mutableStateOf<List<String>>(emptyList())
+    fun videoExportDurationMs(): Long =
+        VideoExportBudget.durationMs(segments.toList(), videoDur, vSpeed)
+
+    fun videoExportEstimatedBytes(): Long =
+        VideoExportBudget.estimatedBytes(
+            videoExportDurationMs(), exportProfile.targetBitrate(videoW, videoH).toLong()
+        )
+
 
     /** Checks the project before expensive rendering and reports actionable issues in Persian. */
     fun runVideoExportPreflight(): Boolean {
@@ -2097,8 +2105,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             if (clip.startMs < 0L || clip.endMs <= clip.startMs || clip.endMs > outputDuration)
                 issues += "بازهٔ یکی از افکت‌ها خارج از محدودهٔ ویدئو است."
         }
-        if (app.cacheDir.usableSpace < 150L * 1024L * 1024L)
-            issues += "فضای خالی حافظه کمتر از ۱۵۰ مگابایت است؛ پیش از خروجی فضا آزاد کنید."
+        val requiredBytes = VideoExportBudget.minimumFreeBytes(videoExportEstimatedBytes())
+        if (app.cacheDir.usableSpace < requiredBytes)
+            issues += "فضای خالی برای رندر کافی نیست؛ دست‌کم ${requiredBytes / (1024L * 1024L)} مگابایت در حافظهٔ برنامه لازم است."
         exportPreflightIssues = issues.distinct()
         return exportPreflightIssues.isEmpty()
     }
