@@ -41,7 +41,7 @@ class LightningEvidenceReportTest {
         assertFalse(second.has("model_label"))
         val csv = LightningEvidenceReport.csv(events, pred)
         assertTrue(csv.lines()[0].contains("model_softmax_uncalibrated"))
-        assertTrue(csv.contains("\\"close\\",0.750000"))
+        assertTrue(csv.contains("\"close\",0.750000"))
     }
 
     @Test fun emptyReportIsWellFormed() {
