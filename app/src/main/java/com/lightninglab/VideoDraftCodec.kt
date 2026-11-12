@@ -21,7 +21,8 @@ internal object VideoDraftCodec {
             .toString()
     }
 
-    fun decode(data: String): VideoDraft? = try {
+    fun decode(data: String): VideoDraft? {
+        return try {
         if (data.length > 2_000_000) return null
         val doc = JSONObject(data)
         if (doc.optInt("version") != VERSION) return null
@@ -30,8 +31,8 @@ internal object VideoDraftCodec {
         if (uri.isBlank() || uri.length > 8192 || saved < 0) return null
         val project = ProjectCodec.decode(doc.getJSONObject("project").toString()) ?: return null
         // Draft references may be content://, file://, but never remote/network URIs.
-        val scheme = android.net.Uri.parse(uri).scheme
-        if (scheme != "content" && scheme != "file") return null
+        if (!uri.startsWith("content://") && !uri.startsWith("file://")) return null
         VideoDraft(uri, project, saved)
-    } catch (_: Exception) { null }
+        } catch (_: Exception) { null }
+    }
 }
