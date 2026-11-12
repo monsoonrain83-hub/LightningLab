@@ -992,6 +992,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     var lightningTemporalReady by mutableStateOf(false)
     val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
+    val lightningReviews = androidx.compose.runtime.mutableStateMapOf<Int, LightningReview>()
+
+    fun reviewLightningEvent(id: Int, decision: LightningReview) {
+        if (items.none { it.event.id == id }) return
+        if (decision == LightningReview.UNREVIEWED) lightningReviews.remove(id)
+        else lightningReviews[id] = decision
+    }
+    fun reviewCounts(): Map<LightningReview, Int> =
+        LightningReviewSummary.count(items.map { lightningReviews[it.event.id] ?: LightningReview.UNREVIEWED })
+
 
     /** Imports an externally trained model, retaining the last known-good model on failure. */
     fun importLightningTemporalModel(u: Uri) {
@@ -1584,7 +1594,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
-        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); composite = null; infoRes = null
+        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); lightningReviews.clear(); composite = null; infoRes = null
         busy = true; progress = 0f; stage = R.string.stage_scan
         job = viewModelScope.launch {
             try {
@@ -1608,11 +1618,12 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun exportLightningEvidence(destination: Uri, json: Boolean) {
         val snapshot = items.map { it.event }
         val predictionSnapshot = temporalScores.toMap()
+        val reviewSnapshot = lightningReviews.toMap()
         if (snapshot.isEmpty()) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot)
+                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot, reviewSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot, reviewSnapshot)
                     app.contentResolver.openOutputStream(destination, "wt")?.use {
                         it.write(payload.toByteArray(Charsets.UTF_8))
                         it.flush()
