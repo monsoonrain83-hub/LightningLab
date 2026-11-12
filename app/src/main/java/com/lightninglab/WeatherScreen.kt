@@ -55,6 +55,9 @@ fun WeatherScreen(vm: MainVM) {
     val pickCloudVideo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { u ->
         if (u != null) vm.analyzeCloudVideo(u)
     }
+    val exportVideoEvidence = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { u ->
+        if (u != null) vm.exportSkyVideoCsv(u)
+    }
     LaunchedEffect(Unit) { vm.initModel() }
     Column(Modifier.fillMaxSize()) {
         TopBar(stringResource(R.string.weather_title))
@@ -85,6 +88,11 @@ fun WeatherScreen(vm: MainVM) {
             vm.cloudVideoReport?.let { report ->
                 Panel {
                     Text("گزارش تحلیل ویدئو", style = MaterialTheme.typography.titleMedium)
+                    OutlinedButton(onClick = { exportVideoEvidence.launch("LightningLab_sky_video_evidence.csv") },
+                        enabled = !vm.cloudVideoBusy && report.frameResults.isNotEmpty()) {
+                        Text("خروجی CSV مشاهدات فریم‌ها")
+                    }
+
                     Text("مدت ویدئو: ${report.durationMillis / 1000} ثانیه | فریم‌های بررسی‌شده: ${report.sampledFrames}", style = MaterialTheme.typography.bodySmall)
                     Text(if (report.modelWasAvailable) "مدل TFLite فعال بوده است؛ خروجی‌ها نامزد تشخیص‌اند." else "مدل TFLite نصب نیست؛ فقط شاخص‌های سادهٔ پوشش و بافت گزارش شده‌اند.", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                     Text("روند زمانی: ${report.evolution.trendLabelPersian}", style = MaterialTheme.typography.titleSmall)
