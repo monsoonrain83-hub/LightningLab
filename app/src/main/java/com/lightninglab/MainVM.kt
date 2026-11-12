@@ -1050,24 +1050,23 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         busy = true
         job = viewModelScope.launch {
             try {
-                val selected = items.toList().take(20)
+                val selected = items.toList()
+                progress = 0f
                 val results = withContext(Dispatchers.Default) {
                     val detector = Detector(app)
                     val duration = if (prepDur > 0L) prepDur else Long.MAX_VALUE / 2
                     val found = mutableMapOf<Int, List<Pair<String, Float>>>()
+                    val runningJob = coroutineContext[Job]
                     for ((index, item) in selected.withIndex()) {
                         ensureActive()
                         val times = LightningTemporalModel.sampleTimes(
                             item.event.startMs, item.event.endMs, duration
                         )
-                        val bitmaps = ArrayList<Bitmap>()
+                        val bitmaps = detector.temporalFrames(source, times, LightningTemporalModel.SIDE) {
+                            runningJob?.isActive == false
+                        }
                         try {
-                            for (t in times) {
-                                ensureActive()
-                                val bitmap = detector.frame(source, t, LightningTemporalModel.SIDE)
-                                    ?: break
-                                bitmaps.add(bitmap)
-                            }
+                            ensureActive()
                             if (bitmaps.size == LightningTemporalModel.FRAMES) {
                                 temporalLightningModel.classify(bitmaps)?.let { found[item.event.id] = it }
                             }
