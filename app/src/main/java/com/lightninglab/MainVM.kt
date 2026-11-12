@@ -987,6 +987,114 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun undoSeg() = undoVideoEdit()
     fun redoSeg() = redoVideoEdit()
 
+    private val temporalLightningModel by lazy {
+        LightningTemporalModel(File(app.filesDir, "lightning_temporal.tflite"))
+    }
+    var lightningTemporalReady by mutableStateOf(false)
+    val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
+
+    /** Imports an externally trained model, retaining the last known-good model on failure. */
+    fun importLightningTemporalModel(u: Uri) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            try {
+            val ok = withContext(Dispatchers.IO) {
+                val target = File(app.filesDir, "lightning_temporal.tflite")
+                val backup = File(app.filesDir, "lightning_temporal.tflite.previous")
+                val staging = File(app.filesDir, "lightning_temporal.tflite.importing")
+                try {
+                    ModelFileRecovery.prepareForImport(target, backup, temporalLightningModel::close, temporalLightningModel::load)
+                    staging.delete()
+                    val input = app.contentResolver.openInputStream(u) ?: throw java.io.IOException("Cannot open model")
+                    input.use { source ->
+                        staging.outputStream().use { out ->
+                            val chunk = ByteArray(64 * 1024)
+                            var size = 0L
+                            while (true) {
+                                val n = source.read(chunk)
+                                if (n < 0) break
+                                size += n
+                                if (size > 150L * 1024 * 1024) throw java.io.IOException("Model exceeds 150 MB limit")
+                                out.write(chunk, 0, n)
+                            }
+                        }
+                    }
+                    if (staging.length() == 0L) throw java.io.IOException("Empty model")
+                    temporalLightningModel.close()
+                    backup.delete()
+                    val hadOld = target.exists()
+                    if (hadOld && !target.renameTo(backup)) throw java.io.IOException("Backup failed")
+                    if (!staging.renameTo(target)) throw java.io.IOException("Model replacement failed")
+                    if (!temporalLightningModel.load()) throw java.io.IOException("Incompatible TFLite contract")
+                    backup.delete()
+                    true
+                } catch (_: Throwable) {
+                    staging.delete()
+                    temporalLightningModel.close()
+                    if (backup.exists()) {
+                        target.delete()
+                        backup.renameTo(target)
+                    }
+                    temporalLightningModel.load()
+                    false
+                }
+            }
+            lightningTemporalReady = withContext(Dispatchers.IO) { temporalLightningModel.load() }
+            temporalScores.clear()
+            info(if (ok) R.string.model_loaded else R.string.model_invalid)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    /** Optional inference; never changes the independent heuristic detector's decisions. */
+    fun classifyLightningEvents() {
+        val source = uri ?: return
+        if (!lightningTemporalReady || busy || items.isEmpty()) return
+        busy = true
+        job = viewModelScope.launch {
+            try {
+                val selected = items.toList()
+                progress = 0f
+                val results = withContext(Dispatchers.Default) {
+                    val detector = Detector(app)
+                    val duration = if (prepDur > 0L) prepDur else Long.MAX_VALUE / 2
+                    val found = mutableMapOf<Int, List<Pair<String, Float>>>()
+                    val runningJob = coroutineContext[Job]
+                    for ((index, item) in selected.withIndex()) {
+                        ensureActive()
+                        val times = LightningTemporalModel.sampleTimes(
+                            item.event.startMs, item.event.endMs, duration
+                        )
+                        val bitmaps = detector.temporalFrames(source, times, LightningTemporalModel.SIDE) {
+                            runningJob?.isActive == false
+                        }
+                        try {
+                            ensureActive()
+                            if (bitmaps.size == LightningTemporalModel.FRAMES) {
+                                temporalLightningModel.classify(bitmaps)?.let { found[item.event.id] = it }
+                            }
+                        } finally {
+                            bitmaps.forEach { if (!it.isRecycled) it.recycle() }
+                        }
+                        progress = (index + 1).toFloat() / selected.size
+                    }
+                    found
+                }
+                temporalScores.clear()
+                temporalScores.putAll(results)
+            } catch (c: CancellationException) {
+                throw c
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
     // ---- optional TFLite cloud model + observer tags ----
     private val cloudModel by lazy { CloudClassifier(File(app.filesDir, "cloud_model.tflite")) }
     private val cloudSynopticModel by lazy { CloudSynopticClassifier(File(app.filesDir, "cloud_synoptic_model.tflite")) }
@@ -1055,6 +1163,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
         atmosphericSegmentationReady = withContext(Dispatchers.IO) {
             ModelFileRecovery.loadOrRestore(File(app.filesDir, "atmosphere_multiclass.tflite"), File(app.filesDir, "atmosphere_multiclass.tflite.previous"), atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
+        }
+        lightningTemporalReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "lightning_temporal.tflite"),
+                File(app.filesDir, "lightning_temporal.tflite.previous"),
+                temporalLightningModel::close, temporalLightningModel::load)
         }
         synopticModelReady = withContext(Dispatchers.IO) {
             ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_synoptic_model.tflite"), File(app.filesDir, "cloud_synoptic_model.tflite.previous"), cloudSynopticModel::close, cloudSynopticModel::load)
@@ -1471,7 +1584,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
-        job?.cancel(); uri = u; items.clear(); composite = null; infoRes = null
+        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); composite = null; infoRes = null
         busy = true; progress = 0f; stage = R.string.stage_scan
         job = viewModelScope.launch {
             try {
@@ -1488,6 +1601,27 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             } catch (c: CancellationException) { throw c
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
             } finally { busy = false; releaseRetiredVideoImages() }
+        }
+    }
+
+    /** Save an auditable evidence report to an Android user-selected document URI. */
+    fun exportLightningEvidence(destination: Uri, json: Boolean) {
+        val snapshot = items.map { it.event }
+        val predictionSnapshot = temporalScores.toMap()
+        if (snapshot.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use {
+                        it.write(payload.toByteArray(Charsets.UTF_8))
+                        it.flush()
+                    } ?: throw java.io.IOException("Cannot write selected document")
+                }
+                infoRes = null
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
+            }
         }
     }
 
@@ -1664,7 +1798,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         photoImageLayers.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
         (videoBitmapPool + videoOverlayBitmaps.values + videoHistory.flatMap { it.overlayBitmaps.values }).distinct().forEach { if (!it.isRecycled) it.recycle() }
         retiredVideoOverlayBitmaps.forEach { if (!it.isRecycled) it.recycle() }
-        try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close(); cloudSynopticModel.close() } catch (_: Exception) { }
+        try { cloudModel.close(); cloudFeatureModel.close(); cloudSegmentationModel.close(); atmosphericSegmentationModel.close(); cloudSynopticModel.close(); temporalLightningModel.close() } catch (_: Exception) { }
         super.onCleared()
     }
 
