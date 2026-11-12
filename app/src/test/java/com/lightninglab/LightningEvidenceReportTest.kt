@@ -53,7 +53,7 @@ class LightningEvidenceReportTest {
         assertFalse(rows.getJSONObject(0).has("model_label"))
         val csv = LightningEvidenceReport.csv(events, emptyMap(), decisions)
         assertTrue(csv.contains("human_review"))
-        assertTrue(csv.contains("\\"REJECTED\\""))
+        assertTrue(csv.contains("\"REJECTED\""))
     }
 
     @Test fun emptyReportIsWellFormed() {
