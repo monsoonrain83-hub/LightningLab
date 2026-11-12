@@ -108,17 +108,35 @@ fun Home(vm: MainVM) {
                 Text(stringResource(R.string.home_tools), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text(stringResource(R.string.home_tool_count), style = MaterialTheme.typography.labelSmall, color = Storm.muted)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(Modifier.weight(1f), Ic.PHOTO, stringResource(R.string.edit_photo),
-                    stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
-                GlassQuickAction(Modifier.weight(1f), Ic.VIDEO, stringResource(R.string.edit_video),
-                    stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.weather_title),
-                    stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
-                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
-                    stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+            // One-column tool cards on narrow devices to avoid truncated RTL labels.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth < 360.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.PHOTO, stringResource(R.string.edit_photo),
+                            stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.VIDEO, stringResource(R.string.edit_video),
+                            stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.CLOUD, stringResource(R.string.weather_title),
+                            stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
+                            stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassQuickAction(Modifier.weight(1f), Ic.PHOTO, stringResource(R.string.edit_photo),
+                                stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
+                            GlassQuickAction(Modifier.weight(1f), Ic.VIDEO, stringResource(R.string.edit_video),
+                                stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.weather_title),
+                                stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
+                            GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
+                                stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+                        }
+                    }
+                }
             }
             if (vm.busy) {
                 GlassPanel(Modifier.fillMaxWidth()) {
