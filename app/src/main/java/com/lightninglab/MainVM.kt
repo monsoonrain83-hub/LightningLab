@@ -342,6 +342,142 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val videoHistory = ArrayList<VideoEditorSnapshot>()
     private var videoHistoryIndex = -1
     private var restoringVideoHistory = false
+    private val videoDraftStore by lazy { VideoDraftStore(app) }
+    private var videoDraftJob: Job? = null
+    private var restoringVideoDraft = false
+    var videoDraftStatus by mutableStateOf<String?>(null)
+
+    fun hasVideoDraft(): Boolean = videoDraftStore.read() != null
+
+    private fun captureVideoDraft(): VideoDraft? {
+        val main = videoUri ?: return null
+        val snapshot = ProjectData(
+            "پیش‌نویس خودکار", main.toString(), videoDur,
+            segments.map { SegData(it.startMs, it.endMs, it.uri?.toString()) },
+            music?.toString(), voice?.toString(), muteOriginal,
+            vFilter, vSpeed, vBrightness, vContrast, vRotate, vFlipH, vFlipV, vCrop,
+            overlayText, textColor, textSize, textPos, textBg, sticker, stickerSize, stickerPos,
+            volOrig, volMusic, volVoice,
+            videoOverlayClips.map { clip ->
+                OverlayClipData(clip.id, clip.kind, clip.content, clip.startMs, clip.endMs,
+                    clip.color, clip.size, clip.position, clip.background,
+                    clip.keyframes.map { OverlayKeyframeData(it.timeMs, it.alpha, it.position) },
+                    if (videoOverlayBitmaps.containsKey(clip.id)) "overlay_${clip.id}.png" else null,
+                    clip.locked)
+            },
+            videoEffectClips.map { EffectClipData(it.id, it.filterIndex, it.startMs, it.endMs, it.locked) },
+            videoMarkers.toList(),
+            fadeInMusicMs, fadeOutMusicMs, fadeInVoiceMs, fadeOutVoiceMs,
+            muteMusic, muteVoice, soloAudioTrack
+        )
+        return VideoDraft(main.toString(), snapshot, System.currentTimeMillis())
+    }
+
+    /** Debounced: no transcoding and no media duplication on every user gesture. */
+    private fun scheduleVideoDraft() {
+        if (restoringVideoDraft || videoUri == null) return
+        videoDraftJob?.cancel()
+        videoDraftJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(2500L)
+            if (busy || recording) return@launch
+            val snapshot = captureVideoDraft() ?: return@launch
+            val images = HashMap<Long, Bitmap>()
+            try {
+                for ((id, bitmap) in videoOverlayBitmaps) {
+                    val copied = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                        ?: throw java.io.IOException("Cannot snapshot overlay image")
+                    images[id] = copied
+                }
+                withContext(Dispatchers.IO) { videoDraftStore.save(snapshot, images) }
+                videoDraftStatus = "پیش‌نویس خودکار ذخیره شد"
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { videoDraftStatus = "ذخیرهٔ پیش‌نویس ناموفق: ${e.message ?: "خطای ذخیره"}" }
+            finally { images.values.forEach { if (!it.isRecycled) it.recycle() } }
+        }
+    }
+
+    fun discardVideoDraft() {
+        videoDraftJob?.cancel()
+        videoDraftStore.delete()
+        videoDraftStatus = "پیش‌نویس حذف شد"
+    }
+
+    private fun canReadDraftUri(value: String): Boolean {
+        val uri = Uri.parse(value)
+        if (uri.scheme != "content" && uri.scheme != "file") return false
+        return try {
+            app.contentResolver.openInputStream(uri)?.use { it.read() >= 0 } == true
+        } catch (_: Exception) { false }
+    }
+
+    /** Restore only after validating all external URI access and draft overlay files. */
+    fun recoverVideoDraft() {
+        if (busy || recording) return
+        val draft = videoDraftStore.read() ?: run {
+            videoDraftStatus = "پیش‌نویس قابل بازیابی پیدا نشد"; return
+        }
+        val p = draft.project
+        val referenced = buildList {
+            add(draft.videoUri)
+            p.segs.mapNotNullTo(this) { it.clip }
+            p.music?.let { add(it) }
+            p.voice?.let { add(it) }
+        }
+        if (referenced.any { !canReadDraftUri(it) }) {
+            videoDraftStatus = "دسترسی به فایل‌های اصلی برقرار نیست؛ فایل‌ها را دوباره انتخاب کنید"
+            return
+        }
+        if (p.overlayClips.any { it.assetFile != null && videoDraftStore.overlay(it.id) == null }) {
+            videoDraftStatus = "بعضی تصویرهای لایه‌ها در پیش‌نویس موجود نیستند"
+            return
+        }
+        videoDraftJob?.cancel()
+        restoringVideoDraft = true
+        try {
+            videoUri = null
+            loadVideo(Uri.parse(draft.videoUri))
+            if (videoUri == null) throw java.io.IOException("Video decoder rejected draft source")
+            segments.clear()
+            segments.addAll(p.segs.map { Seg(it.startMs, it.endMs, it.clip?.let(Uri::parse)) })
+            videoMarkers.clear(); videoMarkers.addAll(p.markers)
+            music = p.music?.let(Uri::parse)
+            voice = p.voice?.let(Uri::parse)
+            muteOriginal = p.mute
+            vFilter = p.filter; vSpeed = p.speed; vBrightness = p.brightness; vContrast = p.contrast
+            vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
+            overlayText = p.text; textColor = p.textColor; textSize = p.textSize
+            textPos = p.textPos; textBg = p.textBg
+            sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
+            videoOverlayClips.clear()
+            videoOverlayClips.addAll(p.overlayClips.map { clip ->
+                clip.assetFile?.let {
+                    val file = videoDraftStore.overlay(clip.id)
+                        ?: throw java.io.IOException("Missing overlay bitmap")
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                        ?: throw java.io.IOException("Invalid overlay PNG")
+                    videoOverlayBitmaps[clip.id] = bitmap
+                }
+                VideoOverlayClip(clip.id, clip.kind, clip.content, clip.startMs, clip.endMs,
+                    clip.color, clip.size, clip.position, clip.background,
+                    clip.keyframes.map { VideoOverlayKeyframe(it.timeMs, it.alpha, it.position) },
+                    clip.assetFile, clip.locked)
+            })
+            nextVideoOverlayId = (videoOverlayClips.maxOfOrNull { it.id } ?: 0L) + 1L
+            videoEffectClips.clear()
+            videoEffectClips.addAll(p.effectClips.map { VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs, it.locked) })
+            nextVideoEffectId = (videoEffectClips.maxOfOrNull { it.id } ?: 0L) + 1L
+            volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
+            fadeInMusicMs = p.fadeInMusicMs; fadeOutMusicMs = p.fadeOutMusicMs
+            fadeInVoiceMs = p.fadeInVoiceMs; fadeOutVoiceMs = p.fadeOutVoiceMs
+            muteMusic = p.muteMusic; muteVoice = p.muteVoice; soloAudioTrack = p.soloAudioTrack
+            resetVideoHistory()
+            screen = Screen.VIDEO
+            videoDraftStatus = "پیش‌نویس بازیابی شد"
+        } catch (e: Exception) {
+            videoDraftStatus = "بازیابی ناموفق: ${e.message ?: "خطا"}"
+        } finally { restoringVideoDraft = false }
+    }
+
     private var timelineGestureDirty = false
     private fun captureVideoSnapshot() = VideoEditorSnapshot(
         segments.toList(), videoOverlayClips.toList(), videoEffectClips.toList(), videoMarkers.toList(), videoOverlayBitmaps.toMap(),
@@ -366,7 +502,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     private fun resetVideoHistory() {
         videoHistory.clear(); videoHistory += captureVideoSnapshot(); videoHistoryIndex = 0
-        updateVideoHistoryFlags(); cleanupVideoBitmaps()
+        updateVideoHistoryFlags(); cleanupVideoBitmaps(); scheduleVideoDraft()
     }
     private fun pushVideoHistory() {
         if (restoringVideoHistory) return
@@ -375,7 +511,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         videoHistory += captureVideoSnapshot()
         if (videoHistory.size > 60) videoHistory.removeAt(0)
         videoHistoryIndex = videoHistory.lastIndex
-        updateVideoHistoryFlags(); cleanupVideoBitmaps()
+        updateVideoHistoryFlags(); cleanupVideoBitmaps(); scheduleVideoDraft()
     }
     private fun restoreVideoSnapshot(s: VideoEditorSnapshot) {
         restoringVideoHistory = true
@@ -413,12 +549,22 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private var musicWaveformJob: Job? = null
     private var voiceWaveformJob: Job? = null
     private var waveformTasks = 0
+    /** Take a durable read grant if the picker/provider offers one. */
+    private fun retainMediaPermission(uri: Uri) {
+        if (uri.scheme != "content") return
+        try { app.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        catch (_: SecurityException) { /* Some providers only grant ephemeral access. */ }
+        catch (_: IllegalArgumentException) { /* Provider does not offer persistable grants. */ }
+    }
+
     fun updateMusicSource(u: Uri?) {
+        u?.let(::retainMediaPermission)
         music = u; pushVideoHistory()
         if (u == null) { musicWaveformJob?.cancel(); musicWaveform = emptyList(); musicName = null }
         else analyzeWaveform(u, false)
     }
     fun updateVoiceSource(u: Uri?) {
+        u?.let(::retainMediaPermission)
         voice = u; pushVideoHistory()
         if (u == null) { voiceWaveformJob?.cancel(); voiceWaveform = emptyList() }
         else analyzeWaveform(u, true)
@@ -833,6 +979,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     /** Appends a whole extra video as its own section (joined after the others on export). */
     fun addClip(c: Uri) {
+        retainMediaPermission(c)
         viewModelScope.launch {
             try {
                 val d = withContext(Dispatchers.IO) {
@@ -1792,6 +1939,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---------------- video editor ----------------
     fun loadVideo(u: Uri) {
+        retainMediaPermission(u)
         val r = MediaMetadataRetriever()
         try {
             r.setDataSource(app, u)
@@ -1842,6 +1990,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         else { f?.delete(); info(R.string.rec_too_short) }
     }
     override fun onCleared() {
+        videoDraftJob?.cancel()
         try { recorder?.release() } catch (e: Exception) { }
         photoImageLayers.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
         (videoBitmapPool + videoOverlayBitmaps.values + videoHistory.flatMap { it.overlayBitmaps.values }).distinct().forEach { if (!it.isRecycled) it.recycle() }
