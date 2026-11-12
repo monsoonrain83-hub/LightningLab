@@ -892,15 +892,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     // ---- photo presets (adjustment sliders only) ----
     private val prefs get() = app.getSharedPreferences("lightninglab", android.content.Context.MODE_PRIVATE)
-    fun savePreset() {
+    fun savePreset(slot: Int = 1) {
         val p = params
-        prefs.edit().putString("photo_preset", listOf(p.exposure, p.brightness, p.contrast, p.saturation, p.warmth,
-            p.highlights, p.shadows, p.sharpness, p.scurve, p.denoise, p.vibrance).joinToString(",")).apply()
+        val values = listOf(p.exposure, p.brightness, p.contrast, p.saturation, p.warmth,
+            p.highlights, p.shadows, p.sharpness, p.scurve, p.denoise, p.vibrance)
+        prefs.edit().putString(PhotoLookSlots.key(slot), PhotoLookSlots.encode(values)).apply()
         info(R.string.preset_saved)
     }
-    fun loadPreset() {
-        val v = prefs.getString("photo_preset", null)?.split(",")?.mapNotNull { it.toFloatOrNull() }
-        if (v == null || v.size < 11) { info(R.string.preset_none); return }
+    fun loadPreset(slot: Int = 1) {
+        val v = PhotoLookSlots.decode(prefs.getString(PhotoLookSlots.key(slot), null))
+        if (v == null) { info(R.string.preset_none); return }
         params = params.copy(exposure = v[0], brightness = v[1], contrast = v[2], saturation = v[3], warmth = v[4],
             highlights = v[5], shadows = v[6], sharpness = v[7], scurve = v[8], denoise = v[9], vibrance = v[10])
         commit()
@@ -992,6 +993,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
     var lightningTemporalReady by mutableStateOf(false)
     val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
+    val lightningReviews = androidx.compose.runtime.mutableStateMapOf<Int, LightningReview>()
+
+    fun reviewLightningEvent(id: Int, decision: LightningReview) {
+        if (items.none { it.event.id == id }) return
+        if (decision == LightningReview.UNREVIEWED) lightningReviews.remove(id)
+        else lightningReviews[id] = decision
+    }
+    fun reviewCounts(): Map<LightningReview, Int> =
+        LightningReviewSummary.count(items.map { lightningReviews[it.event.id] ?: LightningReview.UNREVIEWED })
+
 
     /** Imports an externally trained model, retaining the last known-good model on failure. */
     fun importLightningTemporalModel(u: Uri) {
@@ -1417,6 +1428,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     var wxBitmap by mutableStateOf<Bitmap?>(null)
     var wx by mutableStateOf<CloudAnalysis.Result?>(null)
+    fun exportSkyPhotoCsv(destination: Uri) {
+        val observation = wx ?: return
+        val ranked = topK.toList()
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = SkyPhotoEvidence.csv(observation, ranked)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use { out ->
+                        out.write(payload.toByteArray(Charsets.UTF_8))
+                        out.flush()
+                    } ?: throw java.io.IOException("Cannot write sky photo CSV")
+                }
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: "sky CSV")
+            }
+        }
+    }
+
     fun analyzeSky(u: Uri) {
         viewModelScope.launch {
             try {
@@ -1449,6 +1478,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var cloudVideoBusy by mutableStateOf(false)
     var cloudVideoProgress by mutableStateOf(0f)
     var cloudVideoReport by mutableStateOf<CloudVideoReport?>(null)
+    /** Export existing frame observations; human interpretation remains separate from model output. */
+    fun exportSkyVideoCsv(destination: Uri) {
+        val snapshot = cloudVideoReport ?: return
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val payload = SkyVideoEvidence.csv(snapshot)
+                    app.contentResolver.openOutputStream(destination, "wt")?.use { out ->
+                        out.write(payload.toByteArray(Charsets.UTF_8))
+                        out.flush()
+                    } ?: throw java.io.IOException("Cannot write CSV document")
+                }
+            } catch (e: Exception) {
+                info(R.string.error_generic, e.message ?: "CSV export")
+            }
+        }
+    }
+
 
     fun analyzeCloudVideo(uri: Uri) {
         if (cloudVideoBusy) return
@@ -1584,7 +1631,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
-        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); composite = null; infoRes = null
+        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); lightningReviews.clear(); composite = null; infoRes = null
         busy = true; progress = 0f; stage = R.string.stage_scan
         job = viewModelScope.launch {
             try {
@@ -1608,11 +1655,12 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun exportLightningEvidence(destination: Uri, json: Boolean) {
         val snapshot = items.map { it.event }
         val predictionSnapshot = temporalScores.toMap()
+        val reviewSnapshot = lightningReviews.toMap()
         if (snapshot.isEmpty()) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot)
+                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot, reviewSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot, reviewSnapshot)
                     app.contentResolver.openOutputStream(destination, "wt")?.use {
                         it.write(payload.toByteArray(Charsets.UTF_8))
                         it.flush()
@@ -2042,6 +2090,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     var exportPreflightIssues by mutableStateOf<List<String>>(emptyList())
+    fun videoExportDurationMs(): Long =
+        VideoExportBudget.durationMs(segments.toList(), videoDur, vSpeed)
+
+    fun videoExportEstimatedBytes(): Long =
+        VideoExportBudget.estimatedBytes(
+            videoExportDurationMs(), exportProfile.targetBitrate(videoW, videoH).toLong()
+        )
+
 
     /** Checks the project before expensive rendering and reports actionable issues in Persian. */
     fun runVideoExportPreflight(): Boolean {
@@ -2068,8 +2124,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             if (clip.startMs < 0L || clip.endMs <= clip.startMs || clip.endMs > outputDuration)
                 issues += "بازهٔ یکی از افکت‌ها خارج از محدودهٔ ویدئو است."
         }
-        if (app.cacheDir.usableSpace < 150L * 1024L * 1024L)
-            issues += "فضای خالی حافظه کمتر از ۱۵۰ مگابایت است؛ پیش از خروجی فضا آزاد کنید."
+        val requiredBytes = VideoExportBudget.minimumFreeBytes(videoExportEstimatedBytes())
+        if (app.cacheDir.usableSpace < requiredBytes)
+            issues += "فضای خالی برای رندر کافی نیست؛ دست‌کم ${requiredBytes / (1024L * 1024L)} مگابایت در حافظهٔ برنامه لازم است."
         exportPreflightIssues = issues.distinct()
         return exportPreflightIssues.isEmpty()
     }

@@ -100,7 +100,7 @@ fun Home(vm: MainVM) {
                 }
                 Surface(Modifier.align(Alignment.TopEnd).padding(12.dp), shape = RoundedCornerShape(50),
                     color = Color(0xAA0C1725), border = BorderStroke(1.dp, Color(0x557EC8FF))) {
-                    Text("AI  •  OFFLINE", Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    Text("OFFLINE • مدل اختیاری", Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         color = Color(0xFFB9D8F6), style = MaterialTheme.typography.labelSmall)
                 }
             }
@@ -108,17 +108,35 @@ fun Home(vm: MainVM) {
                 Text(stringResource(R.string.home_tools), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 Text(stringResource(R.string.home_tool_count), style = MaterialTheme.typography.labelSmall, color = Storm.muted)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(Modifier.weight(1f), Ic.PHOTO, stringResource(R.string.edit_photo),
-                    stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
-                GlassQuickAction(Modifier.weight(1f), Ic.VIDEO, stringResource(R.string.edit_video),
-                    stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.weather_title),
-                    stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
-                GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
-                    stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+            // One-column tool cards on narrow devices to avoid truncated RTL labels.
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                if (maxWidth < 360.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.PHOTO, stringResource(R.string.edit_photo),
+                            stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.VIDEO, stringResource(R.string.edit_video),
+                            stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.CLOUD, stringResource(R.string.weather_title),
+                            stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
+                        GlassQuickAction(Modifier.fillMaxWidth(), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
+                            stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassQuickAction(Modifier.weight(1f), Ic.PHOTO, stringResource(R.string.edit_photo),
+                                stringResource(R.string.photo_short), Storm.arc) { vm.screen = Screen.PHOTO }
+                            GlassQuickAction(Modifier.weight(1f), Ic.VIDEO, stringResource(R.string.edit_video),
+                                stringResource(R.string.video_short), Color(0xFF9D9BFF)) { vm.screen = Screen.VIDEO }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.weather_title),
+                                stringResource(R.string.weather_short), Color(0xFF69C9D7)) { vm.screen = Screen.WEATHER }
+                            GlassQuickAction(Modifier.weight(1f), Ic.CLOUD, stringResource(R.string.home_cloud_atlas),
+                                stringResource(R.string.home_cloud_atlas_sub), Color(0xFF86C6FF)) { vm.screen = Screen.CLOUD_ATLAS }
+                        }
+                    }
+                }
             }
             if (vm.busy) {
                 GlassPanel(Modifier.fillMaxWidth()) {
@@ -226,6 +244,10 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
+                val reviewCounts = vm.reviewCounts()
+                Text("بازبینی انسانی: ${reviewCounts[LightningReview.CONFIRMED] ?: 0} تأیید · ${reviewCounts[LightningReview.REJECTED] ?: 0} رد · ${reviewCounts[LightningReview.UNCERTAIN] ?: 0} نامشخص",
+                    style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickTemporalModel.launch(arrayOf("*/*")) }, enabled = !vm.busy) {
                         Text(if (vm.lightningTemporalReady) "تعویض مدل زمانی" else "ورود مدل زمانی TFLite")
@@ -278,6 +300,18 @@ fun Results(vm: MainVM) {
                                 style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                             Text("${item.event.pulseCount} پالس  ·  گستردگی روشنایی ${(item.event.spatialSpread * 100).roundToInt()}٪",
                                 style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                            val review = vm.lightningReviews[item.event.id] ?: LightningReview.UNREVIEWED
+                            Text("نظر بازبین: ${review.labelFa}", style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                listOf(LightningReview.CONFIRMED, LightningReview.REJECTED, LightningReview.UNCERTAIN).forEach { choice ->
+                                    FilterChip(
+                                        selected = review == choice,
+                                        onClick = { vm.reviewLightningEvent(item.event.id, if (review == choice) LightningReview.UNREVIEWED else choice) },
+                                        label = { Text(choice.labelFa, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
+                            }
+
                         }
                     }
                 }
@@ -339,6 +373,7 @@ fun PhotoEditor(vm: MainVM) {
     }
     val prev = vm.photoPrev
     var tab by remember { mutableStateOf(PTab.LIGHT) }
+    var selectedLookSlot by remember { mutableIntStateOf(1) }
     var showPhotoProjects by remember { mutableStateOf(false) }
     var compareMode by remember { mutableStateOf(false) }
     var comparePosition by remember(prev) { mutableStateOf(0.5f) }
@@ -743,9 +778,13 @@ fun PhotoEditor(vm: MainVM) {
                                         Switch(vm.watermark, { vm.watermark = it })
                                         Spacer(Modifier.width(10.dp)); Text(stringResource(R.string.watermark), style = MaterialTheme.typography.bodyMedium)
                                     }
+                                    Text("ظاهرهای ذخیره‌شده", style = MaterialTheme.typography.titleSmall, color = Storm.text)
+                                    ChoiceRow(listOf("ظاهر ۱", "ظاهر ۲", "ظاهر ۳"), selectedLookSlot - 1) {
+                                        selectedLookSlot = it + 1
+                                    }
                                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        OutlinedButton(onClick = { vm.savePreset() }) { Text(stringResource(R.string.preset_save)) }
-                                        OutlinedButton(onClick = { vm.loadPreset() }) { Text(stringResource(R.string.preset_load)) }
+                                        OutlinedButton(onClick = { vm.savePreset(selectedLookSlot) }) { Text(stringResource(R.string.preset_save)) }
+                                        OutlinedButton(onClick = { vm.loadPreset(selectedLookSlot) }) { Text(stringResource(R.string.preset_load)) }
                                         OutlinedButton(onClick = { vm.params = PhotoParams(); vm.commit() }) { Text(stringResource(R.string.reset)) }
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1218,6 +1257,11 @@ fun VideoEditor(vm: MainVM) {
                                     val exportRate = vm.exportProfile.targetBitrate(vm.videoW, vm.videoH) / 1_000_000f
                                     Text("H.264 · حدود ${String.format(Locale.US, "%.1f", exportRate)} Mbps · بدون بزرگ‌نمایی اجباری",
                                         style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                                    Text("مدت برآوردی خروجی: ${vm.videoExportDurationMs() / 1000} ثانیه · حجم تقریبی: ${(vm.videoExportEstimatedBytes() / (1024.0 * 1024.0)).roundToInt()} مگابایت",
+                                        style = MaterialTheme.typography.bodySmall, color = Storm.arc)
+                                    Text("حجم نهایی به کدک، کیفیت و محتوای ویدئو وابسته است.",
+                                        style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+
                                     Button(onClick = { if (vm.runVideoExportPreflight()) vm.exportVideo() }, enabled = !vm.busy,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.export_video)) }
                                     vm.exportPreflightIssues.forEach { issue ->

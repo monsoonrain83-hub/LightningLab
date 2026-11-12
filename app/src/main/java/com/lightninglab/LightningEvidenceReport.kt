@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Stable, offline evidence export. Scores are heuristic, not calibrated probabilities. */
 object LightningEvidenceReport {
-    const val SCHEMA_VERSION = 2
+    const val SCHEMA_VERSION = 3
     private fun number(value: Float): String =
         if (value.isFinite()) String.format(Locale.US, "%.6f", value) else "null"
 
@@ -15,8 +15,8 @@ object LightningEvidenceReport {
     private fun csvField(value: String): String =
         "\"" + value.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ") + "\""
 
-    fun csv(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap()): String = buildString {
-        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source,model_label,model_softmax_uncalibrated\n")
+    fun csv(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap()): String = buildString {
+        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source,model_label,model_softmax_uncalibrated,human_review\n")
         for (e in events.sortedWith(compareBy<LightningEvent> { it.startMs }.thenBy { it.id })) {
             append(SCHEMA_VERSION).append(',').append(e.id).append(',')
                 .append(e.startMs).append(',').append(e.endMs).append(',').append(e.bestMs).append(',')
@@ -30,11 +30,12 @@ object LightningEvidenceReport {
             } else {
                 append(',')
             }
+            append(',').append(csvField((reviews[e.id] ?: LightningReview.UNREVIEWED).name))
             append('\n')
         }
     }
 
-    fun json(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap()): String = buildString {
+    fun json(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap()): String = buildString {
         append("{\"schema_version\":").append(SCHEMA_VERSION)
             .append(",\"source\":\"visual_heuristic\"")
             .append(",\"scientific_caveat\":")
@@ -52,6 +53,7 @@ object LightningEvidenceReport {
                 .append(",\"visual_evidence\":").append(number(e.visualEvidence))
                 .append(",\"spatial_spread\":").append(number(e.spatialSpread))
                 .append(",\"pulse_count\":").append(e.pulseCount)
+                .append(",\"human_review\":").append(quote((reviews[e.id] ?: LightningReview.UNREVIEWED).name))
             predictions[e.id]?.firstOrNull()?.let { prediction ->
                 append(",\"model_label\":").append(quote(prediction.first))
                     .append(",\"model_softmax_uncalibrated\":").append(number(prediction.second))
