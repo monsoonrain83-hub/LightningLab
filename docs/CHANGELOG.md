@@ -1,22 +1,22 @@
-## r10.44 — بازطراحی تجربهٔ کاربری و چیدمان ابزارها
+# LightningLab r10.70 (versionCode 77) — رفع باگ‌های واقعی سورس r10.69
 
-- صفحهٔ خانه از چیدمان بلند و تکراری به داشبورد اولویت‌محور تبدیل شد: یک اقدام اصلی برای تشخیص، چهار فضای کاری در کارت‌های ثانویه، وضعیت پردازش و تنظیم حساسیت در بخش مستقل.
-- هدر خانه کوتاه‌تر شد تا فضای بیشتری برای محتوای اصلی باقی بماند؛ وضعیت پردازش روی دستگاه و انتخاب زبان در دسترس ماند.
-- کارت‌های ابزار، نوار ناوبری و دکمه‌های ابزار ادیتورها فشرده‌تر و یکدست‌تر شدند؛ حالت انتخاب‌شده با رنگ تأکیدی و سطح مشخص دیده می‌شود، بدون آنکه ابزارها حذف شوند.
-- ردیف دسته‌بندی ابزارهای عکس به سگمنت‌های جمع‌وجورتر تبدیل شد؛ نوار ابزار ویدئو نیز فضای افقی کمتری برای هر ابزار می‌گیرد تا گزینه‌های بیشتری هم‌زمان دیده شوند و باقی ابزارها همچنان با پیمایش افقی در دسترس‌اند.
-- متن‌های جدید صفحهٔ خانه برای فارسی، انگلیسی و عربی به منابع ترجمه منتقل شدند.
-- نسخهٔ برنامه به `1.0-r10.44` و `versionCode 54` ارتقا یافت.
+اصلاحات این نسخه:
 
-### کارهای مهم باقی‌مانده
+## VIDEO STUDIO
+- AudioWaveform: رفع فروپاشی توزیع پیک‌ها در آخرین bin وقتی metadata مدت صدا (KEY_DURATION) موجود نبود. ریاضیات توزیع به شیء خالص `WaveformBins` منتقل شد؛ در نبود expected frames، برآورد زندهٔ یکنواخت بر پایهٔ فریم‌های decode‌شده استفاده می‌شود. تست‌های رگرسیون جدید در `WaveformBinsTest.kt`.
+- VideoDraftStore: حذف PNGهای لایه‌هایی که پروژه دیگر ارجاع نمی‌دهد، پیش از انتشار manifest پیش‌نویس؛ جلوگیری از بازگشت تصویر لایهٔ حذف‌شده در بازیابی و جلوگیری از نشت حافظهٔ ذخیره‌سازی.
 
-این انتشار بازطراحی تجربهٔ خانه و نوار ابزار است، نه تکمیل همهٔ قابلیت‌های حرفه‌ای. اولویت‌های بعدی همچنان عبارت‌اند از: autosave و crash recovery؛ تاریخچهٔ یکپارچهٔ تمام عملیات؛ drag/trim واقعی کلیپ‌ها، multi-select و گروه‌بندی؛ thumbnail cache و waveform چندسطحی؛ track controls؛ transition و speed ramp؛ keyframe کامل؛ subtitle/SRT؛ presetهای خروجی و صف export؛ و در ادیتور عکس، handles چندلمسی، ماسک شعاعی/خطی، RGB curves، histogram، before/after slider و خروجی قابل تنظیم. هر مورد باید به موتور پردازش، ذخیرهٔ پروژه و خروجی واقعی متصل شود، نه اینکه صرفاً کنترل UI اضافه شود.
+## MODEL SAFETY
+- ModelFileRecovery.prepareForImport: بکاپ `.previous` فقط پس از اعتبارسنجی موفق target حذف می‌شود (قبلاً حتی در شکست restore حذف می‌شد). دو تست رگرسیون جدید در `ModelFileRecoveryTest.kt`.
 
-## r10.43
-- Fixed Kotlin/JVM setter signature clashes by renaming explicit music and voice URI update methods.
+## UI / GUIDANCE
+- strings.xml (en/fa/ar): پیام model_invalid و model_none_hint اکنون قرارداد ۱۰ جنس WMO و ۱۱کلاسهٔ legacy CCSN را به‌درستی توضیح می‌دهند (قبلاً فقط ۱۱کلاسه). about_text به 1.0-r10.70 به‌روز شد.
+- فایل خالی مردهٔ detektor.kt با stub مستند جایگزین شد.
 
+## BUILD
+- versionName: 1.0-r10.70، versionCode: 77 (افزایش هماهنگ و یک‌باره).
 
-## r10.32 — Feathered and inverse photo masks
-- Added non-destructive feathered brush masks with adjustable softness.
-- Added inverse mask mode for clearing the area outside painted strokes.
-- Wired inverse-mask state into live preview and full-resolution export.
-- Existing photo parameter Undo/Redo remains intact; mask strokes retain their dedicated undo/clear controls.
+## VALIDATION
+- تست‌های JVM و ساخت APK باید در GitHub Actions روی PR این شاخه (fix/r10.70-bugfixes → main) سبز شوند.
+- تست روی گوشی فیزیکی برای waveform فایل بدون metadata و بازیابی پیش‌نویس پس از حذف لایه همچنان لازم است و با CI جایگزین نمی‌شود.
+- هیچ وزن مدل جدید، دقت ادعایی یا قابلیت علمی جدیدی در این نسخه ادعا نمی‌شود.
