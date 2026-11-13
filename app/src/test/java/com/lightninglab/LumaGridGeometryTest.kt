@@ -20,7 +20,9 @@ class LumaGridGeometryTest {
     @Test fun panoramaAndNarrowFrameNeverOverrunHeight() {
         assertEquals(1, LumaGridGeometry.targetHeight(403, 1, 320))
         assertEquals(15, LumaGridGeometry.targetHeight(400, 20, 300))
-        assertEquals(320, LumaGridGeometry.targetHeight(320, 1920, 320).coerceAtMost(320))
+        assertEquals(LumaGridGeometry.Dims(53, 320), LumaGridGeometry.targetDims(320, 1920, 320))
+        assertEquals(LumaGridGeometry.Dims(320, 53), LumaGridGeometry.targetDims(1920, 320, 320))
+        assertEquals(LumaGridGeometry.Dims(320, 320), LumaGridGeometry.targetDims(800, 800, 320))
     }
 
     @Test fun invalidGeometryFailsFast() {
