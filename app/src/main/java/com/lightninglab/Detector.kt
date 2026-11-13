@@ -116,7 +116,7 @@ class Detector(private val ctx: Context) {
                     val tMs = info.presentationTimeUs / 1000
                     if (info.size > 0 && tMs >= startMs && tMs <= endMs && tMs - lastT >= 8) {
                         val img = c.getOutputImage(oi) ?: return null
-                        val tw = min(TW, img.width); val th = LumaGridGeometry.targetHeight(img.width, img.height, tw)
+                        val (tw, th) = LumaGridGeometry.targetDims(img.width, img.height, TW)
                         try {
                             val luma = lumaGrid(img, tw, th)
                             if (day == null) day = DayLine(tw, th)
