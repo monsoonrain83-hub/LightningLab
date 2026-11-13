@@ -9,6 +9,7 @@ on:
       - 'gradle/**'
       - 'tools/cloud_ai/**'
       - 'tools/lightning_ai/**'
+      - 'tools/scientific_eval/**'
       - '.github/workflows/build.yml'
   pull_request:
     paths:
@@ -20,6 +21,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Run only the newest build on each branch/PR; preserve a final main run.
+concurrency:
+  group: lightninglab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -54,6 +59,12 @@ jobs:
         run: python3 -m unittest discover -s tools/lightning_ai/tests -v
       - name: Compile lightning AI utilities
         run: python3 -m compileall -q tools/lightning_ai
+      - name: Run scientific evaluation regression tests
+        run: python3 -m unittest discover -s tools/scientific_eval/tests -v
+      - name: Compile independent scientific evaluation tools
+        run: python3 -m compileall -q tools/scientific_eval
+      - name: Verify offline expert annotation tool
+        run: python3 tools/scientific_eval/validate_annotator.py
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

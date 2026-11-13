@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LightningLab — برچسب‌گذاری رخدادهای واقعی صاعقه</title>
+<style>
+:root{font-family:system-ui,Tahoma,sans-serif;color-scheme:dark;background:#101820;color:#e9f2f7}
+body{max-width:1120px;margin:auto;padding:16px}
+main{display:grid;grid-template-columns:minmax(280px,2fr) minmax(260px,1fr);gap:18px}
+section{background:#1b2834;border:1px solid #425566;border-radius:12px;padding:15px;margin-bottom:14px}
+video{width:100%;max-height:60vh;background:#000;border-radius:8px}
+input,button{font:inherit;color:inherit;background:#223747;border:1px solid #607789;padding:8px;border-radius:7px}
+input{max-width:100%;box-sizing:border-box}
+input[type=number]{width:120px}
+button{cursor:pointer}
+button:focus-visible{outline:3px solid #5dbbdd}
+button.primary{background:#095876}
+h1{font-size:1.4rem}h2{font-size:1.12rem}small,.muted{color:#b0c0c9}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:9px 0}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+td,th{padding:7px;border-bottom:1px solid #3e5360;text-align:right}
+#status{min-height:25px}
+@media(max-width:760px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h1>LightningLab — ثبت مستقل رخدادهای واقعی صاعقه</h1>
+<p class="muted">این ابزار کاملاً آفلاین است. ویدئو روی دستگاه شما می‌ماند. همهٔ فلاش‌های واقعی، از جمله رخدادهایی که برنامه تشخیص نداده، باید توسط بازبین علامت‌گذاری شوند. نتیجهٔ آن، فهرست مرجع است؛ نه تشخیص خودکار.</p>
+<main>
+<div>
+<section>
+<h2>۱. ویدئوی مرجع</h2>
+<div class="row"><label for="videoFile">انتخاب ویدئو:</label><input type="file" id="videoFile" accept="video/*"></div>
+<div class="row"><label for="videoId">شناسهٔ یکتای ویدئو (مطابق clips.csv):</label>
+<input id="videoId" placeholder="clip01" autocomplete="off" maxlength="300"></div>
+<video id="player" controls preload="metadata"></video>
+<p id="info">ویدئو انتخاب نشده است.</p>
+<div class="row">
+<button id="start">ثبت شروع از زمان پخش</button>
+<button id="end">ثبت پایان از زمان پخش</button>
+<label for="startMs">شروع (ms)</label><input type="number" id="startMs" min="0" step="1">
+<label for="endMs">پایان (ms)</label><input type="number" id="endMs" min="0" step="1">
+</div>
+<div class="row"><button class="primary" id="add">افزودن رخداد مرجع</button>
+<button id="seekStart">رفتن به شروع</button><button id="seekEnd">رفتن به پایان</button></div>
+<p class="muted">زمان‌ها برحسب میلی‌ثانیه از ابتدای فایل ویدئویی‌اند. بازه‌ها [شروع، پایان) تعریف می‌شوند. رخداد تک‌فریمی را با طول حداقل یک میلی‌ثانیه ثبت کنید. سرعت و کیفیت تصویر محدود به قابلیت مرورگر است.</p>
+</section>
+</div>
+<div>
+<section>
+<h2>۲. فهرست برچسب‌ها</h2>
+<p class="muted">همهٔ فلاش‌های مرجع را ثبت کنید؛ برای ویدئوهای بدون صاعقه، فهرست خالی است و همان ویدئو باید در clips.csv باقی بماند.</p>
+<p id="counts">۰ رخداد ثبت‌شده</p>
+<div style="max-height:48vh;overflow:auto"><table><thead><tr><th>ویدئو</th><th>زمان</th><th>عمل</th></tr></thead><tbody id="events"></tbody></table></div>
+<div class="row"><button class="primary" id="export">خروجی expert_intervals.csv</button><button id="reset">پاک‌کردن فهرست</button></div>
+<p id="status" role="status" aria-live="polite"></p>
+</section>
+</div>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const video=$('player');
+const events=[];
+let objectUrl=null;
+let durationMs=null;
+function status(message){$('status').textContent=message;}
+function key(id){return id.length>0&&id.length<=300&&!/[\x00-\x1F]/.test(id);}
+function integer(id){const v=Number($(id).value);return $(id).value!==''&&Number.isSafeInteger(v)?v:null;}
+function now(){return Math.round(video.currentTime*1000);}
+function escapeCsv(s){return '"'+String(s).replaceAll('"','""').replace(/[\r\n]/g,' ')+'"';}
+function render(){
+  const body=$('events');body.replaceChildren();
+  events.forEach((item,index)=>{
+    const tr=document.createElement('tr');
+    const id=document.createElement('td');id.textContent=item.video_id;
+    const times=document.createElement('td');times.textContent=item.start_ms+'–'+item.end_ms;
+    const remove=document.createElement('button');remove.textContent='حذف';
+    remove.setAttribute('aria-label','حذف رخداد '+(index+1));
+    remove.onclick=()=>{events.splice(index,1);render();};
+    const operation=document.createElement('td');operation.append(remove);
+    tr.append(id,times,operation);body.append(tr);
+  });
+  $('counts').textContent=events.length+' رخداد ثبت‌شده برای '+new Set(events.map(e=>e.video_id)).size+' ویدئو';
+}
+$('videoFile').onchange=()=>{
+  if(objectUrl)URL.revokeObjectURL(objectUrl);
+  const file=$('videoFile').files?.[0];
+  durationMs=null;
+  if(!file){video.removeAttribute('src');$('info').textContent='ویدئو انتخاب نشده';return;}
+  objectUrl=URL.createObjectURL(file);
+  video.src=objectUrl;
+  if(!$('videoId').value)$('videoId').value=file.name;
+  $('info').textContent='در حال خواندن مدت فایل…';
+};
+video.onloadedmetadata=()=>{
+  durationMs=Number.isFinite(video.duration)?Math.round(video.duration*1000):null;
+  $('info').textContent='مدت ویدئو: '+(durationMs===null?'نامشخص':durationMs+' میلی‌ثانیه')+'؛ موقعیت فعلی '+now()+' ms';
+};
+video.ontimeupdate=()=>{$('info').textContent='زمان فعلی '+now()+' ms'+(durationMs!==null?' / '+durationMs+' ms':'');};
+$('start').onclick=()=>{$('startMs').value=String(now());};
+$('end').onclick=()=>{$('endMs').value=String(now());};
+$('seekStart').onclick=()=>{const v=integer('startMs');if(v!==null)video.currentTime=v/1000;};
+$('seekEnd').onclick=()=>{const v=integer('endMs');if(v!==null)video.currentTime=v/1000;};
+$('add').onclick=()=>{
+  const vid=$('videoId').value.trim(),a=integer('startMs'),b=integer('endMs');
+  if(!key(vid)||a===null||b===null||a<0||b<=a||durationMs===null||b>durationMs){
+    status('شناسه یا بازهٔ زمانی نامعتبر است. ویدئو باید قابل پخش و مدت آن مشخص باشد.');return;
+  }
+  if(events.some(e=>e.video_id===vid&&e.start_ms===a&&e.end_ms===b)){
+    status('این رخداد قبلاً ثبت شده است.');return;
+  }
+  events.push({video_id:vid,start_ms:a,end_ms:b});
+  render();status('رخداد اضافه شد؛ برچسب‌ها فقط هنگام دریافت CSV ذخیره می‌شوند.');
+};
+$('export').onclick=()=>{
+  const sorted=[...events].sort((a,b)=>a.video_id.localeCompare(b.video_id)||a.start_ms-b.start_ms);
+  const lines=['video_id,event_id,start_ms,end_ms'];
+  const counts=new Map();
+  sorted.forEach(e=>{
+    const counter=(counts.get(e.video_id)||0)+1;counts.set(e.video_id,counter);
+    lines.push([escapeCsv(e.video_id),escapeCsv('expert_'+counter),e.start_ms,e.end_ms].join(','));
+  });
+  const blob=new Blob([lines.join('\n')+'\n'],{type:'text/csv;charset=utf-8'});
+  const link=document.createElement('a');const url=URL.createObjectURL(blob);
+  link.href=url;link.download='expert_intervals.csv';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  status('CSV تهیه شد. برای ویدئوهای بدون رخداد نیز فایل clips.csv را کامل نگه دارید.');
+};
+$('reset').onclick=()=>{if(confirm('همهٔ برچسب‌های ثبت‌شده در همین نشست حذف شوند؟')){events.length=0;render();status('فهرست خالی شد.');}};
+render();
+</script>
+</body>
+</html>

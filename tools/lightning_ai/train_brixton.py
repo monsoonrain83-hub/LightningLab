@@ -14,7 +14,7 @@ from pathlib import Path
 
 from model_contract import (
     INPUT_CHANNELS, INPUT_FRAMES, INPUT_HEIGHT, INPUT_WIDTH, LABELS,
-    model_metadata, validate_manifest_rows,
+    model_metadata, validate_manifest_rows, event_window_sample_times_ms,
 )
 
 
@@ -48,6 +48,43 @@ def read_manifest(path: Path, root: Path) -> tuple[list[dict], dict[str, list[di
     return rows, partitions
 
 
+def attach_expert_event_windows(rows: list[dict], path: Path) -> None:
+    """Require an independently annotated start/end window for EVERY clip.
+
+    This is optional for experimental full-clip training but REQUIRED if the
+    model is to match Android's per-detected-event temporal inference.
+    """
+    with path.open(encoding="utf-8-sig", newline="") as stream:
+        reader = csv.DictReader(stream)
+        required = {"relative_path", "sha256", "start_ms", "end_ms", "reviewer"}
+        if reader.fieldnames is None or not required <= set(reader.fieldnames):
+            raise ValueError("Event window annotations require: " + ", ".join(sorted(required)))
+        annotations = {}
+        for entry in reader:
+            relative = entry["relative_path"].strip()
+            if not relative or relative in annotations:
+                raise ValueError("Missing/duplicate expert annotation for " + relative)
+            try:
+                start = int(entry["start_ms"])
+                end = int(entry["end_ms"])
+            except ValueError as err:
+                raise ValueError("Invalid expert event interval for " + relative) from err
+            if start < 0 or end < start or end > 24 * 3600 * 1000 or not entry["reviewer"].strip():
+                raise ValueError("Invalid expert event window/reviewer for " + relative)
+            annotations[relative] = {
+                "start_ms": start, "end_ms": end,
+                "sha256": entry["sha256"].strip().lower(),
+            }
+    rows_by_path = {row["relative_path"]: row for row in rows}
+    if len(rows_by_path) != len(rows) or set(annotations) != set(rows_by_path):
+        raise ValueError("Expert annotation CSV must match the full training manifest exactly")
+    for relative, annotation in annotations.items():
+        row = rows_by_path[relative]
+        if annotation["sha256"] != row["sha256"].lower():
+            raise ValueError("Expert annotation source SHA-256 mismatch: " + relative)
+        row["_event_window"] = (annotation["start_ms"], annotation["end_ms"])
+
+
 def build_and_train(args) -> dict:
     import cv2
     import numpy as np
@@ -60,6 +97,8 @@ def build_and_train(args) -> dict:
     from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
     rows, partitions = read_manifest(args.manifest, args.root)
+    if args.event_times is not None:
+        attach_expert_event_windows(rows, args.event_times)
     label_index = {label: index for index, label in enumerate(LABELS)}
 
     class ClipSequence(tf.keras.utils.Sequence):
@@ -84,7 +123,21 @@ def build_and_train(args) -> dict:
                     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
                     if frame_count <= 0:
                         raise ValueError("Video has no decodable frames: " + row["relative_path"])
-                    positions = np.linspace(0, max(0, frame_count - 1), INPUT_FRAMES).astype(int)
+                    if args.event_times is not None:
+                        fps = float(capture.get(cv2.CAP_PROP_FPS))
+                        if not np.isfinite(fps) or fps <= 0:
+                            raise ValueError("Cannot time-align expert event without valid video FPS")
+                        last_frame_ms = max(0, int(round((frame_count - 1) * 1000.0 / fps)))
+                        event_start, event_end = row["_event_window"]
+                        if event_end > last_frame_ms + int(round(1000.0 / fps)):
+                            raise ValueError("Annotated event lies outside video timeline")
+                        times = event_window_sample_times_ms(event_start, event_end, last_frame_ms)
+                        positions = np.asarray([
+                            min(frame_count - 1, max(0, int(round(t * fps / 1000.0))))
+                            for t in times
+                        ], dtype=int)
+                    else:
+                        positions = np.linspace(0, max(0, frame_count - 1), INPUT_FRAMES).astype(int)
                     previous = None
                     for frame_index, position in enumerate(positions):
                         capture.set(cv2.CAP_PROP_POS_FRAMES, int(position))
@@ -177,6 +230,45 @@ def build_and_train(args) -> dict:
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=list(range(len(LABELS)))).tolist(),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    # Fit calibration on validation only; preserve a completely untouched test.
+    validation_score = []
+    for index in range(len(validation_seq)):
+        batch_x, _ = validation_seq[index]
+        validation_score.extend(model.predict(batch_x, verbose=0).tolist())
+    evaluation_rows = []
+    for split, source_rows, scores in (
+        ("validation", partitions["validation"], validation_score),
+        ("test", partitions["test"], y_score.tolist()),
+    ):
+        if len(source_rows) != len(scores):
+            raise RuntimeError("Prediction rows lost alignment with manifest order")
+        for source_row, values in zip(source_rows, scores):
+            record = {
+                "sample_id": source_row["relative_path"],
+                "source_group": source_row["event_group"],
+                "split": split,
+                "truth": source_row["label"],
+                "domain": "brixton_camera_" + str(source_row["camera"]),
+                "sha256": source_row["sha256"],
+            }
+            record.update({"p_" + label: format(float(values[i]), ".9g")
+                           for i, label in enumerate(LABELS)})
+            evaluation_rows.append(record)
+    predictions_file = output_dir / "test_predictions.csv"
+    validation_file = output_dir / "validation_predictions.csv"
+    combined_file = output_dir / "evaluation_predictions.csv"
+    fieldnames = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
+        "p_" + label for label in LABELS
+    ]
+    for file, records in (
+        (predictions_file, [r for r in evaluation_rows if r["split"] == "test"]),
+        (validation_file, [r for r in evaluation_rows if r["split"] == "validation"]),
+        (combined_file, evaluation_rows),
+    ):
+        with file.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(records)
     model.save(output_dir / "model.keras")
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -198,6 +290,25 @@ def build_and_train(args) -> dict:
         "seed": args.seed,
         "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
+        "test_predictions_sha256": hashlib.sha256(predictions_file.read_bytes()).hexdigest(),
+        "validation_predictions_sha256": hashlib.sha256(validation_file.read_bytes()).hexdigest(),
+        "evaluation_predictions_sha256": hashlib.sha256(combined_file.read_bytes()).hexdigest(),
+        "temporal_sampling": (
+            "android_detected_event_pm500ms" if args.event_times is not None
+            else "full_clip_uniform_8_frames"
+        ),
+        "expert_event_annotations_sha256": (
+            hashlib.sha256(args.event_times.read_bytes()).hexdigest()
+            if args.event_times is not None else None
+        ),
+        "runtime_sampling_warning": (
+            "Expert event windows supplied: training frame timestamps are aligned "
+            "with Android +/-500 ms sampling. Video frame seeking and resolution "
+            "still need on-device equivalence checks."
+            if args.event_times is not None else
+            "Experimental full-clip sampling differs from Android detected-event "
+            "+/-500 ms windows; do not approve this model for scientific use."
+        ),
         "tensorflow_version": tf.__version__,
         "input_shape": input_shape,
         "output_shape": output_shape,
@@ -213,6 +324,8 @@ def build_and_train(args) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--event-times", type=Path, default=None,
+                        help="Expert-annotated per-clip event windows CSV; enables Android-aligned sampling")
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=20)
