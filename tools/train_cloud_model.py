@@ -142,7 +142,7 @@ def main():
                          for i,p in enumerate(paths))
     meta={'labels':LABELS, 'input_shape':[1,SIZE,SIZE,3], 'output_shape':[1,len(LABELS)],
           'tflite_sha256':hashlib.sha256(tflite).hexdigest(),
-          'manifest_sha256':hashlib.sha256('\\n'.join(manifest_rows).encode('utf-8')).hexdigest(),
+          'manifest_sha256':hashlib.sha256('\n'.join(manifest_rows).encode('utf-8')).hexdigest(),
           'test_predictions_sha256':hashlib.sha256(pred_file.read_bytes()).hexdigest(),
           'training_clips':len(train_idx), 'validation_clips':len(val_idx),
           'test_clips':len(test_idx), 'seed':a.seed,
@@ -150,7 +150,7 @@ def main():
           'dataset_license_caveat':'Verify original CCAiM dataset card and redistribution rights before public release',
           'sampling':'aspect_preserving_center_rgb128',
           'domain_limit':'single-starter-collection; independent sites/cameras untested'}
-    (out/'model_metadata.json').write_text(json.dumps(meta,indent=2)+'\\n',encoding='utf-8')
+    (out/'model_metadata.json').write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
     print(f'Wrote {out}/cloud_model.tflite')
 
 if __name__=='__main__': main()
