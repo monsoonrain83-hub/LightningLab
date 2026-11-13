@@ -427,7 +427,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             videoDraftStatus = "دسترسی به فایل‌های اصلی برقرار نیست؛ فایل‌ها را دوباره انتخاب کنید"
             return
         }
-        if (p.overlayClips.any { it.assetFile != null && videoDraftStore.overlay(it.id) == null }) {
+        if (p.overlayClips.any { it.assetFile != null && videoDraftStore.overlay(it.id, it.assetFile) == null }) {
             videoDraftStatus = "بعضی تصویرهای لایه‌ها در پیش‌نویس موجود نیستند"
             return
         }
@@ -451,7 +451,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             videoOverlayClips.clear()
             videoOverlayClips.addAll(p.overlayClips.map { clip ->
                 clip.assetFile?.let {
-                    val file = videoDraftStore.overlay(clip.id)
+                    val file = videoDraftStore.overlay(clip.id, clip.assetFile)
                         ?: throw java.io.IOException("Missing overlay bitmap")
                     val bitmap = BitmapFactory.decodeFile(file.absolutePath)
                         ?: throw java.io.IOException("Invalid overlay PNG")
