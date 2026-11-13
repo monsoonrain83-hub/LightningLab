@@ -77,6 +77,16 @@ def decode_probabilities(values: Iterable[float]) -> list[tuple[str, float]] | N
     return sorted(zip(LABELS, normalized), key=lambda item: item[1], reverse=True)
 
 
+def event_window_sample_times_ms(start_ms: int, end_ms: int, duration_ms: int) -> list[int]:
+    """Match Android LightningTemporalModel.sampleTimes, with 500 ms context."""
+    if start_ms < 0 or end_ms < start_ms or duration_ms < 0:
+        raise ValueError("Invalid human-annotated event window")
+    start = min(duration_ms, max(0, start_ms - 500))
+    end = max(start, min(duration_ms, end_ms + 500))
+    return [start + (end - start) * i // (INPUT_FRAMES - 1)
+            for i in range(INPUT_FRAMES)]
+
+
 def model_metadata() -> dict:
     return {
         "model_family": "MobileNetV3Small temporal mean-pool",
