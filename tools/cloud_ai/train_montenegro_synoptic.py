@@ -120,30 +120,51 @@ def main():
     tflite = converter.convert()
     (out / "cloud_synoptic_model.tflite").write_bytes(tflite)
 
-    # Supply held-out per-head predictions with expert modal targets.
-    # Do not silently treat the observer "/" code as a physical cloud class.
+    # Export validation (for optional calibration) and untouched test separately
+    # for each WMO synoptic level; "/" means undeterminable by observer.
+    y_val_pred = model.predict(datasets["validation"], verbose=0)
     prediction_hashes = {}
+    validation_hashes = {}
+    evaluation_hashes = {}
     for hi, head in enumerate(HEADS):
-        target_csv = out / ("test_predictions_" + head.lower() + ".csv")
-        with target_csv.open("w", encoding="utf-8", newline="") as stream:
-            columns = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
-                "p_" + code for code in LABELS
-            ]
-            writer = csv.DictWriter(stream, fieldnames=columns)
-            writer.writeheader()
-            for ii, original_index in enumerate(indices["test"]):
+        records = []
+        columns = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
+            "p_" + code for code in LABELS
+        ]
+        for split, indexes, scores in (
+            ("validation", indices["validation"], y_val_pred),
+            ("test", indices["test"], y_pred)
+        ):
+            if len(indexes) != len(scores):
+                raise RuntimeError("WMO prediction/manifest order mismatch")
+            for ii, original_index in enumerate(indexes):
                 distribution = targets[original_index, hi, :]
                 if float(distribution.sum()) <= 0:
                     continue
                 source = Path(paths[original_index])
                 digest = hashlib.sha256(source.read_bytes()).hexdigest()
-                row = {"sample_id": source.name, "source_group": str(days[original_index]),
-                       "split": "test", "truth": LABELS[int(distribution.argmax())],
+                row = {"sample_id": source.name,
+                       "source_group": str(days[original_index]),
+                       "split": split, "truth": LABELS[int(distribution.argmax())],
                        "domain": "montenegro_single_site", "sha256": digest}
-                row.update({"p_" + code: format(float(y_pred[ii, hi, jj]), ".9g")
+                row.update({"p_" + code: format(float(scores[ii, hi, jj]), ".9g")
                             for jj, code in enumerate(LABELS)})
-                writer.writerow(row)
-        prediction_hashes[head] = hashlib.sha256(target_csv.read_bytes()).hexdigest()
+                records.append(row)
+        test_csv = out / ("test_predictions_" + head.lower() + ".csv")
+        validation_csv = out / ("validation_predictions_" + head.lower() + ".csv")
+        combined_csv = out / ("evaluation_predictions_" + head.lower() + ".csv")
+        for path, subset in (
+            (test_csv, [r for r in records if r["split"] == "test"]),
+            (validation_csv, [r for r in records if r["split"] == "validation"]),
+            (combined_csv, records)
+        ):
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=columns)
+                writer.writeheader()
+                writer.writerows(subset)
+        prediction_hashes[head] = hashlib.sha256(test_csv.read_bytes()).hexdigest()
+        validation_hashes[head] = hashlib.sha256(validation_csv.read_bytes()).hexdigest()
+        evaluation_hashes[head] = hashlib.sha256(combined_csv.read_bytes()).hexdigest()
     contract = {
         "input_name": "image_rgb_0_255", "input_shape": [1, SIZE, SIZE, 3], "input_dtype": "float32",
         "input_range": [0, 255], "resize": "aspect-preserving", "padding_rgb": [128, 128, 128],
@@ -157,6 +178,8 @@ def main():
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
         "manifest_sha256": hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest(),
         "test_predictions_sha256_per_head": prediction_hashes,
+        "validation_predictions_sha256_per_head": validation_hashes,
+        "evaluation_predictions_sha256_per_head": evaluation_hashes,
         "dataset_license": "CC BY 4.0",
         "dataset_doi": "10.5281/zenodo.21787669",
         "training_clips": int(len(indices["train"])),
