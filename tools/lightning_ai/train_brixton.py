@@ -177,6 +177,27 @@ def build_and_train(args) -> dict:
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=list(range(len(LABELS)))).tolist(),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    # Export every held-out prediction WITH original independent group, label,
+    # SHA-256 and camera provenance, never just a summary accuracy number.
+    predictions_file = output_dir / "test_predictions.csv"
+    with predictions_file.open("w", encoding="utf-8", newline="") as stream:
+        fieldnames = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
+            "p_" + label for label in LABELS
+        ]
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for source_row, scores in zip(partitions["test"], y_score.tolist()):
+            row = {
+                "sample_id": source_row["relative_path"],
+                "source_group": source_row["event_group"],
+                "split": "test",
+                "truth": source_row["label"],
+                "domain": "brixton_camera_" + str(source_row["camera"]),
+                "sha256": source_row["sha256"],
+            }
+            row.update({"p_" + label: format(float(scores[i]), ".9g")
+                        for i, label in enumerate(LABELS)})
+            writer.writerow(row)
     model.save(output_dir / "model.keras")
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -198,6 +219,14 @@ def build_and_train(args) -> dict:
         "seed": args.seed,
         "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
+        "test_predictions_sha256": hashlib.sha256(predictions_file.read_bytes()).hexdigest(),
+        "temporal_sampling": "full_clip_uniform_8_frames",
+        "runtime_sampling_warning": (
+            "Android classifies a detected event using a +/-500 ms window. "
+            "Brixton training uses eight evenly spaced frames from the full clip. "
+            "These contexts are not equivalent unless the event occupies the clip; "
+            "verify preprocessing/domain shift before model acceptance."
+        ),
         "tensorflow_version": tf.__version__,
         "input_shape": input_shape,
         "output_shape": output_shape,
