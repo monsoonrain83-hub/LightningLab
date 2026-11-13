@@ -20,6 +20,22 @@ internal class WaveformCache(private val capacity: Int = 12) {
     @Synchronized fun clear() = values.clear()
 }
 
+/** Pure, JVM-testable bucket math for waveform binning. */
+internal object WaveformBins {
+    /**
+     * Map one decoded frame to a bucket index.
+     * When the container-provided [expectedFrames] is unknown (<= 0), fall back to
+     * a live monotonic estimate based on frames already decoded, so peaks spread
+     * across the whole envelope instead of collapsing into the last bucket.
+     */
+    fun index(frame: Long, totalFrames: Long, expectedFrames: Long, bins: Int): Int {
+        val safeBins = bins.coerceAtLeast(1)
+        val divisor = if (expectedFrames > 0) expectedFrames else max(1L, totalFrames)
+        val scaled = frame.toDouble() * safeBins.toDouble() / divisor.toDouble()
+        return scaled.toInt().coerceIn(0, safeBins - 1)
+    }
+}
+
 /** Decodes an audio URI on a worker thread and returns normalized peak samples for a real waveform. */
 object AudioWaveform {
     private val cache = WaveformCache(12)
@@ -53,12 +69,13 @@ object AudioWaveform {
             codec.configure(format, null, null, 0)
             codec.start()
             val peaks = FloatArray(bins)
-            val durationUs = (format.getLongOrNull(MediaFormat.KEY_DURATION) ?: 0L).coerceAtLeast(1L)
+            val durationUs = (format.getLongOrNull(MediaFormat.KEY_DURATION) ?: 0L)
             var inputDone = false
             var outputDone = false
             var sampleRate = format.getIntegerOrNull(MediaFormat.KEY_SAMPLE_RATE) ?: 44100
             var channels = format.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: 2
             var totalFrames = 0L
+            val expectedFrames = if (durationUs > 0L) durationUs * sampleRate / 1_000_000L else 0L
             var iterations = 0
             val info = MediaCodec.BufferInfo()
             while (!outputDone && iterations++ < 200000) {
@@ -101,7 +118,7 @@ object AudioWaveform {
                                 }
                                 peak = max(peak, abs(value))
                             }
-                            val bucket = ((totalFrames + frame) * bins / (durationUs * sampleRate / 1_000_000L).coerceAtLeast(1L)).toInt().coerceIn(0, bins - 1)
+                            val bucket = WaveformBins.index(totalFrames + frame, totalFrames + frames, expectedFrames, bins)
                             if (peak > peaks[bucket]) peaks[bucket] = peak
                         }
                         totalFrames += frames
