@@ -29,7 +29,7 @@ class ReferencePackTests(unittest.TestCase):
             self.assertEqual("UNVERIFIED_GROUP", row["source_group"])
             self.assertEqual("8000", row["duration_ms"])
             self.assertEqual(64, len(row["sha256"]))
-            with self.assertRaisesRegex(ValueError, "partition"):
+            with self.assertRaisesRegex(ValueError, "invalid video metadata"):
                 parse(csv_path, Path(folder)/"out"/"expert_intervals.csv",
                       Path(folder)/"out"/"detector_intervals.csv")
 
