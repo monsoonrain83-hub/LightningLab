@@ -16,6 +16,19 @@ internal object LumaGridGeometry {
         return Span(start, end)
     }
 
+    data class Dims(val width: Int, val height: Int)
+
+    /** Bound BOTH source axes, preserving the approximate aspect ratio. */
+    fun targetDims(sourceWidth: Int, sourceHeight: Int, maxSide: Int): Dims {
+        require(sourceWidth > 0 && sourceHeight > 0 && maxSide > 0)
+        val longest = maxOf(sourceWidth, sourceHeight).toLong()
+        val tw = (sourceWidth.toLong() * maxSide / longest)
+            .coerceIn(1L, sourceWidth.toLong()).toInt()
+        val th = (sourceHeight.toLong() * maxSide / longest)
+            .coerceIn(1L, sourceHeight.toLong()).toInt()
+        return Dims(tw, th)
+    }
+
     fun targetHeight(sourceWidth: Int, sourceHeight: Int, targetWidth: Int): Int {
         require(sourceWidth > 0 && sourceHeight > 0 && targetWidth in 1..sourceWidth)
         return ((targetWidth.toLong() * sourceHeight / sourceWidth).coerceAtLeast(1L)
