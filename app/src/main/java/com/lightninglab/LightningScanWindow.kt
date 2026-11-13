@@ -16,7 +16,7 @@ internal object LightningScanWindow {
         val spanUs: Long get() = max(1L, endUs - startUs)
         fun progress(timestampUs: Long): Float {
             if (!knownEnd) return 0f
-            val passed = (timestampUs - startUs).coerceAtLeast(0L)
+            val passed = if (timestampUs <= startUs) 0L else timestampUs - startUs
             return (passed.toDouble() / spanUs.toDouble()).toFloat().coerceIn(0f, 1f)
         }
     }
