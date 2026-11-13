@@ -21,6 +21,7 @@ class ScientificReleaseAuditTests(unittest.TestCase):
             "training_clips": 1000, "test_clips": 200,
             "labels": list(BRIXTON), "input_shape": [1, 8, 224, 224, 3],
             "output_shape": [1, 7],
+            "temporal_sampling": "android_detected_event_pm500ms",
         }
         per_class = {v: {"support": 20} for v in BRIXTON}
         self.evaluation = {
@@ -61,6 +62,17 @@ class ScientificReleaseAuditTests(unittest.TestCase):
         self.assertEqual("blocked", result["status"])
         self.assertTrue(any("External evidence too sparse" in x for x in result["reasons"]))
         self.assertTrue(any("external domains" in x for x in result["reasons"]))
+
+    def test_brixton_full_clip_training_is_not_android_event_window(self):
+        self.metadata["temporal_sampling"] = "full_clip_uniform_8_frames"
+        result = audit(self.path, self.metadata, self.evaluation, "brixton")
+        self.assertEqual("blocked", result["status"])
+        self.assertTrue(any("full-clip sampling" in reason for reason in result["reasons"]))
+
+    def test_unknown_dataset_redistribution_license_blocks(self):
+        self.metadata["dataset_license"] = "UNVERIFIED"
+        result = audit(self.path, self.metadata, self.evaluation, "brixton")
+        self.assertEqual("blocked", result["status"])
 
     def test_tensor_label_order_mismatch_blocks(self):
         self.metadata["labels"] = list(reversed(BRIXTON))
