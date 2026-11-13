@@ -3,7 +3,6 @@ package com.lightninglab
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
@@ -20,12 +19,13 @@ class HealFeatherTest {
         assertEquals(0f, HealFeather.weight(15f, 10f, 6f), 1e-4f)
     }
 
-    @Test fun weightIsMonotonicInsideTheFeather() {
-        var prev = -1f
+    @Test fun weightDecreasesMonotonicallyWithDistance() {
+        // Farther from the centre means closer to the original: weight never increases with distance.
+        var prev = Float.MAX_VALUE
         for (i in 0..20) {
             val d = i * 0.5f // 0..10 inside radius 10
             val w = HealFeather.weight(d, 10f, 6f)
-            assertTrue("weight not monotonic at d=$d", w >= prev - 1e-6f)
+            assertTrue("weight increased at d=$d ($w > $prev)", w <= prev + 1e-6f)
             prev = w
         }
     }
@@ -37,20 +37,21 @@ class HealFeatherTest {
         assertEquals(original, HealFeather.blend(original, repaired, 0f))
     }
 
-    @Test fun blendIsSymmetricAroundHalfWeight() {
-        val o = 0xFF000000.toInt(); val r = 0xFF0000FF.toInt()
-        val a = HealFeather.blend(o, r, 0.25f)
-        val b = HealFeather.blend(o, r, 0.75f)
-        val mid = (0xFF shl 24) or (0x7F)
-        assertTrue(abs(a - b) < 12)
-        assertTrue(abs((a and 0xFF) - 0x3F) < 4 && abs((b and 0xFF) - 0xBF) < 4)
+    @Test fun quarterAndThreeQuarterBlendSumToTheFullRange() {
+        val o = 0xFF000030.toInt(); val r = 0xFF0000D0.toInt()
+        val low = HealFeather.blend(o, r, 0.25f) and 0xFF
+        val high = HealFeather.blend(o, r, 0.75f) and 0xFF
+        // 0.25 keeps ~75% original, 0.75 keeps ~75% repaired; together they cover the span.
+        assertEquals(0x9A, low)  // (208*64 + 48*191)/255 = 98
+        assertEquals(0xA6, high) // (208*191 + 48*64)/255 = 166
+        assertEquals(255, low + high + 1)
     }
 
     /**
      * The real regression: with a copy of the pre-fill mask, a circular mark is
-     * blended with smooth weights, so repaired pixels far from the boundary
-     * (centre) differ maximally from the original while boundary pixels stay
-     * close to it. Without the mask copy the feather loop never ran.
+     * blended with smooth weights — the centre keeps the repair, the boundary
+     * keeps the original, and in-between pixels land strictly between the two.
+     * Without the mask copy the feather loop never ran.
      */
     @Test fun applyFeathersTheBoundaryAndKeepsTheCentre() {
         val bw = 41; val bh = 41
@@ -65,12 +66,16 @@ class HealFeatherTest {
             wasUnknown[y * bw + x] = d <= r
         }
         HealFeather.apply(px, original, wasUnknown, distances, r, feather)
-        // Centre: repaired colour kept.
+        // Centre (weight 1): repaired colour kept.
         assertEquals(0xFFF0E0D0.toInt(), px[(cy.toInt()) * bw + cx.toInt()])
         // Outside the mark: untouched original.
         assertEquals(0xFF102030.toInt(), px[0])
-        // Just inside the boundary: mostly original (weight near 0).
-        val edge = (cy.toInt()) * bw + (cx.toInt() + 9)
-        assertTrue("boundary not feathered", abs((px[edge] and 0xFF) - 0x30) <= 2)
+        // Exactly on the boundary (weight 0): original restored.
+        val onEdge = (cy.toInt()) * bw + (cx.toInt() + 10)
+        assertEquals(0xFF102030.toInt(), px[onEdge])
+        // Half-way inside (weight ~0.93): strictly between original and repaired.
+        val mid = (cy.toInt()) * bw + (cx.toInt() + 5)
+        val midBlue = px[mid] and 0xFF
+        assertTrue("mid pixel not between original and repaired, blue=$midBlue", midBlue in 49..207)
     }
 }
