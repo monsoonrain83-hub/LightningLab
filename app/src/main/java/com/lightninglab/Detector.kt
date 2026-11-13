@@ -84,9 +84,11 @@ class Detector(private val ctx: Context) {
             ex.selectTrack(track)
             val fmt = ex.getTrackFormat(track)
             val mime = fmt.getString(MediaFormat.KEY_MIME) ?: return null
-            val durUs = if (fmt.containsKey(MediaFormat.KEY_DURATION)) fmt.getLong(MediaFormat.KEY_DURATION) else 1L
-            val spanUs = max(1L, min(durUs, if (endMs == Long.MAX_VALUE) durUs else endMs * 1000) - startMs * 1000)
-            if (startMs > 0) ex.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            val durationUs = if (fmt.containsKey(MediaFormat.KEY_DURATION)) fmt.getLong(MediaFormat.KEY_DURATION) else -1L
+            val window = LightningScanWindow.of(durationUs, startMs, endMs)
+                ?: return Scan(ArrayList(), null)
+            if (window.startUs > 0L)
+                ex.seekTo(window.startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val c = MediaCodec.createDecoderByType(mime); codec = c
             c.configure(fmt, null, null, 0); c.start()
             val info = MediaCodec.BufferInfo()
@@ -110,15 +112,17 @@ class Detector(private val ctx: Context) {
                     if (info.size > 0 && tMs >= startMs && tMs <= endMs && tMs - lastT >= 8) {
                         val img = c.getOutputImage(oi) ?: return null
                         val tw = min(TW, img.width); val th = max(2, tw * img.height / img.width)
-                        val luma = lumaGrid(img, tw, th)
-                        if (day == null) day = DayLine(tw, th)
-                        day.push(tMs, luma)
-                        out += sampleFromLuma(tMs, luma, tw, th)
-                        img.close(); lastT = tMs
-                        onProgress(min(0.9f, (info.presentationTimeUs - startMs * 1000).toFloat() / spanUs * 0.9f))
+                        try {
+                            val luma = lumaGrid(img, tw, th)
+                            if (day == null) day = DayLine(tw, th)
+                            day.push(tMs, luma)
+                            out += sampleFromLuma(tMs, luma, tw, th)
+                            lastT = tMs
+                            onProgress(min(0.9f, window.progress(info.presentationTimeUs) * 0.9f))
+                        } finally { img.close() }
                     }
                     c.releaseOutputBuffer(oi, false)
-                    if (tMs > endMs) outDone = true
+                    if (window.knownEnd && info.presentationTimeUs > window.endUs) outDone = true
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outDone = true
                 }
             }
@@ -146,17 +150,20 @@ class Detector(private val ctx: Context) {
         try {
             r.setDataSource(ctx, uri)
             val dur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: return out
+            val window = LightningScanWindow.of(LightningScanWindow.microseconds(dur), startMs, endMs)
+                ?: return out
             val (w, h) = dims(r, TW)
-            val end = min(dur, endMs)
-            var t = startMs
+            val end = window.endUs / 1000L
+            var t = window.startUs / 1000L
             while (t < end) {
                 if (cancelled()) break
-                val b = r.getScaledFrameAtTime(t * 1000, OPTION_CLOSEST, w, h)
+                val b = r.getScaledFrameAtTime(LightningScanWindow.microseconds(t), OPTION_CLOSEST, w, h)
                 if (b != null) {
                     val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h); b.recycle()
                     out += sampleFromLuma(t, FloatArray(w * h) { ImgUtil.luma(px[it]) }, w, h)
                 }
-                t += 100; onProgress(min(0.9f, (t - startMs).toFloat() / max(1L, end - startMs) * 0.9f))
+                t = if (end - t <= 100L) end else t + 100L
+                onProgress(min(0.9f, window.progress(LightningScanWindow.microseconds(t)) * 0.9f))
             }
         } finally { r.release() }
         return out
