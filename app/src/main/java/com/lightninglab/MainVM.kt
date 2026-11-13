@@ -1152,55 +1152,54 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
 
     /** Imports an externally trained model, retaining the last known-good model on failure. */
+    /**
+     * Copy the user-selected model into app-private staging; retain the previous
+     * model until the new TFLite interpreter has validated its tensor contract.
+     */
+    private fun installImportedModel(
+        uri: Uri, filename: String, close: () -> Unit, load: () -> Boolean
+    ): Boolean {
+        val target = File(app.filesDir, filename)
+        val backup = File(app.filesDir, "$filename.previous")
+        val staged = File(app.filesDir, "$filename.importing")
+        try {
+            if (backup.isFile && !ModelFileRecovery.prepareForImport(target, backup, close, load))
+                return false
+            if (staged.exists() && !staged.delete()) return false
+            val input = app.contentResolver.openInputStream(uri) ?: return false
+            input.use { source ->
+                staged.outputStream().use { out ->
+                    val buffer = ByteArray(64 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = source.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > 150L * 1024L * 1024L) error("Model exceeds 150 MB")
+                        out.write(buffer, 0, n)
+                    }
+                    out.flush()
+                }
+            }
+            return ModelFileRecovery.installCandidate(target, backup, staged, close, load)
+        } catch (_: Exception) {
+            return false
+        } finally { staged.delete() }
+    }
+
     fun importLightningTemporalModel(u: Uri) {
         if (busy) return
         busy = true
         viewModelScope.launch {
             try {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "lightning_temporal.tflite")
-                val backup = File(app.filesDir, "lightning_temporal.tflite.previous")
-                val staging = File(app.filesDir, "lightning_temporal.tflite.importing")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, temporalLightningModel::close, temporalLightningModel::load)
-                    staging.delete()
-                    val input = app.contentResolver.openInputStream(u) ?: throw java.io.IOException("Cannot open model")
-                    input.use { source ->
-                        staging.outputStream().use { out ->
-                            val chunk = ByteArray(64 * 1024)
-                            var size = 0L
-                            while (true) {
-                                val n = source.read(chunk)
-                                if (n < 0) break
-                                size += n
-                                if (size > 150L * 1024 * 1024) throw java.io.IOException("Model exceeds 150 MB limit")
-                                out.write(chunk, 0, n)
-                            }
-                        }
-                    }
-                    if (staging.length() == 0L) throw java.io.IOException("Empty model")
-                    temporalLightningModel.close()
-                    backup.delete()
-                    val hadOld = target.exists()
-                    if (hadOld && !target.renameTo(backup)) throw java.io.IOException("Backup failed")
-                    if (!staging.renameTo(target)) throw java.io.IOException("Model replacement failed")
-                    if (!temporalLightningModel.load()) throw java.io.IOException("Incompatible TFLite contract")
-                    backup.delete()
-                    true
-                } catch (_: Throwable) {
-                    staging.delete()
-                    temporalLightningModel.close()
-                    if (backup.exists()) {
-                        target.delete()
-                        backup.renameTo(target)
-                    }
-                    temporalLightningModel.load()
-                    false
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "lightning_temporal.tflite", temporalLightningModel::close, temporalLightningModel::load)
                 }
-            }
-            lightningTemporalReady = withContext(Dispatchers.IO) { temporalLightningModel.load() }
+                lightningTemporalReady = withContext(Dispatchers.IO) { temporalLightningModel.load() }
             temporalScores.clear()
-            info(if (ok) R.string.model_loaded else R.string.model_invalid)
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
             } finally {
                 busy = false
             }
@@ -1332,242 +1331,94 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     } }
     fun importModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "cloud_model.tflite")
-                val temp = File(app.filesDir, "cloud_model.tflite.importing")
-                val backup = File(app.filesDir, "cloud_model.tflite.previous")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, cloudModel::close, cloudModel::load)
-                    temp.delete()
-                    backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
-                        temp.isFile && temp.length() > 0L
-                    } ?: false
-                    if (!copied) {
-                        temp.delete()
-                        false
-                    } else {
-                        // Keep the last working model until the candidate has passed the
-                        // interpreter's tensor-contract checks. A bad import must never
-                        // silently replace a previously usable classifier.
-                        cloudModel.close()
-                        val hadPrevious = target.exists()
-                        if (hadPrevious && !target.renameTo(backup)) {
-                            temp.delete()
-                            cloudModel.load()
-                            false
-                        } else if (!temp.renameTo(target)) {
-                            temp.delete()
-                            if (hadPrevious) { backup.renameTo(target) } else { Unit }
-                            cloudModel.load()
-                            false
-                        } else {
-                            val valid = cloudModel.load()
-                            if (valid) {
-                                backup.delete()
-                                true
-                            } else {
-                                target.delete()
-                                if (hadPrevious) { backup.renameTo(target) } else { Unit }
-                                cloudModel.load()
-                                false
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {
-                    temp.delete()
-                    if (backup.exists()) {
-                        target.delete()
-                        backup.renameTo(target)
-                    }
-                    cloudModel.load()
-                    false
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "cloud_model.tflite", cloudModel::close, cloudModel::load)
                 }
+                modelReady = withContext(Dispatchers.IO) { cloudModel.load() }
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
             }
-            modelReady = ok
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
+
     fun importSynopticModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "cloud_synoptic_model.tflite")
-                val temp = File(app.filesDir, "cloud_synoptic_model.tflite.importing")
-                val backup = File(app.filesDir, "cloud_synoptic_model.tflite.previous")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, cloudSynopticModel::close, cloudSynopticModel::load)
-                    temp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
-                        temp.isFile && temp.length() > 0L
-                    } ?: false
-                    if (!copied) {
-                        temp.delete()
-                        false
-                    } else {
-                        cloudSynopticModel.close()
-                        val hadPrevious = target.exists()
-                        if (hadPrevious && !target.renameTo(backup)) {
-                            temp.delete(); cloudSynopticModel.load(); false
-                        } else if (!temp.renameTo(target)) {
-                            temp.delete()
-                            if (hadPrevious) backup.renameTo(target)
-                            cloudSynopticModel.load()
-                            false
-                        } else if (cloudSynopticModel.load()) {
-                            backup.delete()
-                            true
-                        } else {
-                            target.delete()
-                            if (hadPrevious) backup.renameTo(target)
-                            cloudSynopticModel.load()
-                            false
-                        }
-                    }
-                } catch (_: Throwable) {
-                    temp.delete()
-                    if (backup.exists()) { target.delete(); backup.renameTo(target) }
-                    cloudSynopticModel.load()
-                    false
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "cloud_synoptic_model.tflite", cloudSynopticModel::close, cloudSynopticModel::load)
                 }
+                synopticModelReady = withContext(Dispatchers.IO) { cloudSynopticModel.load() }
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
             }
-            synopticModelReady = if (ok) true else withContext(Dispatchers.IO) { cloudSynopticModel.load() }
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
 
     fun importFeatureModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "cloud_features.tflite")
-                val temp = File(app.filesDir, "cloud_features.tflite.importing")
-                val backup = File(app.filesDir, "cloud_features.tflite.previous")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, cloudFeatureModel::close, cloudFeatureModel::load)
-                    temp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
-                        temp.exists() && temp.length() > 0L
-                    } ?: false
-                    if (!copied) {
-                        temp.delete(); false
-                    } else {
-                        cloudFeatureModel.close()
-                        val hadOld = target.exists()
-                        if (hadOld && !target.renameTo(backup)) {
-                            temp.delete(); cloudFeatureModel.load(); false
-                        } else if (!temp.renameTo(target)) {
-                            temp.delete()
-                            if (hadOld) { backup.renameTo(target) } else { Unit }
-                            cloudFeatureModel.load(); false
-                        } else {
-                            val valid = cloudFeatureModel.load()
-                            if (valid) {
-                                backup.delete()
-                                true
-                            } else {
-                                target.delete()
-                                if (hadOld) { backup.renameTo(target) } else { Unit }
-                                cloudFeatureModel.load()
-                                false
-                            }
-                        }
-                    }
-                } catch (_: Throwable) {
-                    temp.delete()
-                    if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
-                    cloudFeatureModel.load()
-                    false
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "cloud_features.tflite", cloudFeatureModel::close, cloudFeatureModel::load)
                 }
+                featureModelReady = withContext(Dispatchers.IO) { cloudFeatureModel.load() }
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
             }
-            featureModelReady = ok
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
         }
     }
 
     fun importSegmentationModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "cloud_segmentation.tflite")
-                val temp = File(app.filesDir, "cloud_segmentation.tflite.importing")
-                val backup = File(app.filesDir, "cloud_segmentation.tflite.previous")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, cloudSegmentationModel::close, cloudSegmentationModel::load)
-                    temp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
-                        temp.length() > 0L
-                    } ?: false
-                    if (!copied) { temp.delete(); false } else {
-                        cloudSegmentationModel.close()
-                        val hadOld = target.exists()
-                        if (hadOld && !target.renameTo(backup)) { temp.delete(); cloudSegmentationModel.load(); false }
-                        else if (!temp.renameTo(target)) {
-                            temp.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
-                            cloudSegmentationModel.load(); false
-                        } else {
-                            val valid = cloudSegmentationModel.load()
-                            if (valid) backup.delete()
-                            else {
-                                target.delete()
-                                if (hadOld) { backup.renameTo(target) } else { Unit }
-                                cloudSegmentationModel.load()
-                            }
-                            valid
-                        }
-                    }
-                } catch (_: Throwable) {
-                    temp.delete()
-                    if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
-                    cloudSegmentationModel.load()
-                    false
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "cloud_segmentation.tflite", cloudSegmentationModel::close, cloudSegmentationModel::load)
                 }
-            }
-            segmentationModelReady = ok
+                segmentationModelReady = withContext(Dispatchers.IO) { cloudSegmentationModel.load() }
             segmentationResult = null
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
+            }
         }
     }
 
     fun importAtmosphericSegmentationModel(u: Uri) {
+        if (busy) return
+        busy = true
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                val target = File(app.filesDir, "atmosphere_multiclass.tflite")
-                val temp = File(app.filesDir, "atmosphere_multiclass.tflite.importing")
-                val backup = File(app.filesDir, "atmosphere_multiclass.tflite.previous")
-                try {
-                    ModelFileRecovery.prepareForImport(target, backup, atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
-                    temp.delete(); backup.delete()
-                    val copied = app.contentResolver.openInputStream(u)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
-                        temp.length() > 0L
-                    } ?: false
-                    if (!copied) { temp.delete(); false } else {
-                        atmosphericSegmentationModel.close()
-                        val hadOld = target.exists()
-                        if (hadOld && !target.renameTo(backup)) { temp.delete(); atmosphericSegmentationModel.load(); false }
-                        else if (!temp.renameTo(target)) {
-                            temp.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
-                            atmosphericSegmentationModel.load(); false
-                        } else {
-                            val valid = atmosphericSegmentationModel.load()
-                            if (valid) backup.delete() else {
-                                target.delete(); if (hadOld) { backup.renameTo(target) } else { Unit }
-                                atmosphericSegmentationModel.load()
-                            }
-                            valid
-                        }
-                    }
-                } catch (_: Throwable) {
-                    temp.delete(); if (backup.exists() && !target.exists()) { backup.renameTo(target) } else { Unit }
-                    atmosphericSegmentationModel.load(); false
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "atmosphere_multiclass.tflite", atmosphericSegmentationModel::close, atmosphericSegmentationModel::load)
                 }
-            }
-            atmosphericSegmentationReady = ok
+                atmosphericSegmentationReady = withContext(Dispatchers.IO) { atmosphericSegmentationModel.load() }
             atmosphericSegmentationResult = null
-            if (ok) info(R.string.model_loaded) else info(R.string.model_invalid)
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
+            }
         }
     }
 
