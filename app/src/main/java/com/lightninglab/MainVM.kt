@@ -466,11 +466,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs, it.locked)
             }
 
+            val restoredUri = Uri.parse(draft.videoUri)
+            // Probe the media before touching any part of the live editor.
+            // A missing/corrupt source must not clear the user's current work.
+            val probe = MediaMetadataRetriever()
+            try {
+                probe.setDataSource(app, restoredUri)
+                probe.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            } finally { probe.release() }
             videoDraftJob?.cancel()
             restoringVideoDraft = true
-            val restoredUri = Uri.parse(draft.videoUri)
-            // Keep the current editor selected when the source decoder refuses a
-            // draft video. loadVideo changes the URI only after reading metadata.
             loadVideo(restoredUri)
             if (videoUri != restoredUri) throw java.io.IOException("Video decoder rejected draft source")
             segments.clear(); segments.addAll(incomingSegments)
