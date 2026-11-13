@@ -33,7 +33,7 @@ td,th{padding:7px;border-bottom:1px solid #3e5360;text-align:right}
 <h2>۱. ویدئوی مرجع</h2>
 <div class="row"><label for="videoFile">انتخاب ویدئو:</label><input type="file" id="videoFile" accept="video/*"></div>
 <div class="row"><label for="videoId">شناسهٔ یکتای ویدئو (مطابق clips.csv):</label>
-<input id="videoId" placeholder="clip01" autocomplete="off" maxlength="150"></div>
+<input id="videoId" placeholder="clip01" autocomplete="off" maxlength="300"></div>
 <video id="player" controls preload="metadata"></video>
 <p id="info">ویدئو انتخاب نشده است.</p>
 <div class="row">
@@ -66,7 +66,7 @@ const events=[];
 let objectUrl=null;
 let durationMs=null;
 function status(message){$('status').textContent=message;}
-function key(id){return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,149}$/.test(id);}
+function key(id){return id.length>0&&id.length<=300&&!/[\x00-\x1F]/.test(id);}
 function integer(id){const v=Number($(id).value);return $(id).value!==''&&Number.isSafeInteger(v)?v:null;}
 function now(){return Math.round(video.currentTime*1000);}
 function escapeCsv(s){return '"'+String(s).replaceAll('"','""').replace(/[\r\n]/g,' ')+'"';}
@@ -91,7 +91,7 @@ $('videoFile').onchange=()=>{
   if(!file){video.removeAttribute('src');$('info').textContent='ویدئو انتخاب نشده';return;}
   objectUrl=URL.createObjectURL(file);
   video.src=objectUrl;
-  if(!$('videoId').value)$('videoId').value=file.name.replace(/\.[^.]+$/,'').replace(/[^A-Za-z0-9_.-]/g,'_').slice(0,150);
+  if(!$('videoId').value)$('videoId').value=file.name;
   $('info').textContent='در حال خواندن مدت فایل…';
 };
 video.onloadedmetadata=()=>{
