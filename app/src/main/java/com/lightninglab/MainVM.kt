@@ -83,7 +83,8 @@ data class CloudVideoFrameResult(
     val texture: Float,
     val kindLabel: String,
     /** Optional multi-label structural feature scores from the separately imported TFLite model. */
-    val structuralFeatures: List<Pair<String, Float>>? = null
+    val structuralFeatures: List<Pair<String, Float>>? = null,
+    val quality: SkyFrameQuality.Result? = null
 )
 data class CloudVideoReport(
     val durationMillis: Long,
@@ -1449,13 +1450,14 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
 
     var wxBitmap by mutableStateOf<Bitmap?>(null)
     var wx by mutableStateOf<CloudAnalysis.Result?>(null)
+    var skyPhotoQuality by mutableStateOf<SkyFrameQuality.Result?>(null)
     fun exportSkyPhotoCsv(destination: Uri) {
         val observation = wx ?: return
         val ranked = topK.toList()
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val payload = SkyPhotoEvidence.csv(observation, ranked)
+                    val payload = SkyPhotoEvidence.csv(observation, ranked, skyPhotoQuality)
                     app.contentResolver.openOutputStream(destination, "wt")?.use { out ->
                         out.write(payload.toByteArray(Charsets.UTF_8))
                         out.flush()
@@ -1470,10 +1472,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun analyzeSky(u: Uri) {
         viewModelScope.launch {
             try {
-                val (bmp, res) = withContext(Dispatchers.Default) {
+                val (bmp, res, quality) = withContext(Dispatchers.Default) {
                     val b = decodeSoftwareBitmap(u, 1024)
                     val px = IntArray(b.width * b.height); b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
-                    b to CloudAnalysis.analyze(px, b.width, b.height)
+                    Triple(b, CloudAnalysis.analyze(px, b.width, b.height), SkyFrameQuality.assess(px, b.width, b.height))
                 }
                 val ranked = withContext(Dispatchers.Default) { cloudModel.classify(bmp) }
                 val synoptic = if (synopticModelReady) withContext(Dispatchers.Default) { cloudSynopticModel.classify(bmp) } else null
@@ -1490,7 +1492,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 segmentationResult = segmented
                 atmosphericSegmentationResult = atmosphericSegmented
                 features.clear(); morphologyCues.clear(); morphologyAssessment = null
-                wxBitmap = bmp; wx = res; infoRes = null
+                wxBitmap = bmp; wx = res; skyPhotoQuality = quality; infoRes = null
             } catch (e: Exception) { info(R.string.error_generic, e.message ?: "image") }
         }
     }
@@ -1576,7 +1578,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                                         oktas = sky.oktas,
                                         texture = sky.texture,
                                         kindLabel = label,
-                                        structuralFeatures = structuralFeatures
+                                        structuralFeatures = structuralFeatures,
+                                        quality = SkyFrameQuality.assess(pixels, frame.width, frame.height)
                                     )
                                     observations += CloudFrameObservation(
                                         elapsedMillis = ms,
