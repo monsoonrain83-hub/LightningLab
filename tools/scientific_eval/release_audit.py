@@ -33,8 +33,10 @@ def audit(model_file: Path, metadata: dict, evaluation: dict, task: str,
     expected = metadata.get("tflite_sha256", "")
     if not isinstance(expected, str) or expected.lower() != actual_hash:
         reasons.append("Model SHA-256 does not match training metadata")
-    if not metadata.get("manifest_sha256") or not metadata.get("dataset_license"):
-        reasons.append("Training manifest fingerprint and dataset license are required")
+    license = str(metadata.get("dataset_license") or "").strip()
+    if not metadata.get("manifest_sha256") or not license or license.upper() in (
+            "UNVERIFIED", "UNKNOWN", "VERIFY", "TODO"):
+        reasons.append("Verified dataset license and training manifest fingerprint are required")
     if not isinstance(metadata.get("training_clips"), int) or metadata["training_clips"] < 1:
         reasons.append("No positive recorded training sample count")
     if not isinstance(metadata.get("test_clips"), int) or metadata["test_clips"] < 1:
@@ -45,14 +47,20 @@ def audit(model_file: Path, metadata: dict, evaluation: dict, task: str,
             reasons.append("Model label order differs from runtime Brixton contract")
         if metadata.get("input_shape") != [1, 8, 224, 224, 3] or metadata.get("output_shape") != [1, 7]:
             reasons.append("Brixton tensor contract mismatch")
+        if metadata.get("temporal_sampling") != "android_detected_event_pm500ms":
+            reasons.append("Brixton training full-clip sampling does not match Android +/-500 ms event window")
     elif task == "cloud-genus":
         if metadata.get("labels") != task_labels:
             reasons.append("Cloud genus label order mismatch")
+        if metadata.get("sampling") != "aspect_preserving_center_rgb128":
+            reasons.append("Cloud model image preprocessing does not match Android")
     else:
         # Three-head WMO models have one classifier per level; require all
         # head-order metadata and evaluate each head separately.
         if metadata.get("head_order") != ["CL", "CM", "CH"] or metadata.get("class_order_per_head") != task_labels:
             reasons.append("WMO synoptic head contract mismatch")
+        if metadata.get("input_shape") != [1, 224, 224, 3] or metadata.get("output_shape") != [1, 3, 11]:
+            reasons.append("WMO synoptic tensor contract mismatch")
 
     if evaluation.get("schema") != "lightninglab-scientific-classification-v1":
         reasons.append("Unknown evaluation report schema")
