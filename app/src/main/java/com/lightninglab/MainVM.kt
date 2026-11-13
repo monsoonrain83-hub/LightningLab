@@ -412,13 +412,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         } catch (_: Exception) { false }
     }
 
-    /** Restore only after validating all external URI access and draft overlay files. */
+    /** Validate and pre-decode every draft asset before replacing live editor data. */
     fun recoverVideoDraft() {
         if (busy || recording) return
         val draft = videoDraftStore.read() ?: run {
             videoDraftStatus = "پیش‌نویس قابل بازیابی پیدا نشد"; return
         }
         val p = draft.project
+        if (!VideoDraftRestoreRules.validate(draft)) {
+            videoDraftStatus = "ساختار پیش‌نویس معتبر نیست؛ ویرایش فعلی تغییر نکرد"; return
+        }
         val referenced = buildList {
             add(draft.videoUri)
             p.segs.mapNotNullTo(this) { it.clip }
@@ -426,58 +429,78 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             p.voice?.let { add(it) }
         }
         if (referenced.any { !canReadDraftUri(it) }) {
-            videoDraftStatus = "دسترسی به فایل‌های اصلی برقرار نیست؛ فایل‌ها را دوباره انتخاب کنید"
+            videoDraftStatus = "دسترسی به فایل‌های اصلی برقرار نیست؛ ویرایش فعلی تغییر نکرد"
             return
         }
-        if (p.overlayClips.any { it.assetFile != null && videoDraftStore.overlay(it.id, it.assetFile) == null }) {
-            videoDraftStatus = "بعضی تصویرهای لایه‌ها در پیش‌نویس موجود نیستند"
-            return
-        }
-        videoDraftJob?.cancel()
-        restoringVideoDraft = true
+
+        // A maliciously large PNG or missing overlay must not destroy the active
+        // editor. Preflight dimensions, then decode everything BEFORE loadVideo.
+        val incomingBitmaps = HashMap<Long, Bitmap>()
+        val incomingOverlays = ArrayList<VideoOverlayClip>()
+        var committed = false
         try {
-            videoUri = null
-            loadVideo(Uri.parse(draft.videoUri))
-            if (videoUri == null) throw java.io.IOException("Video decoder rejected draft source")
-            segments.clear()
-            segments.addAll(p.segs.map { Seg(it.startMs, it.endMs, it.clip?.let(Uri::parse)) })
+            var totalPixels = 0L
+            for (clip in p.overlayClips) {
+                clip.assetFile?.let {
+                    val file = videoDraftStore.overlay(clip.id, it)
+                        ?: throw java.io.IOException("Missing overlay PNG")
+                    val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, dimensions)
+                    if (!VideoDraftRestoreRules.permitsBitmap(
+                            dimensions.outWidth, dimensions.outHeight, totalPixels))
+                        throw java.io.IOException("Overlay dimensions exceed safe limits")
+                    totalPixels += dimensions.outWidth.toLong() * dimensions.outHeight.toLong()
+                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                        ?: throw java.io.IOException("Invalid overlay PNG")
+                    incomingBitmaps[clip.id] = bitmap
+                }
+                incomingOverlays.add(VideoOverlayClip(
+                    clip.id, clip.kind, clip.content, clip.startMs, clip.endMs,
+                    clip.color, clip.size, clip.position, clip.background,
+                    clip.keyframes.map { VideoOverlayKeyframe(it.timeMs, it.alpha, it.position) },
+                    clip.assetFile, clip.locked
+                ))
+            }
+            val incomingSegments = p.segs.map { Seg(it.startMs, it.endMs, it.clip?.let(Uri::parse)) }
+            val incomingEffects = p.effectClips.map {
+                VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs, it.locked)
+            }
+
+            videoDraftJob?.cancel()
+            restoringVideoDraft = true
+            val restoredUri = Uri.parse(draft.videoUri)
+            // Keep the current editor selected when the source decoder refuses a
+            // draft video. loadVideo changes the URI only after reading metadata.
+            loadVideo(restoredUri)
+            if (videoUri != restoredUri) throw java.io.IOException("Video decoder rejected draft source")
+            segments.clear(); segments.addAll(incomingSegments)
             videoMarkers.clear(); videoMarkers.addAll(p.markers)
-            music = p.music?.let(Uri::parse)
-            voice = p.voice?.let(Uri::parse)
+            music = p.music?.let(Uri::parse); voice = p.voice?.let(Uri::parse)
             muteOriginal = p.mute
             vFilter = p.filter; vSpeed = p.speed; vBrightness = p.brightness; vContrast = p.contrast
             vRotate = p.rotate; vFlipH = p.flipH; vFlipV = p.flipV; vCrop = p.crop
             overlayText = p.text; textColor = p.textColor; textSize = p.textSize
             textPos = p.textPos; textBg = p.textBg
             sticker = p.sticker; stickerSize = p.stickerSize; stickerPos = p.stickerPos
-            videoOverlayClips.clear()
-            videoOverlayClips.addAll(p.overlayClips.map { clip ->
-                clip.assetFile?.let {
-                    val file = videoDraftStore.overlay(clip.id, clip.assetFile)
-                        ?: throw java.io.IOException("Missing overlay bitmap")
-                    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                        ?: throw java.io.IOException("Invalid overlay PNG")
-                    videoOverlayBitmaps[clip.id] = bitmap
-                }
-                VideoOverlayClip(clip.id, clip.kind, clip.content, clip.startMs, clip.endMs,
-                    clip.color, clip.size, clip.position, clip.background,
-                    clip.keyframes.map { VideoOverlayKeyframe(it.timeMs, it.alpha, it.position) },
-                    clip.assetFile, clip.locked)
-            })
-            nextVideoOverlayId = (videoOverlayClips.maxOfOrNull { it.id } ?: 0L) + 1L
-            videoEffectClips.clear()
-            videoEffectClips.addAll(p.effectClips.map { VideoEffectClip(it.id, it.filterIndex, it.startMs, it.endMs, it.locked) })
-            nextVideoEffectId = (videoEffectClips.maxOfOrNull { it.id } ?: 0L) + 1L
+            videoOverlayClips.clear(); videoOverlayClips.addAll(incomingOverlays)
+            videoOverlayBitmaps.clear(); videoOverlayBitmaps.putAll(incomingBitmaps)
+            nextVideoOverlayId = (incomingOverlays.maxOfOrNull { it.id } ?: 0L) + 1L
+            videoEffectClips.clear(); videoEffectClips.addAll(incomingEffects)
+            nextVideoEffectId = (incomingEffects.maxOfOrNull { it.id } ?: 0L) + 1L
             volOrig = p.volOrig; volMusic = p.volMusic; volVoice = p.volVoice
             fadeInMusicMs = p.fadeInMusicMs; fadeOutMusicMs = p.fadeOutMusicMs
             fadeInVoiceMs = p.fadeInVoiceMs; fadeOutVoiceMs = p.fadeOutVoiceMs
             muteMusic = p.muteMusic; muteVoice = p.muteVoice; soloAudioTrack = p.soloAudioTrack
             resetVideoHistory()
+            committed = true
             screen = Screen.VIDEO
             videoDraftStatus = "پیش‌نویس بازیابی شد"
         } catch (e: Exception) {
             videoDraftStatus = "بازیابی ناموفق: ${e.message ?: "خطا"}"
-        } finally { restoringVideoDraft = false }
+        } finally {
+            restoringVideoDraft = false
+            if (!committed) incomingBitmaps.values.forEach { if (!it.isRecycled) it.recycle() }
+        }
     }
 
     private var timelineGestureDirty = false
