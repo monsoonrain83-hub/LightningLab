@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--truth", type=Path, required=True)
     e.add_argument("--predictions", type=Path, required=True)
     e.add_argument("--out", type=Path, required=True)
-    e.add_argument("--score-threshold", type=float, default=0.5)
+    e.add_argument("--score-threshold", type=float, default=0.0)
     e.add_argument("--min-iou", type=float, default=0.3)
     e.add_argument("--seed", type=int, default=2026)
     e.add_argument("--bootstraps", type=int, default=400)
