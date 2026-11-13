@@ -38,8 +38,10 @@ def probe_duration_ms(path: Path) -> int:
         duration = float(json.loads(result.stdout)["format"]["duration"])
     except (KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
         raise ValueError("No trustworthy video duration from ffprobe: " + str(path)) from error
+    if not math.isfinite(duration):
+        raise ValueError("Video duration is not finite: " + str(path))
     milliseconds = round(duration * 1000)
-    if not math.isfinite(duration) or not 1 <= milliseconds <= 24 * 3600 * 1000:
+    if not 1 <= milliseconds <= 24 * 3600 * 1000:
         raise ValueError("Invalid video duration: " + str(path))
     return milliseconds
 
