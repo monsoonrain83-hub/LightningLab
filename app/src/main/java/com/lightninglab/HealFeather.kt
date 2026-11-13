@@ -22,12 +22,20 @@ internal object HealFeather {
     fun blend(original: Int, repaired: Int, a: Float): Int {
         if (a >= 0.999f) return repaired
         if (a <= 0.001f) return original
-        val aa = (a * 255f).toInt()
-        val inv = 255 - aa
-        val rr = ((((repaired shr 16) and 255) * aa + ((original shr 16) and 255) * inv) / 255)
-        val gg = ((((repaired shr 8) and 255) * aa + ((original shr 8) and 255) * inv) / 255)
-        val bb = (((repaired and 255) * aa + (original and 255) * inv) / 255)
-        return (0xFF shl 24) or (rr shl 16) or (gg shl 8) or bb
+        val mix = a.coerceIn(0f, 1f)
+        val oldAlpha = (original ushr 24) and 255
+        val newAlpha = (repaired ushr 24) and 255
+        val alpha = (oldAlpha * (1f - mix) + newAlpha * mix).toInt().coerceIn(0, 255)
+        if (alpha == 0) return 0 // Do not leak hidden RGB from transparent pixels.
+        // Alpha-weighted (premultiplied) composition avoids dark halos on PNGs.
+        fun channel(shift: Int): Int {
+            val old = (original ushr shift) and 255
+            val fresh = (repaired ushr shift) and 255
+            val weighted = old * oldAlpha * (1f - mix) + fresh * newAlpha * mix
+            return (weighted / (oldAlpha * (1f - mix) + newAlpha * mix))
+                .toInt().coerceIn(0, 255)
+        }
+        return (alpha shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
     }
 
     /**
