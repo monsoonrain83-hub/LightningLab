@@ -11,7 +11,7 @@ Input contract matches CloudClassifier.kt: float32 RGB [1,224,224,3], 0..255.
 The model includes MobileNetV3 preprocessing. Test images are held out and not used
 for training/model selection. Exact duplicates are grouped before splitting.
 """
-import argparse, hashlib, json, os, random
+import argparse, csv, hashlib, json, os, random
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
@@ -117,12 +117,40 @@ def main():
     cm=confusion_matrix(yt,yp,labels=list(range(len(LABELS))))
     metrics=f'TEST accuracy: {(yt==yp).mean():.4f} (n={len(yt)})\n\n{report}\nConfusion matrix (rows=true, cols=pred; order={LABELS}):\n{cm}\n'
     (out/'metrics.txt').write_text(metrics,encoding='utf-8'); print(metrics)
+    # Preserve per-image held-out predictions, not only aggregate scores.
+    # Identical bytes stay in the same split (see group split above).
+    pred_file = out/'test_predictions.csv'
+    with pred_file.open('w', encoding='utf-8', newline='') as stream:
+        columns=['sample_id','source_group','split','truth','domain','sha256']+['p_'+label for label in LABELS]
+        writer=csv.DictWriter(stream,fieldnames=columns); writer.writeheader()
+        for index, predicted in zip(test_idx.tolist(), probs.tolist()):
+            row={'sample_id':str(Path(paths[index]).relative_to(root)),
+                 'source_group':hashes[index],'split':'test',
+                 'truth':LABELS[int(ys[index])],
+                 'domain':'ccaim_single_collection','sha256':hashes[index]}
+            row.update({'p_'+label:format(float(predicted[i]),'.9g') for i,label in enumerate(LABELS)})
+            writer.writerow(row)
     converter=tf.lite.TFLiteConverter.from_keras_model(model); converter.optimizations=[tf.lite.Optimize.DEFAULT]
     tflite=converter.convert(); (out/'cloud_model.tflite').write_bytes(tflite)
     (out/'labels.json').write_text(json.dumps({'input':'float32 RGB [1,224,224,3], 0..255; aspect-preserving resize, centered RGB pad=128 (matches Android)','output_order':LABELS,
       'model':'MobileNetV3Small transfer learning','test_count':int(len(yt))},indent=2),encoding='utf-8')
     (out/'split_counts.json').write_text(json.dumps({'train':len(train_idx),'validation':len(val_idx),'test':len(test_idx),
       'class_counts_train':{LABELS[i]:int(counts[i]) for i in range(len(LABELS))}},indent=2),encoding='utf-8')
+    split_for_index={int(i):split for split,part in
+                     [('train',train_idx),('validation',val_idx),('test',test_idx)] for i in part}
+    manifest_rows=sorted(str(Path(p).relative_to(root))+'|'+hashes[i]+'|'+split_for_index[i]
+                         for i,p in enumerate(paths))
+    meta={'labels':LABELS, 'input_shape':[1,SIZE,SIZE,3], 'output_shape':[1,len(LABELS)],
+          'tflite_sha256':hashlib.sha256(tflite).hexdigest(),
+          'manifest_sha256':hashlib.sha256('\\n'.join(manifest_rows).encode('utf-8')).hexdigest(),
+          'test_predictions_sha256':hashlib.sha256(pred_file.read_bytes()).hexdigest(),
+          'training_clips':len(train_idx), 'validation_clips':len(val_idx),
+          'test_clips':len(test_idx), 'seed':a.seed,
+          'dataset_license':'UNVERIFIED',
+          'dataset_license_caveat':'Verify original CCAiM dataset card and redistribution rights before public release',
+          'sampling':'aspect_preserving_center_rgb128',
+          'domain_limit':'single-starter-collection; independent sites/cameras untested'}
+    (out/'model_metadata.json').write_text(json.dumps(meta,indent=2)+'\\n',encoding='utf-8')
     print(f'Wrote {out}/cloud_model.tflite')
 
 if __name__=='__main__': main()
