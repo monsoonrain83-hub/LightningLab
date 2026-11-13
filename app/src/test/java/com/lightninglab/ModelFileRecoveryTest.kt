@@ -50,4 +50,32 @@ class ModelFileRecoveryTest {
             assertFalse(backup.exists())
         } finally { dir.deleteRecursively() }
     }
+
+    /**
+     * Regression (r10.70): prepareForImport used to delete the .previous backup even
+     * when the active target could not be loaded; the last known-good copy must survive.
+     */
+    @Test fun prepareForImportKeepsBackupWhenRestoreFails() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("corrupt") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("also-corrupt") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { false })
+            assertFalse(prepared)
+            assertTrue(backup.exists())
+            assertEquals("also-corrupt", backup.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun prepareForImportRemovesBackupOnlyAfterSuccessfulValidation() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("valid-new") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { true })
+            assertTrue(prepared)
+            assertFalse(backup.exists())
+            assertEquals("valid-new", target.readText())
+        } finally { dir.deleteRecursively() }
+    }
 }
