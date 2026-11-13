@@ -15,6 +15,10 @@ internal class VideoDraftStore(context: Context) {
 
     fun exists(): Boolean = metadata.baseFile.isFile
 
+    /** Extract overlay ids the current project still references, so stale PNGs can be pruned. */
+    private fun referencedOverlayIds(draft: VideoDraft): Set<Long> =
+        draft.project.overlayClips.mapNotNull { it.id.takeIf { id -> id >= 0 } }.toSet()
+
     fun save(draft: VideoDraft, bitmaps: Map<Long, Bitmap>) {
         if (!dir.exists() && !dir.mkdirs()) error("Could not create draft folder")
         // Write images before publishing the manifest; only reference completed files.
@@ -29,6 +33,15 @@ internal class VideoDraftStore(context: Context) {
             } catch (error: Exception) {
                 target.failWrite(stream)
                 throw error
+            }
+        }
+        // Drop overlay PNGs the project no longer references so a restored draft
+        // can never re-attach an image of a deleted layer (and storage does not leak).
+        val referenced = referencedOverlayIds(draft)
+        dir.listFiles()?.forEach { file ->
+            if (file.isFile && file.name.startsWith("overlay_") && file.name.endsWith(".png")) {
+                val id = file.name.removePrefix("overlay_").removeSuffix(".png").toLongOrNull()
+                if (id == null || id !in referenced) file.delete()
             }
         }
         val body = VideoDraftCodec.encode(draft).toByteArray(Charsets.UTF_8)
