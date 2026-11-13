@@ -63,10 +63,7 @@
     <string name="add_music">افزودن موسیقی یا صدا</string>
     <string name="remove_music">حذف موسیقی</string>
     <string name="video_saved">ویدئو در Movies/LightningLab ذخیره شد</string>
-    <string name="about_text">نسخه ۱٫۰
-طراحی: Hassan Mehrzad
-
-تمام پردازش روی همین دستگاه انجام می‌شود. برنامه مجوز اینترنت درخواست نمی‌کند.</string>
+    <string name="about_text">نسخه ۱٫۰-r10.70\nطراحی: Hassan Mehrzad\n\nتمام پردازش روی همین دستگاه انجام می‌شود. برنامه مجوز اینترنت درخواست نمی‌کند.</string>
     <string name="export_video">خروجی ویدئو (MP4)</string>
     <string name="highlights">هایلایت</string>
     <string name="shadows">سایه</string>
@@ -82,10 +79,7 @@
     <string name="weather_title">تحلیل آسمان و ابر</string>
     <string name="pick_sky">انتخاب عکس آسمان</string>
     <string name="wx_hint">عکسی انتخاب کنید که بیشتر آسمان باشد (زمین و خورشید را برش بزنید).</string>
-    <string name="wx_report">پوشش ابر: %1$d%% (%2$d از ۸ اکتا)
-شاخص بافت: %3$s
-روشنایی ابر: %4$d از ۲۵۵
-حدس تقریبی نوع: %5$s</string>
+    <string name="wx_report">پوشش ابر: %1$d%% (%2$d از ۸ اکتا)\nشاخص بافت: %3$s\nروشنایی ابر: %4$d از ۲۵۵\nحدس تقریبی نوع: %5$s</string>
     <string name="wx_disclaimer">برآورد قانون‌محور و اعتبارسنجی‌نشده. پوشش ابر با نسبت قرمز به آبی محاسبه می‌شود؛ نوع ابر فقط حدس تقریبی است و طبقه‌بندی WMO نیست.</string>
     <string name="kind_clear">آسمان صاف</string>
     <string name="kind_thin">ابر نازک و رگه‌ای (شبیه Ci/Cc)</string>
@@ -117,8 +111,8 @@
     <string name="model_import">وارد کردن مدل ابر (.tflite)</string>
     <string name="model_replace">جایگزینی مدل ابر (.tflite)</string>
     <string name="model_loaded">مدل بارگذاری شد</string>
-    <string name="model_invalid">مدل نامعتبر: باید ۱۱ کلاس خروجی بدهد (tools/train_cloud_model.py را ببینید)</string>
-    <string name="model_none_hint">مدل آموزش‌دیده‌ای بارگذاری نشده: نوع نمایش‌داده‌شده فقط حدس تقریبی قانون‌محور است. با tools/train_cloud_model.py (دیتاست CCSN) مدل بسازید و اینجا وارد کنید.</string>
+    <string name="model_invalid">مدل نامعتبر: باید ۱۰ جنس ابر WMO (طبق tools/train_cloud_model.py) یا فرمت قدیمی ۱۱کلاسهٔ CCSN را خروجی بدهد.</string>
+    <string name="model_none_hint">مدل آموزش‌دیده‌ای بارگذاری نشده: نوع نمایش‌داده‌شده فقط حدس تقریبی قانون‌محور است. با tools/train_cloud_model.py یک مدل ۱۰جنس (دیتاست CCAiM، آماده‌سازی با tools/cloud_ai/prepare_ccaim.py) بسازید یا از خروجی قدیمی ۱۱کلاسهٔ CCSN استفاده کنید و اینجا وارد کنید.</string>
     <string name="tab_light">نور</string>
     <string name="tab_color">رنگ</string>
     <string name="tab_detail">جزئیات</string>
