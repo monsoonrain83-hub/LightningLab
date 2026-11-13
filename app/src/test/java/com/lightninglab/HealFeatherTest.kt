@@ -8,8 +8,8 @@ import org.junit.Test
  * Inpaint.fill clears the unknown mask while filling, so heal() must copy the
  * mask first or the feather pass silently becomes dead code and the repair
  * shows a hard circular seam. Only exact, arithmetic-certain assertions are
- * used here: interpolation-weight values are checked through the production
- * weight()/blend() functions rather than recomputed literals.
+ * used; the simulation pretends Inpaint filled the whole patch, so pixels
+ * outside the pre-fill mask keep that value (feathering never touches them).
  */
 class HealFeatherTest {
     @Test fun weightEndpoints() {
@@ -28,9 +28,9 @@ class HealFeatherTest {
 
     /**
      * The real regression: with a copy of the pre-fill mask, feathering actually
-     * runs — the centre keeps the repair, pixels outside the mark stay untouched,
-     * and the boundary ring is restored to the original. Without the mask copy
-     * the boundary stayed fully repaired and showed a hard circular seam.
+     * runs — the centre keeps the repair, the boundary ring is restored to the
+     * original, and pixels outside the mask are never modified. Without the
+     * mask copy the boundary stayed fully repaired and showed a hard seam.
      */
     @Test fun applyFeathersTheBoundaryAndKeepsTheCentre() {
         val bw = 41; val bh = 41
@@ -48,10 +48,10 @@ class HealFeatherTest {
         HealFeather.apply(px, original, wasUnknown, distances, r, feather)
         // Centre (weight 1): repaired colour kept.
         assertEquals(0xFFF0E0D0.toInt(), px[(cy.toInt()) * bw + cx.toInt()])
-        // Outside the mark: untouched original.
-        assertEquals(0xFF102030.toInt(), px[0])
-        // Exactly on the boundary (weight 0): original restored — this is what
-        // the missing mask copy used to break.
+        // Outside the mark: feathering never touches it, so the filled value stays.
+        assertEquals(0xFFF0E0D0.toInt(), px[0])
+        // Exactly on the boundary (weight 0, inside the mask): original restored —
+        // this is what the missing mask copy used to break.
         val onEdge = (cy.toInt()) * bw + (cx.toInt() + 10)
         assertEquals(0xFF102030.toInt(), px[onEdge])
     }
