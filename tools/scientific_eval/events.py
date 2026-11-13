@@ -73,8 +73,8 @@ def parse(clips_path: Path, truth_path: Path, predictions_path: Path) -> list[di
                 raise ValueError("Invalid event time or score") from exc
             if start < 0 or end <= start or end > clips[vid]["duration_ms"]:
                 raise ValueError("Event outside declared video duration")
-            if key == "predictions" and (not math.isfinite(score) or not 0 <= score <= 1):
-                raise ValueError("Prediction score must be finite and in [0,1]")
+            if key == "predictions" and (not math.isfinite(score) or score < 0):
+                raise ValueError("Detector ranking score must be finite and nonnegative; it is NOT a probability")
             clips[vid][key].append({"event_id": event_id, "start_ms": start,
                                     "end_ms": end, "score": score})
     return list(clips.values())
@@ -89,7 +89,7 @@ def interval_iou(a: dict, b: dict) -> float:
 
 
 def score_events(clips: list[dict], threshold: float, min_iou: float = 0.3) -> dict:
-    if not 0.0 <= threshold <= 1.0 or not 0 < min_iou <= 1.0:
+    if not math.isfinite(threshold) or threshold < 0.0 or not 0 < min_iou <= 1.0:
         raise ValueError("Invalid score/IoU thresholds")
     tp = fp = fn = 0
     onset_errors: list[int] = []
@@ -132,7 +132,7 @@ def score_events(clips: list[dict], threshold: float, min_iou: float = 0.3) -> d
             "threshold": threshold, "min_iou": min_iou}
 
 
-def evaluate(clips: list[dict], threshold: float = 0.5, min_iou: float = 0.3,
+def evaluate(clips: list[dict], threshold: float = 0.0, min_iou: float = 0.3,
              seed: int = 2026, bootstraps: int = 400) -> dict:
     if not any(c["split"] in ("test", "external") for c in clips):
         raise ValueError("No independently labelled test/external videos")
@@ -160,6 +160,7 @@ def evaluate(clips: list[dict], threshold: float = 0.5, min_iou: float = 0.3,
         "results": report,
         "limitations": [
             "One-to-one interval IoU matching against expert event annotations.",
+            "Detector scores are uncalibrated nonnegative ranking values, NOT probabilities and not confined to [0,1].",
             "Detection score threshold and IoU threshold MUST be fixed using validation, before opening test.",
             "Negative clips are required to estimate deployment false alarms; no negative clips means no evidence of operational specificity.",
             "FP/hour is an event frequency over all annotated videos, not a probability of lightning occurrence.",
@@ -170,7 +171,7 @@ def evaluate(clips: list[dict], threshold: float = 0.5, min_iou: float = 0.3,
 
 
 def write_report(clips_csv: Path, truth_csv: Path, predicted_csv: Path, output: Path,
-                 threshold: float = 0.5, min_iou: float = 0.3,
+                 threshold: float = 0.0, min_iou: float = 0.3,
                  seed: int = 2026, bootstraps: int = 400) -> dict:
     data = evaluate(parse(clips_csv, truth_csv, predicted_csv), threshold, min_iou, seed, bootstraps)
     output.parent.mkdir(parents=True, exist_ok=True)
