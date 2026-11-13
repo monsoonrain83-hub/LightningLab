@@ -20,19 +20,31 @@ internal class WaveformCache(private val capacity: Int = 12) {
     @Synchronized fun clear() = values.clear()
 }
 
-/** Pure, JVM-testable bucket math for waveform binning. */
+/**
+ * Pure, JVM-testable bucket math for waveform binning.
+ *
+ * When [expectedFrames] is known from container metadata, frames are mapped
+ * proportionally over the whole envelope. When it is unknown (<= 0), a live
+ * monotonic estimate based on frames decoded so far is used instead, so peaks
+ * spread across the envelope rather than collapsing into the last bucket.
+ */
 internal object WaveformBins {
-    /**
-     * Map one decoded frame to a bucket index.
-     * When the container-provided [expectedFrames] is unknown (<= 0), fall back to
-     * a live monotonic estimate based on frames already decoded, so peaks spread
-     * across the whole envelope instead of collapsing into the last bucket.
-     */
     fun index(frame: Long, totalFrames: Long, expectedFrames: Long, bins: Int): Int {
         val safeBins = bins.coerceAtLeast(1)
         val divisor = if (expectedFrames > 0) expectedFrames else max(1L, totalFrames)
         val scaled = frame.toDouble() * safeBins.toDouble() / divisor.toDouble()
         return scaled.toInt().coerceIn(0, safeBins - 1)
+    }
+
+    /**
+     * Sanity helper for regression tests: verify that a frame sequence covering
+     * [frames] total frames spreads over at least [minSpread] distinct buckets.
+     */
+    fun spread(frames: Long, expectedFrames: Long, bins: Int): Int {
+        if (frames <= 0L || bins <= 0) return 0
+        val seen = HashSet<Int>()
+        for (f in 0L until frames) seen.add(index(f, frames, expectedFrames, bins))
+        return seen.size
     }
 }
 
