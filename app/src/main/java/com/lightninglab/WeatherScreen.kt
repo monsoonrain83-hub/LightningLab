@@ -104,6 +104,9 @@ fun WeatherScreen(vm: MainVM) {
                     Text("میانگین ابتدای ویدئو: ${report.cloudCoverTrend.firstMeanPercent}٪ | انتها: ${report.cloudCoverTrend.lastMeanPercent}٪ | تغییر: ${if (report.cloudCoverTrend.changePercentagePoints > 0) "+" else ""}${report.cloudCoverTrend.changePercentagePoints} واحد درصد", style = MaterialTheme.typography.bodySmall)
                     Text("کمینه تا بیشینهٔ برآوردشده: ${report.cloudCoverTrend.minimumPercent} تا ${report.cloudCoverTrend.maximumPercent}٪", style = MaterialTheme.typography.bodySmall)
                     Text(report.cloudCoverTrend.notePersian, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    val flagged = report.frameResults.count { it.quality?.flags?.isNotEmpty() == true }
+                    Text("کنترل کیفیت RGB: ${flagged} فریم از ${report.sampledFrames} دارای هشدار روشنایی/تاریکی/رنگ گرم بوده‌اند.",
+                        style = MaterialTheme.typography.bodySmall, color = Storm.muted)
                     if (report.temporalConsensus.framesWithModelOutput > 0) {
                         Spacer(Modifier.height(6.dp))
                         Text("جمع‌بندی چندفریمی مدل", style = MaterialTheme.typography.titleSmall)
@@ -142,6 +145,9 @@ fun WeatherScreen(vm: MainVM) {
                         val genusText = frame.genusCode?.let { CloudInfo.genusName(it) } ?: "مدل جنس مشخصی پیشنهاد نکرد"
                         val scoreText = frame.score?.let { " · امتیاز خام ${String.format(Locale.US, "%.2f", it)}" } ?: ""
                         Text("$time — $genusText$scoreText | پوشش ${frame.coverPercent}٪ (${frame.oktas}/8 اکتا) | ${frame.kindLabel}", style = MaterialTheme.typography.bodySmall)
+                        frame.quality?.takeIf { it.flags.isNotEmpty() }?.let { quality ->
+                            Text("⚠ ${quality.noteFa}", style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                        }
                     }
                     if (report.evolution.events.isNotEmpty()) {
                         Text("رویدادهای زمانی", style = MaterialTheme.typography.titleSmall)
@@ -191,6 +197,11 @@ fun WeatherScreen(vm: MainVM) {
                         String.format(Locale.US, "%.1f", r.texture), r.cloudLuma.roundToInt(), stringResource(kindRes(r.kind))),
                         style = MaterialTheme.typography.bodyMedium)
                     Text(stringResource(R.string.wx_disclaimer), style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    vm.skyPhotoQuality?.let { quality ->
+                        Text("کنترل RGB: روشنِ اشباع ${quality.clippedPercent}٪، بسیار تاریک ${quality.darkPercent}٪، غالباً قرمز ${quality.warmRedPercent}٪",
+                            style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                        Text(quality.noteFa, style = MaterialTheme.typography.bodySmall, color = Storm.muted)
+                    }
                 }
                 vm.synopticPredictions?.let { result ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
