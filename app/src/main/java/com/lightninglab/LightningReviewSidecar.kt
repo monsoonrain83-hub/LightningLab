@@ -37,7 +37,8 @@ internal class LightningReviewSidecar(context: Context) {
     }
 
     @Synchronized
-    fun read(source: String): Map<String, LightningReview> = try {
+    fun read(source: String): Map<String, LightningReview> {
+        return try {
         val disk = file(source)
         if (!disk.baseFile.isFile || disk.baseFile.length() > 100_000L) return emptyMap()
         val doc = JSONObject(disk.openRead().use { it.readBytes().toString(Charsets.UTF_8) })
@@ -53,7 +54,8 @@ internal class LightningReviewSidecar(context: Context) {
                 state != null && state != LightningReview.UNREVIEWED) result[key] = state
         }
         result
-    } catch (_: Exception) { emptyMap() }
+        } catch (_: Exception) { emptyMap() }
+    }
 
     @Synchronized
     fun save(source: String, decisions: Map<String, LightningReview>) {
