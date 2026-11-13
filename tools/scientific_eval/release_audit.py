@@ -29,6 +29,10 @@ def audit(model_file: Path, metadata: dict, evaluation: dict, task: str,
     if not 0 <= min_macro_f1 <= 1 or not 0 <= max_ece <= 1:
         raise ValueError("Invalid quality thresholds")
     reasons = []
+    with model_file.open("rb") as input_stream:
+        magic = input_stream.read(8)
+    if len(magic) < 8 or magic[4:8] != b"TFL3" or model_file.stat().st_size < 256:
+        reasons.append("Model does not have the expected TFLite FlatBuffer header/size")
     actual_hash = sha256_file(model_file)
     expected = metadata.get("tflite_sha256", "")
     if not isinstance(expected, str) or expected.lower() != actual_hash:
