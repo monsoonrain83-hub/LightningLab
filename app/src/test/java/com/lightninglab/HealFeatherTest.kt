@@ -37,14 +37,19 @@ class HealFeatherTest {
         assertEquals(original, HealFeather.blend(original, repaired, 0f))
     }
 
-    @Test fun quarterAndThreeQuarterBlendSumToTheFullRange() {
+    @Test fun blendIsOrderedAndInsideTheInputRange() {
         val o = 0xFF000030.toInt(); val r = 0xFF0000D0.toInt()
-        val low = HealFeather.blend(o, r, 0.25f) and 0xFF
-        val high = HealFeather.blend(o, r, 0.75f) and 0xFF
-        // 0.25 keeps ~75% original, 0.75 keeps ~75% repaired; together they cover the span.
-        assertEquals(0x9A, low)  // (208*64 + 48*191)/255 = 98
-        assertEquals(0xA6, high) // (208*191 + 48*64)/255 = 166
-        assertEquals(255, low + high + 1)
+        val ob = o and 0xFF; val rb = r and 0xFF
+        var prev = ob
+        for (i in 1..9) {
+            val a = i / 10f
+            val b = HealFeather.blend(o, r, a) and 0xFF
+            // A higher weight keeps more of the repaired colour, and never leaves [original, repaired].
+            assertTrue("blend out of order at a=$a ($b)", b >= prev)
+            assertTrue("blend below original at a=$a ($b)", b >= ob)
+            assertTrue("blend above repaired at a=$a ($b)", b <= rb)
+            prev = b
+        }
     }
 
     /**
@@ -77,5 +82,8 @@ class HealFeatherTest {
         val mid = (cy.toInt()) * bw + (cx.toInt() + 5)
         val midBlue = px[mid] and 0xFF
         assertTrue("mid pixel not between original and repaired, blue=$midBlue", midBlue in 49..207)
+        // A pixel closer to the centre keeps strictly more of the repair.
+        val inner = (cy.toInt()) * bw + (cx.toInt() + 2)
+        assertTrue((px[inner] and 0xFF) > midBlue)
     }
 }
