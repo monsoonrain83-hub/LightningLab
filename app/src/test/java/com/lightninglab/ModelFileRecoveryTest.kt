@@ -53,17 +53,38 @@ class ModelFileRecoveryTest {
 
     /**
      * Regression (r10.70): prepareForImport used to delete the .previous backup even
-     * when the active target could not be loaded; the last known-good copy must survive.
+     * when the active target could not be loaded or restored. Here the target cannot
+     * be removed (non-empty directory), so the restore aborts and the last
+     * known-good backup must survive for manual recovery.
      */
-    @Test fun prepareForImportKeepsBackupWhenRestoreFails() {
+    @Test fun prepareForImportKeepsBackupWhenRestoreCannotProceed() {
         val dir = tempDir()
         try {
-            val target = File(dir, "model.tflite").apply { writeText("corrupt") }
-            val backup = File(dir, "model.tflite.previous").apply { writeText("also-corrupt") }
+            val target = File(dir, "model.tflite").apply {
+                mkdirs()
+                File(this, "child.txt").writeText("occupied")
+            }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
             val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { false })
             assertFalse(prepared)
             assertTrue(backup.exists())
-            assertEquals("also-corrupt", backup.readText())
+            assertEquals("valid-old", backup.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    /**
+     * A backup that restores cleanly is consumed: it becomes the active target and
+     * no stale .previous copy is left behind.
+     */
+    @Test fun prepareForImportConsumesBackupOnSuccessfulRestore() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("broken") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { target.readText() == "valid-old" })
+            assertTrue(prepared)
+            assertEquals("valid-old", target.readText())
+            assertFalse(backup.exists())
         } finally { dir.deleteRecursively() }
     }
 
