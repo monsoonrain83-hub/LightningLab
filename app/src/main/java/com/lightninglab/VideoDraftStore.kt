@@ -33,7 +33,7 @@ internal class VideoDraftStore(context: Context) {
     @Synchronized
     fun save(draft: VideoDraft, bitmaps: Map<Long, Bitmap>) {
         if (!dir.exists() && !dir.mkdirs()) error("Could not create draft folder")
-        val token = System.nanoTime().coerceAtLeast(0L)
+        val token = System.nanoTime() and Long.MAX_VALUE
         val filenames = HashMap<Long, String>()
         for ((id, bitmap) in bitmaps) {
             require(id >= 0 && !bitmap.isRecycled)
