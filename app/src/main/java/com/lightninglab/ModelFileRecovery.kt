@@ -3,76 +3,78 @@ package com.lightninglab
 import java.io.File
 
 /**
- * Recovers an interrupted TensorFlow Lite model replacement.
- *
- * Imports use a sibling `.previous` file as a rollback copy. If Android kills the
- * process between moving the old model aside and validating the new one, this
- * helper restores the last known-good model instead of silently discarding it.
+ * Transactional TFLite imports: a .previous recovery copy survives until the
+ * candidate has passed the actual model loader's tensor-contract checks.
  */
 internal object ModelFileRecovery {
-    /**
-     * Load [target]. If it is invalid and [backup] exists, restore the backup and
-     * retry. The caller owns interpreter lifecycle through [close] and [load].
-     */
     fun loadOrRestore(
-        target: File,
-        backup: File,
-        close: () -> Unit,
-        load: () -> Boolean
+        target: File, backup: File, close: () -> Unit, load: () -> Boolean
     ): Boolean {
-        if (!target.exists() && backup.isFile) moveOrCopy(backup, target)
-
-        val currentWorks = safelyLoad(load)
-        if (currentWorks) {
-            if (backup.exists()) backup.delete()
+        if (safelyLoad(load)) {
+            backup.takeIf { it.isFile }?.delete()
             return true
         }
-
         closeSafely(close)
         if (!backup.isFile) return false
-
-        if (target.exists() && !target.delete()) return false
         return try {
-            moveOrCopy(backup, target)
-            val restoredWorks = safelyLoad(load)
-            if (restoredWorks && backup.exists()) backup.delete()
-            restoredWorks
+            // Never MOVE the only recovery copy before the restored model loads.
+            if (target.exists() && !target.delete()) return false
+            backup.copyTo(target, overwrite = true)
+            val restored = safelyLoad(load)
+            if (restored) backup.delete()
+            restored
+        } catch (_: Throwable) { false }
+    }
+
+    fun prepareForImport(
+        target: File, backup: File, close: () -> Unit, load: () -> Boolean
+    ): Boolean = loadOrRestore(target, backup, close, load)
+
+    /**
+     * Staging must contain a complete, non-empty candidate in the same directory.
+     * A corrupt candidate cannot destroy the previous model, even if restore fails.
+     */
+    fun installCandidate(
+        target: File, backup: File, staging: File, close: () -> Unit, load: () -> Boolean
+    ): Boolean {
+        if (!staging.isFile || staging.length() <= 0L || staging.parentFile != target.parentFile ||
+            backup.parentFile != target.parentFile || staging == target || staging == backup) return false
+        val hadOld = target.isFile
+        // A prior interrupted transaction must be resolved before overwriting .previous.
+        if (backup.isFile && !loadOrRestore(target, backup, close, load)) return false
+        val existing = target.isFile
+        closeSafely(close)
+        return try {
+            if (existing) {
+                if (backup.exists() && !backup.delete()) return false
+                // Preserve the source file; do not rename the only valid copy.
+                target.copyTo(backup, overwrite = true)
+                if (backup.length() != target.length()) error("Incomplete model backup")
+            }
+            if (target.exists() && !target.delete()) error("Cannot replace existing model")
+            if (!staging.renameTo(target)) error("Cannot publish staged model")
+            if (!safelyLoad(load)) error("New model failed interpreter validation")
+            backup.delete() // only after the new active model loaded successfully
+            true
         } catch (_: Throwable) {
+            closeSafely(close)
+            if (backup.isFile) {
+                try {
+                    if (target.exists()) target.delete()
+                    backup.copyTo(target, overwrite = true)
+                    if (safelyLoad(load)) backup.delete()
+                } catch (_: Throwable) { /* leave last recovery backup intact */ }
+            } else if (!hadOld && target.exists()) {
+                target.delete()
+            }
             false
         }
     }
 
-    /**
-     * Resolve a previous interrupted transaction before starting a new import.
-     * Returns true when the active target is loaded and validated. The backup is
-     * only removed after that success, so a failed restore keeps the last
-     * known-good copy available for manual recovery.
-     */
-    fun prepareForImport(
-        target: File,
-        backup: File,
-        close: () -> Unit,
-        load: () -> Boolean
-    ): Boolean {
-        // Preserve a backup until the active target has been validated.
-        val restored = loadOrRestore(target, backup, close, load)
-        if (restored && target.exists() && backup.exists()) backup.delete()
-        return restored
-    }
-
-    private fun moveOrCopy(from: File, to: File) {
-        if (from.renameTo(to)) return
-        from.copyTo(to, overwrite = true)
-        if (!from.delete()) throw IllegalStateException("Could not remove recovery backup")
-    }
-
-    private fun safelyLoad(load: () -> Boolean): Boolean = try {
-        load()
-    } catch (_: Throwable) {
-        false
-    }
+    private fun safelyLoad(load: () -> Boolean): Boolean =
+        try { load() } catch (_: Throwable) { false }
 
     private fun closeSafely(close: () -> Unit) {
-        try { close() } catch (_: Throwable) { /* recovery must continue */ }
+        try { close() } catch (_: Throwable) { }
     }
 }
