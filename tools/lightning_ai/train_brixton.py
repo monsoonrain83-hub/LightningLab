@@ -230,27 +230,45 @@ def build_and_train(args) -> dict:
         "confusion_matrix": confusion_matrix(y_true, y_pred, labels=list(range(len(LABELS)))).tolist(),
     }
     (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    # Export every held-out prediction WITH original independent group, label,
-    # SHA-256 and camera provenance, never just a summary accuracy number.
-    predictions_file = output_dir / "test_predictions.csv"
-    with predictions_file.open("w", encoding="utf-8", newline="") as stream:
-        fieldnames = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
-            "p_" + label for label in LABELS
-        ]
-        writer = csv.DictWriter(stream, fieldnames=fieldnames)
-        writer.writeheader()
-        for source_row, scores in zip(partitions["test"], y_score.tolist()):
-            row = {
+    # Fit calibration on validation only; preserve a completely untouched test.
+    validation_score = []
+    for index in range(len(validation_seq)):
+        batch_x, _ = validation_seq[index]
+        validation_score.extend(model.predict(batch_x, verbose=0).tolist())
+    evaluation_rows = []
+    for split, source_rows, scores in (
+        ("validation", partitions["validation"], validation_score),
+        ("test", partitions["test"], y_score.tolist()),
+    ):
+        if len(source_rows) != len(scores):
+            raise RuntimeError("Prediction rows lost alignment with manifest order")
+        for source_row, values in zip(source_rows, scores):
+            record = {
                 "sample_id": source_row["relative_path"],
                 "source_group": source_row["event_group"],
-                "split": "test",
+                "split": split,
                 "truth": source_row["label"],
                 "domain": "brixton_camera_" + str(source_row["camera"]),
                 "sha256": source_row["sha256"],
             }
-            row.update({"p_" + label: format(float(scores[i]), ".9g")
-                        for i, label in enumerate(LABELS)})
-            writer.writerow(row)
+            record.update({"p_" + label: format(float(values[i]), ".9g")
+                           for i, label in enumerate(LABELS)})
+            evaluation_rows.append(record)
+    predictions_file = output_dir / "test_predictions.csv"
+    validation_file = output_dir / "validation_predictions.csv"
+    combined_file = output_dir / "evaluation_predictions.csv"
+    fieldnames = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
+        "p_" + label for label in LABELS
+    ]
+    for file, records in (
+        (predictions_file, [r for r in evaluation_rows if r["split"] == "test"]),
+        (validation_file, [r for r in evaluation_rows if r["split"] == "validation"]),
+        (combined_file, evaluation_rows),
+    ):
+        with file.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(records)
     model.save(output_dir / "model.keras")
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
@@ -273,6 +291,8 @@ def build_and_train(args) -> dict:
         "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
         "test_predictions_sha256": hashlib.sha256(predictions_file.read_bytes()).hexdigest(),
+        "validation_predictions_sha256": hashlib.sha256(validation_file.read_bytes()).hexdigest(),
+        "evaluation_predictions_sha256": hashlib.sha256(combined_file.read_bytes()).hexdigest(),
         "temporal_sampling": (
             "android_detected_event_pm500ms" if args.event_times is not None
             else "full_clip_uniform_8_frames"
