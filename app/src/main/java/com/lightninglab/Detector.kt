@@ -162,7 +162,8 @@ class Detector(private val ctx: Context) {
                     val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h); b.recycle()
                     out += sampleFromLuma(t, FloatArray(w * h) { ImgUtil.luma(px[it]) }, w, h)
                 }
-                t = (t + 100L).coerceAtMost(end); onProgress(min(0.9f, window.progress(LightningScanWindow.microseconds(t)) * 0.9f))
+                t = if (end - t <= 100L) end else t + 100L
+                onProgress(min(0.9f, window.progress(LightningScanWindow.microseconds(t)) * 0.9f))
             }
         } finally { r.release() }
         return out
