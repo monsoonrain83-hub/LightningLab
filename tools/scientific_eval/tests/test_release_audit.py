@@ -14,7 +14,7 @@ class ScientificReleaseAuditTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.path = Path(self.temp.name) / "candidate.tflite"
-        self.path.write_bytes(b"\\x10\\x00\\x00\\x00TFL3".decode("unicode_escape").encode("latin1") + b"synthetic test fixture" * 20)
+        self.path.write_bytes(bytes([16, 0, 0, 0]) + b"TFL3" + b"synthetic test fixture" * 20)
         self.metadata = {
             "tflite_sha256": hashlib.sha256(self.path.read_bytes()).hexdigest(),
             "manifest_sha256": "b"*64, "dataset_license": "CC BY 4.0",
