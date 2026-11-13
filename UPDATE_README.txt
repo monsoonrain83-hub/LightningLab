@@ -1,3 +1,60 @@
+## r10.70 — رفع باگ‌های واقعی سورس r10.69 (versionCode 77)
+
+- AudioWaveform: رفع فروپاشی پیک‌ها در آخرین bin وقتی metadata مدت صدا (KEY_DURATION) موجود نیست؛ ریاضیات توزیع به شیء خالص WaveformBins منتقل شد و تست‌های رگرسیون WaveformBinsTest.kt اضافه شد.
+- VideoDraftStore: حذف PNGهای لایه‌هایی که پروژه دیگر ارجاع نمی‌دهد، پیش از انتشار manifest پیش‌نویس؛ جلوگیری از بازیابی تصویر لایهٔ حذف‌شده و نشت حافظهٔ ذخیره‌سازی.
+- ModelFileRecovery: بکاپ .previous فقط پس از اعتبارسنجی موفق target حذف می‌شود؛ سه تست رگرسیون جدید.
+- strings.xml (en/fa/ar): راهنمای import مدل با قرارداد واقعی هماهنگ شد (۱۰ جنس WMO اصلی + ۱۱کلاسهٔ legacy CCSN)؛ about_text به 1.0-r10.70 به‌روز شد.
+- فایل خالی مردهٔ detektor.kt با stub مستند جایگزین شد.
+- CI روی PR #29 سبز: تست‌های Python، JVM و ساخت APK موفق. تست گوشی فیزیکی همچنان لازم است.
+
+---
+
+## r10.68–r10.69 — پیش‌نویس خودکار ویدئو و امنیت پروژه‌های عکس (versionCode 75–76)
+
+- r10.68 (PR #27): پیش‌نویس خودکار ویدئو با تأخیر ۲٫۵ ثانیه پس از هر ویرایش ثبت‌شده، نگهداری اتمیک متادیتا و تصاویر لایه‌ها با AtomicFile، مجوز خواندن پایدار URI و امکان بازیابی یا حذف آگاهانهٔ پیش‌نویس. ویدئو/صوت کپی نمی‌شوند؛ بازیابی به باقی‌ماندن فایل اصلی و اعتبار مجوز وابسته است.
+- r10.69 (PR #28): کنترل مسیرهای امن و یکپارچگی SHA-256 پروژه‌های جدید Photo Studio پیش از بازکردن یا انتشار؛ رد manifest مخدوش؛ سازگاری پروژه‌های قدیمی بدون integrity.json با بررسی وجود فایل‌های ارجاع‌شده.
+
+---
+
+## r10.66–r10.67 — یکپارچگی پروژه‌ها و بازبینی UX (versionCode 73–74)
+
+- r10.66: فهرست SHA-256 و اندازهٔ فایل‌های هر پروژهٔ ویدئو، بررسی سلامت فایل‌ها پیش از بازگشایی و کنترل مسیرهای ناامن.
+- r10.67: بازبینی دستی رخداد صاعقه (تأیید/رد/نامشخص) مستقل از خروجی مدل در schema v3؛ گزارش CSV عکس و ویدئوی آسمان؛ سه اسلات ظاهر عکس؛ تخمین زمان/حجم خروجی ویدئو؛ چیدمان واکنش‌گرای خانه.
+
+---
+
+## r10.62–r10.65 — pipeline آموزش صاعقه و خروجی گزارش (versionCode 69–72)
+
+- r10.62: pipeline آموزش temporal TFLite برای هفت برچسب Brixton، هشت فریم RGB، MobileNetV3Small و گزارش macro-F1/Brier/confusion matrix.
+- r10.63 (PR #21): کنترل SHA-256 پیش از آموزش، رد نشت داده و metadata بازتولیدپذیری.
+- r10.64: خروجی CSV/JSON رخدادها، import امن مدل زمانی TFLite و sampling هشت فریم.
+- r10.65: بهینه‌سازی استخراج فریم با retriever مشترک، کنترل لغو و schema v2 گزارش.
+
+---
+
+## r10.58–r10.61 — کارت رخداد، پروفایل‌های خروجی و دیتاست (versionCode 65–68)
+
+- r10.58: کارت رخداد صاعقه با زمان شروع/پایان، تعداد پالس و گستردگی روشنایی.
+- r10.59: پروفایل‌های خروجی H.264 با رزولوشن و bitrate متناسب و عدم upscale.
+- r10.60: آماده‌سازی دیتاست ویدئویی Brixton (CC BY 4.0) با هفت برچسب و split زمانی.
+- r10.61: مقایسهٔ لغزشی before/after در Photo Studio.
+
+---
+
+## r10.46–r10.57 — بازیابی سورس و زیرساخت مدل‌ها (versionCode 53–64)
+
+- r10.46–r10.49: بازیابی سورس، اصلاح pipeline بیلد، SRT، مدل‌های ابر، DayLine، fade صوت، waveform cache و پروژه‌های ویدئو.
+- r10.50: تاریخچهٔ یکپارچهٔ undo/redo ویدئو، انتشار اتمیک پروژه و preflight خروجی.
+- r10.51: کنترل مستقل mute/solo صدا، قفل overlay/effect، مرتب‌سازی قطعات و هیستوگرام عکس.
+- r10.52: انتخاب چند قطعه، جابه‌جایی گروه پیوسته و حذف گروهی با Undo.
+- r10.53: منحنی‌های پنج‌نقطه‌ای R/G/B و RGB مشترک با LUT.
+- r10.54: دسته‌بندی نشانه‌های ظاهری صاعقه (heuristic).
+- r10.55: pipeline دادهٔ چندناظر Montenegro با soft-label برای CL/CM/CH.
+- r10.56: نمودار تعاملی drag برای منحنی عکس.
+- r10.57: runtime و pipeline آموزش مدل سه‌سر WMO با خروجی [1,3,11].
+
+---
+
 ## r10.45 — تایم‌لاین تعاملی و ویرایش دقیق‌تر ویدئو
 
 - خط‌کش تایم‌لاین اکنون تعاملی است: لمس یا کشیدن روی خط‌کش، playhead را به همان موقعیت می‌برد و پیش‌نمایش ویدئو را seek می‌کند؛ این رفتار با زوم ۱× تا ۴× نیز هماهنگ است.
@@ -81,7 +138,7 @@ VIDEO EDITOR
 - Added horizontal timeline zoom (1x–4x), Split-at-playhead for selected segments, and insertion of new overlays at the current playhead with a five-second default duration.
 
 PHOTO EDITOR
-- Selected text, shape and image layers can be moved directly on the canvas by dragging. Gesture updates are committed once at drag end, avoiding one undo entry per pointer event.
+- Selected text, shape, and image layers can be moved directly on the canvas by dragging. Gesture updates are committed once at drag end, avoiding one undo entry per pointer event.
 - Duplicated shape/image layers become selected immediately.
 
 VALIDATION
