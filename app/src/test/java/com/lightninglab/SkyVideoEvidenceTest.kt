@@ -17,7 +17,7 @@ class SkyVideoEvidenceTest {
         assertTrue(lines[1].startsWith("2,500,20,2,0.15000"))
         assertTrue(lines[2].startsWith("2,2500,80,7,0.75000"))
         assertTrue(lines[2].contains("\"Ci\",0.35000"))
-        assertTrue(lines[1].endsWith("\"\",,,,\"\""))
+        assertTrue(lines[1].endsWith("\"\",,,,,\"\""))
     }
 
     @Test fun emptyReportRetainsHeader() {
