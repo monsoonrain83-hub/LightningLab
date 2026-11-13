@@ -19,6 +19,19 @@ class HealFeatherTest {
         assertEquals(0f, HealFeather.weight(15f, 10f, 6f), 0f)
     }
 
+    @Test fun transparentPNGHealingPreservesAlphaAndColour() {
+        val transparent = 0x00000000
+        val repair = 0xFFFF8040.toInt()
+        val midpoint = HealFeather.blend(transparent, repair, 0.5f)
+        val alpha = (midpoint ushr 24) and 255
+        assertTrue(alpha in 126..129)
+        assertEquals(255, (midpoint ushr 16) and 255)
+        assertEquals(128, (midpoint ushr 8) and 255)
+        assertEquals(64, midpoint and 255)
+        assertEquals(transparent, HealFeather.blend(transparent, repair, 0f))
+        assertEquals(repair, HealFeather.blend(transparent, repair, 1f))
+    }
+
     @Test fun blendKeepsEndpoints() {
         val original = 0xFF102030.toInt()
         val repaired = 0xFFAABBCC.toInt()
