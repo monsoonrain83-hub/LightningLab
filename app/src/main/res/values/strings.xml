@@ -63,10 +63,7 @@
     <string name="add_music">Add music or sound</string>
     <string name="remove_music">Remove music</string>
     <string name="video_saved">Video saved to Movies/LightningLab</string>
-    <string name="about_text">Version 1.0
-Designed by Hassan Mehrzad
-
-All processing happens on this device. The app does not request the internet permission.</string>
+    <string name="about_text">Version 1.0-r10.70\nDesigned by Hassan Mehrzad\n\nAll processing happens on this device. The app does not request the internet permission.</string>
     <string name="export_video">Export video (MP4)</string>
     <string name="highlights">Highlights</string>
     <string name="shadows">Shadows</string>
@@ -82,10 +79,7 @@ All processing happens on this device. The app does not request the internet per
     <string name="weather_title">Sky and cloud analysis</string>
     <string name="pick_sky">Choose a sky photo</string>
     <string name="wx_hint">Use a photo that is mostly sky (crop out ground and sun).</string>
-    <string name="wx_report">Cloud cover: %1$d%% (%2$d/8 oktas)
-Texture index: %3$s
-Cloud brightness: %4$d/255
-Rough type guess: %5$s</string>
+    <string name="wx_report">Cloud cover: %1$d%% (%2$d/8 oktas)\nTexture index: %3$s\nCloud brightness: %4$d/255\nRough type guess: %5$s</string>
     <string name="wx_disclaimer">Rule-based estimate, not validated. Cover uses a red/blue ratio; the type is only a rough guess, not a WMO classification.</string>
     <string name="kind_clear">clear sky</string>
     <string name="kind_thin">thin streaky cloud (Ci/Cc-like)</string>
@@ -117,8 +111,8 @@ Rough type guess: %5$s</string>
     <string name="model_import">Import cloud model (.tflite)</string>
     <string name="model_replace">Replace cloud model (.tflite)</string>
     <string name="model_loaded">Model loaded</string>
-    <string name="model_invalid">Invalid model: it must output 11 classes (see tools/train_cloud_model.py)</string>
-    <string name="model_none_hint">No trained model loaded: the type shown above is only a rough rule-based guess. Train one with tools/train_cloud_model.py (CCSN) and import it here.</string>
+    <string name="model_invalid">Invalid model: it must output the 10 WMO cloud genera (see tools/train_cloud_model.py) or the 11-class legacy CCSN format.</string>
+    <string name="model_none_hint">No trained model loaded: the type shown above is only a rough rule-based guess. Train a 10-genus model with tools/train_cloud_model.py (CCAiM dataset, prepared with tools/cloud_ai/prepare_ccaim.py) or use the legacy 11-class CCSN export, and import it here.</string>
     <string name="tab_light">Light</string>
     <string name="tab_color">Color</string>
     <string name="tab_detail">Detail</string>
@@ -212,7 +206,7 @@ Rough type guess: %5$s</string>
     <string name="hsl_lum">Luminance</string>
     <string name="cutout_btn">Remove background (AI)</string>
     <string name="cutout_done">Background removed. Save as PNG to keep transparency.</string>
-    <string name="cutout_note">Uses Google ML Kit: needs Google Play services and a one-time model download (internet). The result is at most 2048 px on the long side; "Undo removal" restores the original.</string>
+    <string name="cutout_note">Uses Google ML Kit: needs Google Play services and a one-time model download (internet). The result is at most 2048 px on the long side; \"Undo removal\" restores the original.</string>
     <string name="on_device">ON-DEVICE</string>
     <string name="quick_access">Quick access</string>
     <string name="no_cloud_upload">No cloud upload</string>

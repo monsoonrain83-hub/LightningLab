@@ -180,21 +180,12 @@ object PhotoEdit {
                 distances[y * bw + x] = d
                 if (d <= r) unk[y * bw + x] = true
             }
+            // Inpaint.fill clears the mask as it fills, so keep a copy first;
+            // otherwise the boundary feathering below would silently never run.
+            val wasUnknown = unk.copyOf()
             Inpaint.fill(px, bw, bh, unk)
             // Feather the repair boundary to avoid a visible circular seam.
-            for (i in px.indices) if (unk[i]) {
-                val edge = ((r - distances[i]) / feather).coerceIn(0f, 1f)
-                val a = edge * edge * (3f - 2f * edge)
-                if (a < 0.999f) {
-                    val o = original[i]; val f = px[i]
-                    val aa = (a * 255f).toInt()
-                    val inv = 255 - aa
-                    val rr = ((((f shr 16) and 255) * aa + ((o shr 16) and 255) * inv) / 255)
-                    val gg = ((((f shr 8) and 255) * aa + ((o shr 8) and 255) * inv) / 255)
-                    val bb = (((f and 255) * aa + (o and 255) * inv) / 255)
-                    px[i] = (0xFF shl 24) or (rr shl 16) or (gg shl 8) or bb
-                }
-            }
+            HealFeather.apply(px, original, wasUnknown, distances, r, feather)
             out.setPixels(px, 0, bw, x0, y0, bw, bh)
         }
         return out

@@ -10,6 +10,40 @@ import java.nio.file.Files
 class ModelFileRecoveryTest {
     private fun tempDir(): File = Files.createTempDirectory("ll-model-recovery-").toFile()
 
+    @Test fun failedCandidateRestoresLastKnownGoodModel() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("good-old") }
+            val backup = File(dir, "model.tflite.previous")
+            val staged = File(dir, "model.tflite.importing").apply { writeText("bad-new") }
+            val result = ModelFileRecovery.installCandidate(target, backup, staged, {}, { target.readText().startsWith("good") })
+            assertFalse(result)
+            assertEquals("good-old", target.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun successfulCandidatePublishesAndCleansBackup() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("good-old") }
+            val backup = File(dir, "model.tflite.previous")
+            val staged = File(dir, "model.tflite.importing").apply { writeText("good-new") }
+            assertTrue(ModelFileRecovery.installCandidate(target, backup, staged, {}, { target.readText().startsWith("good") }))
+            assertEquals("good-new", target.readText())
+            assertFalse(backup.exists())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun failedRecoveryKeepsBackupForNextAttempt() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("bad") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("good-old") }
+            assertFalse(ModelFileRecovery.loadOrRestore(target, backup, {}, { false }))
+            assertEquals("good-old", backup.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
     @Test fun keepsValidCurrentModelAndRemovesStaleBackup() {
         val dir = tempDir()
         try {
@@ -48,6 +82,55 @@ class ModelFileRecoveryTest {
             assertTrue(loaded)
             assertEquals("valid-old", target.readText())
             assertFalse(backup.exists())
+        } finally { dir.deleteRecursively() }
+    }
+
+    /**
+     * Regression (r10.70): prepareForImport used to delete the .previous backup even
+     * when the active target could not be loaded or restored. Here the target cannot
+     * be removed (non-empty directory), so the restore aborts and the last
+     * known-good backup must survive for manual recovery.
+     */
+    @Test fun prepareForImportKeepsBackupWhenRestoreCannotProceed() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply {
+                mkdirs()
+                File(this, "child.txt").writeText("occupied")
+            }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { false })
+            assertFalse(prepared)
+            assertTrue(backup.exists())
+            assertEquals("valid-old", backup.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    /**
+     * A backup that restores cleanly is consumed: it becomes the active target and
+     * no stale .previous copy is left behind.
+     */
+    @Test fun prepareForImportConsumesBackupOnSuccessfulRestore() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("broken") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { target.readText() == "valid-old" })
+            assertTrue(prepared)
+            assertEquals("valid-old", target.readText())
+            assertFalse(backup.exists())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun prepareForImportRemovesBackupOnlyAfterSuccessfulValidation() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("valid-new") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("valid-old") }
+            val prepared = ModelFileRecovery.prepareForImport(target, backup, {}, { true })
+            assertTrue(prepared)
+            assertFalse(backup.exists())
+            assertEquals("valid-new", target.readText())
         } finally { dir.deleteRecursively() }
     }
 }

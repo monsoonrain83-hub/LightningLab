@@ -63,10 +63,7 @@
     <string name="add_music">إضافة موسيقى أو صوت</string>
     <string name="remove_music">إزالة الموسيقى</string>
     <string name="video_saved">تم حفظ الفيديو في Movies/LightningLab</string>
-    <string name="about_text">الإصدار 1.0
-تصميم: Hassan Mehrzad
-
-تتم المعالجة بالكامل على هذا الجهاز. لا يطلب التطبيق إذن الإنترنت.</string>
+    <string name="about_text">الإصدار 1.0-r10.70\nتصميم: Hassan Mehrzad\n\nتتم المعالجة بالكامل على هذا الجهاز. لا يطلب التطبيق إذن الإنترنت.</string>
     <string name="export_video">تصدير الفيديو (MP4)</string>
     <string name="highlights">الإضاءات</string>
     <string name="shadows">الظلال</string>
@@ -82,10 +79,7 @@
     <string name="weather_title">تحليل السماء والغيوم</string>
     <string name="pick_sky">اختر صورة للسماء</string>
     <string name="wx_hint">استخدم صورة معظمها سماء (اقتطع الأرض والشمس).</string>
-    <string name="wx_report">الغطاء السحابي: %1$d%% (%2$d/8 أوكتا)
-مؤشر النسيج: %3$s
-سطوع الغيوم: %4$d/255
-تخمين تقريبي للنوع: %5$s</string>
+    <string name="wx_report">الغطاء السحابي: %1$d%% (%2$d/8 أوكتا)\nمؤشر النسيج: %3$s\nسطوع الغيوم: %4$d/255\nتخمين تقريبي للنوع: %5$s</string>
     <string name="wx_disclaimer">تقدير قائم على قواعد وغير مُتحقَّق منه. الغطاء يعتمد على نسبة الأحمر/الأزرق، والنوع تخمين تقريبي وليس تصنيف WMO.</string>
     <string name="kind_clear">سماء صافية</string>
     <string name="kind_thin">غيوم رقيقة مخططة (شبيهة Ci/Cc)</string>
@@ -117,8 +111,8 @@
     <string name="model_import">استيراد نموذج الغيوم (.tflite)</string>
     <string name="model_replace">استبدال نموذج الغيوم (.tflite)</string>
     <string name="model_loaded">تم تحميل النموذج</string>
-    <string name="model_invalid">نموذج غير صالح: يجب أن يُخرج 11 فئة (انظر tools/train_cloud_model.py)</string>
-    <string name="model_none_hint">لا يوجد نموذج مدرَّب: النوع المعروض تخمين تقريبي قائم على قواعد فقط. درّب نموذجاً بـ tools/train_cloud_model.py (CCSN) واستورده هنا.</string>
+    <string name="model_invalid">نموذج غير صالح: يجب أن يُخرج الأجناس العشرة للغيوم وفق WMO (انظر tools/train_cloud_model.py) أو تنسيق CCSN القديم ذا 11 فئة.</string>
+    <string name="model_none_hint">لا يوجد نموذج مدرَّب: النوع المعروض تخمين تقريبي قائم على قواعد فقط. درّب نموذجاً لعشرة أجناس بـ tools/train_cloud_model.py (مجموعة CCAiM، تُجهَّز بـ tools/cloud_ai/prepare_ccaim.py) أو استخدم تصدير CCSN القديم ذا 11 فئة، واستورده هنا.</string>
     <string name="tab_light">الضوء</string>
     <string name="tab_color">اللون</string>
     <string name="tab_detail">التفاصيل</string>
