@@ -14,10 +14,10 @@ class SkyVideoEvidenceTest {
         val lines = csv.lines().filter { it.isNotEmpty() }
         assertEquals(3, lines.size)
         assertTrue(lines[0].contains("model_softmax_uncalibrated"))
-        assertTrue(lines[1].startsWith("1,500,20,2,0.15000"))
-        assertTrue(lines[2].startsWith("1,2500,80,7,0.75000"))
+        assertTrue(lines[1].startsWith("2,500,20,2,0.15000"))
+        assertTrue(lines[2].startsWith("2,2500,80,7,0.75000"))
         assertTrue(lines[2].contains("\"Ci\",0.35000"))
-        assertTrue(lines[1].endsWith("\"\","))
+        assertTrue(lines[1].endsWith("\"\",,,,\"\""))
     }
 
     @Test fun emptyReportRetainsHeader() {
