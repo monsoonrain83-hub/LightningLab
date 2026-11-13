@@ -10,6 +10,40 @@ import java.nio.file.Files
 class ModelFileRecoveryTest {
     private fun tempDir(): File = Files.createTempDirectory("ll-model-recovery-").toFile()
 
+    @Test fun failedCandidateRestoresLastKnownGoodModel() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("good-old") }
+            val backup = File(dir, "model.tflite.previous")
+            val staged = File(dir, "model.tflite.importing").apply { writeText("bad-new") }
+            val result = ModelFileRecovery.installCandidate(target, backup, staged, {}, { target.readText().startsWith("good") })
+            assertFalse(result)
+            assertEquals("good-old", target.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun successfulCandidatePublishesAndCleansBackup() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("good-old") }
+            val backup = File(dir, "model.tflite.previous")
+            val staged = File(dir, "model.tflite.importing").apply { writeText("good-new") }
+            assertTrue(ModelFileRecovery.installCandidate(target, backup, staged, {}, { target.readText().startsWith("good") }))
+            assertEquals("good-new", target.readText())
+            assertFalse(backup.exists())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun failedRecoveryKeepsBackupForNextAttempt() {
+        val dir = tempDir()
+        try {
+            val target = File(dir, "model.tflite").apply { writeText("bad") }
+            val backup = File(dir, "model.tflite.previous").apply { writeText("good-old") }
+            assertFalse(ModelFileRecovery.loadOrRestore(target, backup, {}, { false }))
+            assertEquals("good-old", backup.readText())
+        } finally { dir.deleteRecursively() }
+    }
+
     @Test fun keepsValidCurrentModelAndRemovesStaleBackup() {
         val dir = tempDir()
         try {
