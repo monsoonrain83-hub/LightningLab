@@ -145,7 +145,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var infoArgs by mutableStateOf<List<Any>>(emptyList())
     val items = mutableStateListOf<Item>()
     private var job: Job? = null
-    private var scanGeneration = 0L
+    @Volatile private var scanGeneration = 0L
 
     // photo editor
     var photoSrc by mutableStateOf<Bitmap?>(null)
@@ -1146,6 +1146,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val reviewSidecar by lazy { LightningReviewSidecar(app) }
     private val reviewRecords = LinkedHashMap<String, LightningReview>()
     private var reviewSaveJob: Job? = null
+    private var reviewDirty = false
     var reviewPersistenceStatus by mutableStateOf<String?>(null)
 
     fun reviewLightningEvent(id: Int, decision: LightningReview) {
@@ -1160,6 +1161,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             reviewRecords[key] = decision
         }
         // Keep the UI responsive; writing a bounded, atomic sidecar occurs on IO.
+        reviewDirty = true
         reviewSaveJob?.cancel()
         val snapshot = reviewRecords.toMap()
         reviewPersistenceStatus = "در حال ذخیرهٔ بررسی‌ها"
@@ -1167,6 +1169,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             try {
                 kotlinx.coroutines.delay(350L)
                 withContext(Dispatchers.IO) { reviewSidecar.save(source, snapshot) }
+                if (uri?.toString() == source && reviewRecords == snapshot) reviewDirty = false
                 reviewPersistenceStatus = "بررسی‌های انسانی ذخیره شدند"
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { reviewPersistenceStatus = "ذخیرهٔ بررسی‌ها ناموفق: ${e.message ?: "خطا"}" }
@@ -1660,8 +1663,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         // Save the last review edits for the PREVIOUS source before clearing its
         // in-memory state; a quick rescan must not silently discard pending edits.
         val previousSource = uri?.toString()
-        val pendingReview = if (reviewPersistenceStatus == "در حال ذخیرهٔ بررسی‌ها")
-            reviewRecords.toMap() else null
+        val pendingReview = if (reviewDirty) reviewRecords.toMap() else null
         reviewSaveJob?.cancel()
 
         val generation = ++scanGeneration
@@ -1670,6 +1672,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         temporalScores.clear()
         lightningReviews.clear()
         reviewRecords.clear()
+        reviewDirty = false
         reviewPersistenceStatus = null
         composite = null
         infoRes = null
@@ -1689,12 +1692,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 }
 
                 val det = Detector(app)
+                val scanSensitivity = sensitivity
                 val gate = LightningScanProgress()
                 val scanned = withContext(Dispatchers.Default) {
                     val generated = ArrayList<Item>()
                     try {
                         val events = det.detect(
-                            u, sensitivity, startMs = startMs, endMs = endMs,
+                            u, scanSensitivity, startMs = startMs, endMs = endMs,
                             onProgress = { fraction ->
                                 if (gate.shouldPublish(fraction)) {
                                     viewModelScope.launch {
