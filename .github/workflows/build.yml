@@ -21,6 +21,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Run only the newest build on each branch/PR; preserve a final main run.
+concurrency:
+  group: lightninglab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
