@@ -76,7 +76,7 @@ def attach_expert_event_windows(rows: list[dict], path: Path) -> None:
                 "sha256": entry["sha256"].strip().lower(),
             }
     rows_by_path = {row["relative_path"]: row for row in rows}
-    if set(annotations) != set(rows_by_path):
+    if len(rows_by_path) != len(rows) or set(annotations) != set(rows_by_path):
         raise ValueError("Expert annotation CSV must match the full training manifest exactly")
     for relative, annotation in annotations.items():
         row = rows_by_path[relative]
