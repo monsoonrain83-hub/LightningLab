@@ -145,6 +145,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var infoArgs by mutableStateOf<List<Any>>(emptyList())
     val items = mutableStateListOf<Item>()
     private var job: Job? = null
+    private var scanGeneration = 0L
 
     // photo editor
     var photoSrc by mutableStateOf<Bitmap?>(null)
@@ -1655,35 +1656,103 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
-        job?.cancel(); reviewSaveJob?.cancel()
-        uri = u; items.clear(); temporalScores.clear(); lightningReviews.clear()
-        reviewRecords.clear(); reviewPersistenceStatus = null; composite = null; infoRes = null
-        busy = true; progress = 0f; stage = R.string.stage_scan
+        job?.cancel()
+        // Save the last review edits for the PREVIOUS source before clearing its
+        // in-memory state; a quick rescan must not silently discard pending edits.
+        val previousSource = uri?.toString()
+        val pendingReview = if (reviewPersistenceStatus == "در حال ذخیرهٔ بررسی‌ها")
+            reviewRecords.toMap() else null
+        reviewSaveJob?.cancel()
+
+        val generation = ++scanGeneration
+        uri = u
+        items.clear()
+        temporalScores.clear()
+        lightningReviews.clear()
+        reviewRecords.clear()
+        reviewPersistenceStatus = null
+        composite = null
+        infoRes = null
+        busy = true
+        progress = 0f
+        stage = R.string.stage_scan
+
         job = viewModelScope.launch {
             try {
-                val det = Detector(app)
-                withContext(Dispatchers.Default) {
-                    val evs = det.detect(u, sensitivity, startMs = startMs, endMs = endMs, onProgress = { progress = it },
-                        onStage = { stage = it }, cancelled = { !isActive })
-                    stage = R.string.stage_thumbs
-                    for (e in evs.sortedByDescending { it.score }.take(60).sortedBy { it.startMs }) {
-                        det.frame(u, e.bestMs, 480)?.let { items += Item(e, it) }
+                if (previousSource != null && pendingReview != null) {
+                    try {
+                        withContext(Dispatchers.IO) { reviewSidecar.save(previousSource, pendingReview) }
+                    } catch (error: Exception) {
+                        if (scanGeneration == generation)
+                            reviewPersistenceStatus = "ذخیرهٔ بررسی‌های قبلی ناموفق: ${error.message ?: "خطا"}"
                     }
                 }
-                // Restore only exact time-window matches from this same video URI.
+
+                val det = Detector(app)
+                val gate = LightningScanProgress()
+                val scanned = withContext(Dispatchers.Default) {
+                    val generated = ArrayList<Item>()
+                    try {
+                        val events = det.detect(
+                            u, sensitivity, startMs = startMs, endMs = endMs,
+                            onProgress = { fraction ->
+                                if (gate.shouldPublish(fraction)) {
+                                    viewModelScope.launch {
+                                        if (scanGeneration == generation)
+                                            progress = (gate.last() / 100f).coerceIn(0f, 1f)
+                                    }
+                                }
+                            },
+                            onStage = { newStage ->
+                                viewModelScope.launch {
+                                    if (scanGeneration == generation) stage = newStage
+                                }
+                            },
+                            cancelled = { !isActive || scanGeneration != generation }
+                        )
+                        viewModelScope.launch {
+                            if (scanGeneration == generation) stage = R.string.stage_thumbs
+                        }
+                        for (event in events.sortedByDescending { it.score }.take(60).sortedBy { it.startMs }) {
+                            ensureActive()
+                            if (scanGeneration != generation) throw CancellationException("New scan started")
+                            det.frame(u, event.bestMs, 480)?.let { generated.add(Item(event, it)) }
+                        }
+                        generated
+                    } catch (error: Throwable) {
+                        generated.forEach { if (!it.thumb.isRecycled) it.thumb.recycle() }
+                        throw error
+                    }
+                }
+                // One atomic Compose-state publication on Main; no worker
+                // thread writes to SnapshotStateList or visible progress state.
+                if (scanGeneration != generation) {
+                    scanned.forEach { if (!it.thumb.isRecycled) it.thumb.recycle() }
+                    return@launch
+                }
+                items.addAll(scanned)
                 val restored = withContext(Dispatchers.IO) { reviewSidecar.read(u.toString()) }
-                if (uri == u) {
+                if (scanGeneration == generation && uri == u) {
                     reviewRecords.putAll(restored)
                     for (entry in items) {
-                        val e = entry.event
-                        val key = LightningReviewKeys.event(e.startMs, e.endMs, e.bestMs)
-                        restored[key]?.let { lightningReviews[e.id] = it }
+                        val event = entry.event
+                        val key = LightningReviewKeys.event(event.startMs, event.endMs, event.bestMs)
+                        restored[key]?.let { lightningReviews[event.id] = it }
                     }
+                    progress = 1f
+                    if (items.isEmpty()) info(R.string.no_events) else screen = Screen.RESULTS
                 }
-                if (items.isEmpty()) info(R.string.no_events) else screen = Screen.RESULTS
-            } catch (c: CancellationException) { throw c
-            } catch (e: Exception) { info(R.string.error_generic, e.message ?: e.javaClass.simpleName)
-            } finally { busy = false; releaseRetiredVideoImages() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (scanGeneration == generation)
+                    info(R.string.error_generic, error.message ?: error.javaClass.simpleName)
+            } finally {
+                if (scanGeneration == generation) {
+                    busy = false
+                    releaseRetiredVideoImages()
+                }
+            }
         }
     }
 
@@ -1709,7 +1778,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun cancel() { job?.cancel(); busy = false }
+    fun cancel() { ++scanGeneration; job?.cancel(); busy = false }
 
     fun toggle(i: Int) {
         val it = items[i]
