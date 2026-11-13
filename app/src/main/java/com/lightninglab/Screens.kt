@@ -244,9 +244,18 @@ fun Results(vm: MainVM) {
                     TextButton(onClick = { vm.clearSel() }) { Text(stringResource(R.string.deselect_all)) }
                 }
                 Text("${vm.items.size} رخداد تصویری شناسایی شد", style = MaterialTheme.typography.titleMedium, color = Storm.text)
-                val reviewCounts = vm.reviewCounts()
-                Text("بازبینی انسانی: ${reviewCounts[LightningReview.CONFIRMED] ?: 0} تأیید · ${reviewCounts[LightningReview.REJECTED] ?: 0} رد · ${reviewCounts[LightningReview.UNCERTAIN] ?: 0} نامشخص",
+                val reviewMetrics = LightningReviewMetrics.summarize(
+                    vm.items.map { vm.lightningReviews[it.event.id] ?: LightningReview.UNREVIEWED }
+                )
+                Text("بازبینی انسانی: ${reviewMetrics.confirmed} تأیید · ${reviewMetrics.rejected} رد · ${reviewMetrics.uncertain} نامشخص · ${reviewMetrics.unreviewed} بررسی‌نشده",
                     style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                Text("پوشش بازبینی: ${reviewMetrics.reviewCoveragePercent}٪ از رخدادهای کشف‌شده",
+                    style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                reviewMetrics.confirmedAmongAdjudicatedPercent?.let { value ->
+                    Text("تأیید در ${reviewMetrics.adjudicated} رخداد دارای رأی قطعی: ${value}٪",
+                        style = MaterialTheme.typography.labelSmall, color = Storm.text)
+                    Text(reviewMetrics.caveatFa, style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                }
                 vm.reviewPersistenceStatus?.let { status ->
                     Text(status, style = MaterialTheme.typography.labelSmall, color = Storm.muted)
                 }
