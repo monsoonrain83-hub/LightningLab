@@ -1167,7 +1167,8 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         reviewPersistenceStatus = "در حال ذخیرهٔ بررسی‌ها"
         reviewSaveJob = viewModelScope.launch {
             try {
-                kotlinx.coroutines.delay(350L)
+                // A review is valuable user-supplied evidence: enqueue the atomic
+                // write immediately rather than risking a 350ms debounce loss.
                 withContext(Dispatchers.IO) { reviewSidecar.save(source, snapshot) }
                 if (uri?.toString() == source && reviewRecords == snapshot) reviewDirty = false
                 reviewPersistenceStatus = "بررسی‌های انسانی ذخیره شدند"
@@ -1667,8 +1668,18 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         reviewSaveJob?.cancel()
 
         val generation = ++scanGeneration
+        // Result thumbnails are no longer needed after a new scan starts.
+        // Delay recycling until Compose has left the previous result screen.
+        val oldResultBitmaps = (items.map { it.thumb } + listOfNotNull(composite))
+            .distinct()
         uri = u
         items.clear()
+        if (oldResultBitmaps.isNotEmpty()) {
+            viewModelScope.launch {
+                delay(2000L)
+                oldResultBitmaps.forEach { if (!it.isRecycled) it.recycle() }
+            }
+        }
         temporalScores.clear()
         lightningReviews.clear()
         reviewRecords.clear()
