@@ -48,6 +48,53 @@ internal object WaveformBins {
     }
 }
 
+/**
+ * One-pass bounded PCM peak capture for streams with no reliable duration.
+ * Unlike a live bin estimate, a frame gets its FINAL horizontal position only
+ * when the total number of frames is known at EOF.
+ */
+internal class WindowedPeaks(private val maxWindows: Int = 16384, initialFramesPerWindow: Int = 512) {
+    init { require(maxWindows >= 2 && initialFramesPerWindow > 0) }
+    private val windows = ArrayList<Float>()
+    private var framesPerWindow = initialFramesPerWindow.toLong()
+    private var buffered = 0L
+    private var bufferedMax = 0f
+
+    fun add(value: Float) {
+        if (value.isFinite()) bufferedMax = max(bufferedMax, abs(value))
+        buffered++
+        if (buffered >= framesPerWindow) {
+            windows.add(bufferedMax)
+            buffered = 0L
+            bufferedMax = 0f
+            if (windows.size >= maxWindows) {
+                val merged = ArrayList<Float>((windows.size + 1) / 2)
+                var i = 0
+                while (i < windows.size) {
+                    merged.add(if (i + 1 < windows.size) max(windows[i], windows[i + 1]) else windows[i])
+                    i += 2
+                }
+                windows.clear()
+                windows.addAll(merged)
+                framesPerWindow *= 2L
+            }
+        }
+    }
+
+    fun finish(bins: Int): FloatArray {
+        val count = bins.coerceAtLeast(1)
+        val data = ArrayList<Float>(windows)
+        if (buffered > 0L) data.add(bufferedMax)
+        val result = FloatArray(count)
+        if (data.isEmpty()) return result
+        for (i in data.indices) {
+            val index = (i.toLong() * count / data.size).toInt().coerceIn(0, count - 1)
+            result[index] = max(result[index], data[i])
+        }
+        return result
+    }
+}
+
 /** Decodes an audio URI on a worker thread and returns normalized peak samples for a real waveform. */
 object AudioWaveform {
     private val cache = WaveformCache(12)
@@ -81,6 +128,7 @@ object AudioWaveform {
             codec.configure(format, null, null, 0)
             codec.start()
             val peaks = FloatArray(bins)
+            val unknownDurationPeaks = WindowedPeaks()
             val durationUs = (format.getLongOrNull(MediaFormat.KEY_DURATION) ?: 0L)
             var inputDone = false
             var outputDone = false
@@ -130,8 +178,10 @@ object AudioWaveform {
                                 }
                                 peak = max(peak, abs(value))
                             }
-                            val bucket = WaveformBins.index(totalFrames + frame, totalFrames + frames, expectedFrames, bins)
-                            if (peak > peaks[bucket]) peaks[bucket] = peak
+                            if (expectedFrames > 0L) {
+                                val bucket = WaveformBins.index(totalFrames + frame, totalFrames + frames, expectedFrames, bins)
+                                if (peak > peaks[bucket]) peaks[bucket] = peak
+                            } else unknownDurationPeaks.add(peak)
                         }
                         totalFrames += frames
                     }
@@ -143,9 +193,10 @@ object AudioWaveform {
                     channels = outFormat.getIntegerOrNull(MediaFormat.KEY_CHANNEL_COUNT) ?: channels
                 }
             }
-            val maxPeak = peaks.maxOrNull() ?: 0f
-            if (maxPeak <= 0f) return peaks.map { 0.02f }
-            return peaks.map { (it / maxPeak).coerceIn(0.025f, 1f) }
+            val finalPeaks = if (expectedFrames > 0L) peaks else unknownDurationPeaks.finish(bins)
+            val maxPeak = finalPeaks.maxOrNull() ?: 0f
+            if (maxPeak <= 0f) return finalPeaks.map { 0.02f }
+            return finalPeaks.map { (it / maxPeak).coerceIn(0.025f, 1f) }
         } finally {
             try { codec?.stop() } catch (_: Exception) { }
             try { codec?.release() } catch (_: Exception) { }
