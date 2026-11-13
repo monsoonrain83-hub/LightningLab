@@ -1,6 +1,7 @@
 package com.lightninglab
 
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Transactional TFLite imports: a .previous recovery copy survives until the
@@ -43,14 +44,19 @@ internal object ModelFileRecovery {
         // A prior interrupted transaction must be resolved before overwriting .previous.
         if (backup.isFile && !loadOrRestore(target, backup, close, load)) return false
         val existing = target.isFile
+        var backupComplete = false
+        var replacementStarted = false
         closeSafely(close)
         return try {
             if (existing) {
                 if (backup.exists() && !backup.delete()) return false
                 // Preserve the source file; do not rename the only valid copy.
                 target.copyTo(backup, overwrite = true)
-                if (backup.length() != target.length()) error("Incomplete model backup")
+                if (backup.length() != target.length() ||
+                    !sha256(backup).contentEquals(sha256(target))) error("Incomplete model backup")
+                backupComplete = true
             }
+            replacementStarted = true
             if (target.exists() && !target.delete()) error("Cannot replace existing model")
             if (!staging.renameTo(target)) error("Cannot publish staged model")
             if (!safelyLoad(load)) error("New model failed interpreter validation")
@@ -58,17 +64,34 @@ internal object ModelFileRecovery {
             true
         } catch (_: Throwable) {
             closeSafely(close)
-            if (backup.isFile) {
+            if (replacementStarted && backupComplete && backup.isFile) {
                 try {
                     if (target.exists()) target.delete()
                     backup.copyTo(target, overwrite = true)
                     if (safelyLoad(load)) backup.delete()
-                } catch (_: Throwable) { /* leave last recovery backup intact */ }
+                } catch (_: Throwable) { /* last valid backup remains available */ }
+            } else if (!replacementStarted && existing) {
+                // Backup copy may be partial. The untouched original must stay active.
+                if (backup.exists() && !backupComplete) backup.delete()
+                safelyLoad(load)
             } else if (!hadOld && target.exists()) {
                 target.delete()
             }
             false
         }
+    }
+
+    private fun sha256(file: File): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val chunk = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(chunk)
+                if (count < 0) break
+                if (count > 0) digest.update(chunk, 0, count)
+            }
+        }
+        return digest.digest()
     }
 
     private fun safelyLoad(load: () -> Boolean): Boolean =
