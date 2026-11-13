@@ -247,6 +247,11 @@ fun Results(vm: MainVM) {
                 val reviewCounts = vm.reviewCounts()
                 Text("بازبینی انسانی: ${reviewCounts[LightningReview.CONFIRMED] ?: 0} تأیید · ${reviewCounts[LightningReview.REJECTED] ?: 0} رد · ${reviewCounts[LightningReview.UNCERTAIN] ?: 0} نامشخص",
                     style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                vm.reviewPersistenceStatus?.let { status ->
+                    Text(status, style = MaterialTheme.typography.labelSmall, color = Storm.muted)
+                }
+                Text("نظر انسانی فقط روی دستگاه ذخیره می‌شود و هنگام تحلیل مجدد همان فایل و رخداد زمانی بازیابی می‌شود.",
+                    style = MaterialTheme.typography.labelSmall, color = Storm.muted)
 
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickTemporalModel.launch(arrayOf("*/*")) }, enabled = !vm.busy) {

@@ -1141,11 +1141,34 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     var lightningTemporalReady by mutableStateOf(false)
     val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
     val lightningReviews = androidx.compose.runtime.mutableStateMapOf<Int, LightningReview>()
+    private val reviewSidecar by lazy { LightningReviewSidecar(app) }
+    private val reviewRecords = LinkedHashMap<String, LightningReview>()
+    private var reviewSaveJob: Job? = null
+    var reviewPersistenceStatus by mutableStateOf<String?>(null)
 
     fun reviewLightningEvent(id: Int, decision: LightningReview) {
-        if (items.none { it.event.id == id }) return
-        if (decision == LightningReview.UNREVIEWED) lightningReviews.remove(id)
-        else lightningReviews[id] = decision
+        val event = items.firstOrNull { it.event.id == id }?.event ?: return
+        val source = uri?.toString() ?: return
+        val key = LightningReviewKeys.event(event.startMs, event.endMs, event.bestMs)
+        if (decision == LightningReview.UNREVIEWED) {
+            lightningReviews.remove(id)
+            reviewRecords.remove(key)
+        } else {
+            lightningReviews[id] = decision
+            reviewRecords[key] = decision
+        }
+        // Keep the UI responsive; writing a bounded, atomic sidecar occurs on IO.
+        reviewSaveJob?.cancel()
+        val snapshot = reviewRecords.toMap()
+        reviewPersistenceStatus = "در حال ذخیرهٔ بررسی‌ها"
+        reviewSaveJob = viewModelScope.launch {
+            try {
+                kotlinx.coroutines.delay(350L)
+                withContext(Dispatchers.IO) { reviewSidecar.save(source, snapshot) }
+                reviewPersistenceStatus = "بررسی‌های انسانی ذخیره شدند"
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { reviewPersistenceStatus = "ذخیرهٔ بررسی‌ها ناموفق: ${e.message ?: "خطا"}" }
+        }
     }
     fun reviewCounts(): Map<LightningReview, Int> =
         LightningReviewSummary.count(items.map { lightningReviews[it.event.id] ?: LightningReview.UNREVIEWED })
@@ -1629,7 +1652,9 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     }
 
     fun startDetect(u: Uri, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE) {
-        job?.cancel(); uri = u; items.clear(); temporalScores.clear(); lightningReviews.clear(); composite = null; infoRes = null
+        job?.cancel(); reviewSaveJob?.cancel()
+        uri = u; items.clear(); temporalScores.clear(); lightningReviews.clear()
+        reviewRecords.clear(); reviewPersistenceStatus = null; composite = null; infoRes = null
         busy = true; progress = 0f; stage = R.string.stage_scan
         job = viewModelScope.launch {
             try {
@@ -1640,6 +1665,16 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     stage = R.string.stage_thumbs
                     for (e in evs.sortedByDescending { it.score }.take(60).sortedBy { it.startMs }) {
                         det.frame(u, e.bestMs, 480)?.let { items += Item(e, it) }
+                    }
+                }
+                // Restore only exact time-window matches from this same video URI.
+                val restored = withContext(Dispatchers.IO) { reviewSidecar.read(u.toString()) }
+                if (uri == u) {
+                    reviewRecords.putAll(restored)
+                    for (entry in items) {
+                        val e = entry.event
+                        val key = LightningReviewKeys.event(e.startMs, e.endMs, e.bestMs)
+                        restored[key]?.let { lightningReviews[e.id] = it }
                     }
                 }
                 if (items.isEmpty()) info(R.string.no_events) else screen = Screen.RESULTS
@@ -1841,6 +1876,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         else { f?.delete(); info(R.string.rec_too_short) }
     }
     override fun onCleared() {
+        reviewSaveJob?.cancel()
         videoDraftJob?.cancel()
         try { recorder?.release() } catch (e: Exception) { }
         photoImageLayers.forEach { if (!it.bitmap.isRecycled) it.bitmap.recycle() }
