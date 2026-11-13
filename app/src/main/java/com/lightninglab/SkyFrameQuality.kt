@@ -28,7 +28,7 @@ object SkyFrameQuality {
 
     fun assess(pixels: IntArray, width: Int, height: Int): Result {
         require(width > 0 && height > 0 && width.toLong() * height.toLong() == pixels.size.toLong())
-        val stride = (pixels.size / 65_536).coerceAtLeast(1)
+        val stride = ((pixels.size.toLong() + 65_535L) / 65_536L).toInt().coerceAtLeast(1)
         var total = 0
         var clipped = 0
         var dark = 0
