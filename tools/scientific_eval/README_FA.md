@@ -121,9 +121,11 @@ python3 tools/lightning_ai/train_brixton.py \
 SHA هر ردیف annotation باید دقیقاً با منبع یکسان باشد و همهٔ کلیپ‌ها annotation داشته باشند؛ در غیر این صورت آموزش متوقف می‌شود. بدون `--event-times` مدل فقط پژوهشیِ full-clip است و برای انتشار علمی با runtime فعلی تأیید نمی‌شود. حتی با پنجرهٔ زمانی هم باید تفاوت decoder و انتخاب فریم OpenCV/Android جداگانه آزموده شود.
 
 در خروجی‌های آموزش:
-- `tools/lightning_ai/train_brixton.py` فایل `test_predictions.csv` و متادیتای هش‌دار می‌نویسد.
-- `tools/train_cloud_model.py` فایل `test_predictions.csv` و `model_metadata.json` می‌نویسد؛ مجوز مجموعهٔ starter تا راستی‌آزمایی با مقدار `UNVERIFIED` ثبت می‌شود.
-- `tools/cloud_ai/train_montenegro_synoptic.py` فایل‌های `test_predictions_cl.csv`، `test_predictions_cm.csv`، `test_predictions_ch.csv` و `model_metadata.json` می‌نویسد.
+- `tools/lightning_ai/train_brixton.py` فایل‌های `validation_predictions.csv`، `test_predictions.csv` و `evaluation_predictions.csv` به‌همراه متادیتای هش‌دار می‌نویسد.
+- `tools/train_cloud_model.py` همین سه خروجی را برای ده جنس ابر و `model_metadata.json` می‌نویسد؛ مجوز مجموعهٔ starter تا راستی‌آزمایی با مقدار `UNVERIFIED` ثبت می‌شود.
+- `tools/cloud_ai/train_montenegro_synoptic.py` برای هر یک از سرهای `cl/cm/ch` خروجی‌های جداگانهٔ `validation_predictions_*.csv`، `test_predictions_*.csv`، `evaluation_predictions_*.csv` و `model_metadata.json` می‌نویسد.
+
+**برای اجرای کالیبراسیون از `evaluation_predictions.csv` استفاده کنید:** این فایل حاوی هر دو تقسیم `validation` و `test` است. خود ابزار کالیبراسیون فقط از `validation` برای fit استفاده می‌کند، سپس ردیف‌های `test` را با همان پارامتر خروجی می‌دهد. خروجی جدید را با `evaluate.py classification` بسنجید و مقایسه را ثبت کنید.
 
 یک **گیت محافظه‌کار** برای بررسی شواهد کافیِ نامزدی مدل افزوده شده:
 
