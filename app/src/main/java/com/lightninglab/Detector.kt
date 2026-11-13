@@ -47,24 +47,29 @@ class Detector(private val ctx: Context) {
     private fun lumaGrid(img: Image, tw: Int, th: Int): FloatArray {
         val p = img.planes[0]; val buf = p.buffer; val rs = p.rowStride; val ps = p.pixelStride
         val bigW = img.width; val bigH = img.height
-        val bw = max(1, bigW / tw); val bh = max(1, bigH / th)
         val off = if (ps == 2) 1 else 0 // 10-bit: take the high byte
         val limit = buf.limit()
         val out = FloatArray(tw * th)
-        for (y in 0 until th) for (x in 0 until tw) {
-            var s = 0; var c = 0
-            var yy = y * bh
-            val ye = min(bigH, yy + bh); val xe = min(bigW, (x + 1) * bw)
-            while (yy < ye) {
-                var xx = x * bw
-                while (xx < xe) {
-                    val idx = yy * rs + xx * ps + off
-                    if (idx < limit) { s += buf.get(idx).toInt() and 255; c++ }
-                    xx += 2
+        for (y in 0 until th) {
+            val yr = LumaGridGeometry.span(y, th, bigH)
+            for (x in 0 until tw) {
+                val xr = LumaGridGeometry.span(x, tw, bigW)
+                var sum = 0; var count = 0
+                var yy = yr.start
+                while (yy < yr.endExclusive) {
+                    var xx = xr.start
+                    while (xx < xr.endExclusive) {
+                        val idx = yy.toLong() * rs + xx.toLong() * ps + off
+                        if (idx >= 0 && idx < limit) {
+                            sum += buf.get(idx.toInt()).toInt() and 255
+                            count++
+                        }
+                        xx += 2
+                    }
+                    yy += 2
                 }
-                yy += 2
+                out[y * tw + x] = if (count > 0) sum.toFloat() / count else 0f
             }
-            out[y * tw + x] = if (c > 0) s.toFloat() / c else 0f
         }
         return out
     }
@@ -111,7 +116,7 @@ class Detector(private val ctx: Context) {
                     val tMs = info.presentationTimeUs / 1000
                     if (info.size > 0 && tMs >= startMs && tMs <= endMs && tMs - lastT >= 8) {
                         val img = c.getOutputImage(oi) ?: return null
-                        val tw = min(TW, img.width); val th = max(2, tw * img.height / img.width)
+                        val tw = min(TW, img.width); val th = LumaGridGeometry.targetHeight(img.width, img.height, tw)
                         try {
                             val luma = lumaGrid(img, tw, th)
                             if (day == null) day = DayLine(tw, th)
