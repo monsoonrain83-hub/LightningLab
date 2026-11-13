@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Train a three-head CL/CM/CH model from prepare_montenegro_synoptic.py output."""
-import argparse, csv, json, random
+import argparse, csv, hashlib, json, random
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
@@ -11,7 +11,7 @@ LABELS = [str(i) for i in range(10)] + ["/"]
 
 def load_manifest(path):
     root = path.parent
-    paths, targets, splits = [], [], []
+    paths, targets, splits, days = [], [], [], []
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         for row in csv.DictReader(f):
             target = np.zeros((3, CLASSES), dtype=np.float32)
@@ -25,10 +25,10 @@ def load_manifest(path):
             image = root / row["image_path"]
             if not image.is_file():
                 raise FileNotFoundError(image)
-            paths.append(str(image)); targets.append(target); splits.append(row["split"])
+            paths.append(str(image)); targets.append(target); splits.append(row["split"]); days.append(row.get("day", ""))
     if not paths:
         raise ValueError("No labelled images found in manifest")
-    return np.asarray(paths), np.asarray(targets), np.asarray(splits)
+    return np.asarray(paths), np.asarray(targets), np.asarray(splits), np.asarray(days)
 
 def make_dataset(paths, targets, batch_size, training=False, seed=42):
     ds = tf.data.Dataset.from_tensor_slices((paths, targets))
@@ -78,7 +78,7 @@ def main():
     args = ap.parse_args()
     random.seed(args.seed); np.random.seed(args.seed); tf.random.set_seed(args.seed)
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    paths, targets, splits = load_manifest(Path(args.manifest))
+    paths, targets, splits, days = load_manifest(Path(args.manifest))
     indices = {name: np.where(splits == name)[0] for name in ("train", "validation", "test")}
     if any(len(indices[name]) == 0 for name in indices):
         raise ValueError("Manifest must contain non-empty train, validation and test splits")
@@ -117,7 +117,33 @@ def main():
     (out / "cloud_synoptic_architecture.json").write_text(model.to_json() + "\\n", encoding="utf-8")
     model.save_weights(out / "cloud_synoptic.weights.h5")
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    (out / "cloud_synoptic_model.tflite").write_bytes(converter.convert())
+    tflite = converter.convert()
+    (out / "cloud_synoptic_model.tflite").write_bytes(tflite)
+
+    # Supply held-out per-head predictions with expert modal targets.
+    # Do not silently treat the observer "/" code as a physical cloud class.
+    prediction_hashes = {}
+    for hi, head in enumerate(HEADS):
+        target_csv = out / ("test_predictions_" + head.lower() + ".csv")
+        with target_csv.open("w", encoding="utf-8", newline="") as stream:
+            columns = ["sample_id", "source_group", "split", "truth", "domain", "sha256"] + [
+                "p_" + code for code in LABELS
+            ]
+            writer = csv.DictWriter(stream, fieldnames=columns)
+            writer.writeheader()
+            for ii, original_index in enumerate(indices["test"]):
+                distribution = targets[original_index, hi, :]
+                if float(distribution.sum()) <= 0:
+                    continue
+                source = Path(paths[original_index])
+                digest = hashlib.sha256(source.read_bytes()).hexdigest()
+                row = {"sample_id": source.name, "source_group": str(days[original_index]),
+                       "split": "test", "truth": LABELS[int(distribution.argmax())],
+                       "domain": "montenegro_single_site", "sha256": digest}
+                row.update({"p_" + code: format(float(y_pred[ii, hi, jj]), ".9g")
+                            for jj, code in enumerate(LABELS)})
+                writer.writerow(row)
+        prediction_hashes[head] = hashlib.sha256(target_csv.read_bytes()).hexdigest()
     contract = {
         "input_name": "image_rgb_0_255", "input_shape": [1, SIZE, SIZE, 3], "input_dtype": "float32",
         "input_range": [0, 255], "resize": "aspect-preserving", "padding_rgb": [128, 128, 128],
@@ -126,6 +152,20 @@ def main():
         "slash_semantics": "not determinable by observer", "scores": "raw model scores; not calibrated probabilities"
     }
     (out / "model_contract.json").write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+    provenance = dict(contract)
+    provenance.update({
+        "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
+        "manifest_sha256": hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest(),
+        "test_predictions_sha256_per_head": prediction_hashes,
+        "dataset_license": "CC BY 4.0",
+        "dataset_doi": "10.5281/zenodo.21787669",
+        "training_clips": int(len(indices["train"])),
+        "validation_clips": int(len(indices["validation"])),
+        "test_clips": int(len(indices["test"])),
+        "seed": args.seed,
+        "domain_limit": "Montenegro single-site seasonal daylight; external geography untested"
+    })
+    (out / "model_metadata.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     (out / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({h: {k: v for k, v in metrics[h].items() if k not in ("classification_report", "confusion_matrix")} for h in HEADS}, indent=2))
 
