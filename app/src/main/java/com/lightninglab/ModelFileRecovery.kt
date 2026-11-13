@@ -42,16 +42,22 @@ internal object ModelFileRecovery {
         }
     }
 
-    /** Resolve a previous interrupted transaction before starting a new import. */
+    /**
+     * Resolve a previous interrupted transaction before starting a new import.
+     * Returns true when the active target is loaded and validated. The backup is
+     * only removed after that success, so a failed restore keeps the last
+     * known-good copy available for manual recovery.
+     */
     fun prepareForImport(
         target: File,
         backup: File,
         close: () -> Unit,
         load: () -> Boolean
-    ) {
+    ): Boolean {
         // Preserve a backup until the active target has been validated.
-        loadOrRestore(target, backup, close, load)
-        if (target.exists() && backup.exists()) backup.delete()
+        val restored = loadOrRestore(target, backup, close, load)
+        if (restored && target.exists() && backup.exists()) backup.delete()
+        return restored
     }
 
     private fun moveOrCopy(from: File, to: File) {
