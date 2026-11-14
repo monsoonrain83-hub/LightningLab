@@ -32,6 +32,10 @@ import androidx.media3.effect.TextOverlay
 import androidx.media3.effect.TextureOverlay
 import com.google.common.collect.ImmutableList
 import com.lightninglab.atmospheric.knowledge.AtmosphericEngine
+import com.lightninglab.viewmodel.AppNavigationState
+import com.lightninglab.viewmodel.LocalProjectRepository
+import com.lightninglab.viewmodel.ProjectRepository
+import com.lightninglab.viewmodel.LightningReviewLedger
 import com.lightninglab.atmospheric.knowledge.CloudVisualEvidence
 import com.lightninglab.atmospheric.knowledge.CloudFrameObservation
 import com.lightninglab.atmospheric.knowledge.CloudEvolutionAnalyzer
@@ -132,7 +136,10 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             decoder.setTargetSampleSize(sample)
         })
     }
-    var screen by mutableStateOf(Screen.HOME)
+    private val navigation = AppNavigationState()
+    var screen: Screen
+        get() = navigation.current
+        set(value) { navigation.navigate(value) }
     var uri by mutableStateOf<Uri?>(null)
     var busy by mutableStateOf(false)
     var progress by mutableStateOf(0f)
@@ -344,7 +351,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val videoHistory = ArrayList<VideoEditorSnapshot>()
     private var videoHistoryIndex = -1
     private var restoringVideoHistory = false
-    private val videoDraftStore by lazy { VideoDraftStore(app) }
+    private val videoDraftStore: ProjectRepository by lazy { LocalProjectRepository(app) }
     private var videoDraftJob: Job? = null
     private var restoringVideoDraft = false
     var videoDraftStatus by mutableStateOf<String?>(null)
@@ -1172,33 +1179,27 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
     val lightningReviews = androidx.compose.runtime.mutableStateMapOf<Int, LightningReview>()
     private val reviewSidecar by lazy { LightningReviewSidecar(app) }
-    private val reviewRecords = LinkedHashMap<String, LightningReview>()
+    private val reviewLedger = LightningReviewLedger()
     private var reviewSaveJob: Job? = null
-    private var reviewDirty = false
     var reviewPersistenceStatus by mutableStateOf<String?>(null)
 
     fun reviewLightningEvent(id: Int, decision: LightningReview) {
         val event = items.firstOrNull { it.event.id == id }?.event ?: return
         val source = uri?.toString() ?: return
         val key = LightningReviewKeys.event(event.startMs, event.endMs, event.bestMs)
-        if (decision == LightningReview.UNREVIEWED) {
-            lightningReviews.remove(id)
-            reviewRecords.remove(key)
-        } else {
-            lightningReviews[id] = decision
-            reviewRecords[key] = decision
-        }
+        if (decision == LightningReview.UNREVIEWED) lightningReviews.remove(id)
+        else lightningReviews[id] = decision
+        reviewLedger.vote(key, decision)
         // Keep the UI responsive; writing a bounded, atomic sidecar occurs on IO.
-        reviewDirty = true
         reviewSaveJob?.cancel()
-        val snapshot = reviewRecords.toMap()
+        val snapshot = reviewLedger.snapshot()
         reviewPersistenceStatus = "در حال ذخیرهٔ بررسی‌ها"
         reviewSaveJob = viewModelScope.launch {
             try {
                 // A review is valuable user-supplied evidence: enqueue the atomic
                 // write immediately rather than risking a 350ms debounce loss.
                 withContext(Dispatchers.IO) { reviewSidecar.save(source, snapshot) }
-                if (uri?.toString() == source && reviewRecords == snapshot) reviewDirty = false
+                if (uri?.toString() == source) reviewLedger.markPersisted(snapshot)
                 reviewPersistenceStatus = "بررسی‌های انسانی ذخیره شدند"
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { reviewPersistenceStatus = "ذخیرهٔ بررسی‌ها ناموفق: ${e.message ?: "خطا"}" }
@@ -1692,7 +1693,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         // Save the last review edits for the PREVIOUS source before clearing its
         // in-memory state; a quick rescan must not silently discard pending edits.
         val previousSource = uri?.toString()
-        val pendingReview = if (reviewDirty) reviewRecords.toMap() else null
+        val pendingReview = reviewLedger.pendingSnapshot()
         reviewSaveJob?.cancel()
 
         val generation = ++scanGeneration
@@ -1710,8 +1711,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
         temporalScores.clear()
         lightningReviews.clear()
-        reviewRecords.clear()
-        reviewDirty = false
+        reviewLedger.reset()
         reviewPersistenceStatus = null
         composite = null
         infoRes = null
@@ -1776,7 +1776,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                 items.addAll(scanned)
                 val restored = withContext(Dispatchers.IO) { reviewSidecar.read(u.toString()) }
                 if (scanGeneration == generation && uri == u) {
-                    reviewRecords.putAll(restored)
+                    reviewLedger.restore(restored)
                     for (entry in items) {
                         val event = entry.event
                         val key = LightningReviewKeys.event(event.startMs, event.endMs, event.bestMs)
