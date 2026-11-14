@@ -6,6 +6,7 @@ optionally sha256, site_id, camera_id, sample_id, head. No dependencies.
 This is an evaluator, NOT a trained model or proof of generalization.
 """
 import argparse
+import csv
 import hashlib
 import json
 import math
@@ -95,6 +96,33 @@ def site_errors(rows):
             owners[row["site_id"]].add(row["split"])
     return [f"site_id: {len([v for v in owners.values() if len(v)>1])} sites cross splits"] \
         if any(len(v)>1 for v in owners.values()) else []
+
+
+
+def audit_manifest(path):
+    """Audit full original manifest, not just the rows with predictions."""
+    rows = []
+    with Path(path).open(encoding="utf-8-sig", newline="") as stream:
+        for line_no, entry in enumerate(csv.DictReader(stream), 2):
+            try:
+                rows.append({
+                    "split": str(entry["split"]).strip().lower(),
+                    "group_id": str(entry.get("event_group") or entry.get("group_id") or "").strip(),
+                    "sha256": str(entry.get("sha256") or "").strip().lower(),
+                    "site_id": str(entry.get("site_id") or "").strip(),
+                })
+                if rows[-1]["split"] not in ("train", "validation", "test") or not rows[-1]["group_id"]:
+                    raise ValueError("invalid split or missing group_id")
+            except (ValueError, KeyError) as exc:
+                raise ValueError(f"{path}:{line_no}: {exc}") from exc
+    if not rows:
+        raise ValueError("manifest is empty")
+    problems = leakage_errors(rows)
+    if problems:
+        raise ValueError("DATA LEAKAGE in manifest: " + "; ".join(problems))
+    return {"rows": len(rows),
+            "groups": len({r["group_id"] for r in rows}),
+            "split_counts": dict(Counter(r["split"] for r in rows))}
 
 
 def metrics(rows, labels, abstain_below=0.0):
@@ -215,6 +243,7 @@ def evaluate(rows, labels, *, split="test", independent_sites=False,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--predictions", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path, help="Full training manifest for cross-split leakage audit")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--task", choices=("lightning", "cloud-head"), required=True)
     parser.add_argument("--head", choices=("CL", "CM", "CH"))
@@ -238,6 +267,20 @@ def main():
                       independent_sites=args.independent_sites,
                       abstain_below=args.abstain_below,
                       bootstrap=args.bootstrap, seed=args.seed)
+    if args.manifest:
+        report["manifest_audit"] = audit_manifest(args.manifest)
+        report["manifest_sha256"] = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
+        # Predicted test samples must be represented in the full manifest.
+        # No artificial confidence or scientific validity is conferred by passing this check.
+        with args.manifest.open(encoding="utf-8-sig", newline="") as stream:
+            manifest_keys = {(str(r.get("event_group") or r.get("group_id") or "").strip(),
+                              str(r.get("sha256") or "").strip().lower(),
+                              str(r.get("split") or "").strip().lower())
+                             for r in csv.DictReader(stream)}
+        unmatched = sum(1 for r in rows if
+                        (r["group_id"], r["sha256"], r["split"]) not in manifest_keys)
+        if unmatched:
+            raise ValueError(f"{unmatched} predictions not found in audited manifest")
     report["task"] = args.task
     report["head"] = args.head
     report["labels"] = labels
