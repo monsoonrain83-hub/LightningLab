@@ -150,38 +150,49 @@ class Detector(private val ctx: Context) {
         return max(2, (w * s).toInt()) to max(2, (h * s).toInt())
     }
 
-    private fun scanRetriever(uri: Uri, startMs: Long, endMs: Long, onProgress: (Float) -> Unit, cancelled: () -> Boolean): ArrayList<Sample> {
+    private fun scanRetriever(uri: Uri, startMs: Long, endMs: Long, onProgress: (Float) -> Unit, cancelled: () -> Boolean): Scan {
         val r = MediaMetadataRetriever(); val out = ArrayList<Sample>()
+        var day: DayLine? = null
         try {
             r.setDataSource(ctx, uri)
-            val dur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: return out
+            val dur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: return Scan(out, null)
             val window = LightningScanWindow.of(LightningScanWindow.microseconds(dur), startMs, endMs)
-                ?: return out
+                ?: return Scan(out, null)
             val (w, h) = dims(r, TW)
+            if (LightningFallbackSampling.supportsMotionVerification(w, h))
+                day = DayLine(w, h)
             val end = window.endUs / 1000L
             var t = window.startUs / 1000L
+            val step = LightningFallbackSampling.intervalMs(end - t)
             while (t < end) {
                 if (cancelled()) break
-                val b = r.getScaledFrameAtTime(LightningScanWindow.microseconds(t), OPTION_CLOSEST, w, h)
-                if (b != null) {
-                    val px = IntArray(w * h); b.getPixels(px, 0, w, 0, 0, w, h); b.recycle()
-                    out += sampleFromLuma(t, FloatArray(w * h) { ImgUtil.luma(px[it]) }, w, h)
+                val bitmap = r.getScaledFrameAtTime(
+                    LightningScanWindow.microseconds(t), OPTION_CLOSEST, w, h)
+                if (bitmap != null) {
+                    val luma = try {
+                        val px = IntArray(w * h)
+                        bitmap.getPixels(px, 0, w, 0, 0, w, h)
+                        FloatArray(w * h) { ImgUtil.luma(px[it]) }
+                    } finally { bitmap.recycle() }
+                    day?.push(t, luma)
+                    out += sampleFromLuma(t, luma, w, h)
                 }
-                t = if (end - t <= 100L) end else t + 100L
+                t = LightningFallbackSampling.next(t, end, step)
                 onProgress(min(0.9f, window.progress(LightningScanWindow.microseconds(t)) * 0.9f))
             }
+            day?.finish()
         } finally { r.release() }
-        return out
+        return Scan(out, day?.stats?.takeIf { it.size == out.size })
     }
 
-    /** Analyses [startMs, endMs] of the video. The coarse retriever fallback has no motion-compensated verification. */
+    /** Analyses [startMs, endMs] of the video. The retriever fallback uses bounded, denser sampling and motion-compensated verification when dimensions permit. */
     fun detect(
         uri: Uri, sensitivity: Float, minSepMs: Long = 250L, startMs: Long = 0L, endMs: Long = Long.MAX_VALUE,
         onProgress: (Float) -> Unit, onStage: (Int) -> Unit, cancelled: () -> Boolean
     ): List<LightningEvent> {
         var sc = scanCodec(uri, startMs, endMs, onProgress, cancelled)
         if (cancelled()) return emptyList()
-        if (sc == null || sc.s.size < 5) sc = Scan(scanRetriever(uri, startMs, endMs, onProgress, cancelled), null)
+        if (sc == null || sc.s.size < 5) sc = scanRetriever(uri, startMs, endMs, onProgress, cancelled)
         if (cancelled()) return emptyList()
         onStage(R.string.stage_refine)
         return FlashAnalyzer.analyze(sc.s, sensitivity, minSepMs, sc.day)
