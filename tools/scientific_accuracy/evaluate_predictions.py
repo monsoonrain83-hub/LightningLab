@@ -99,7 +99,7 @@ def site_errors(rows):
 
 
 
-def audit_manifest(path):
+def audit_manifest(path, *, require_independent_sites=False):
     """Audit full original manifest, not just the rows with predictions."""
     rows = []
     with Path(path).open(encoding="utf-8-sig", newline="") as stream:
@@ -118,8 +118,12 @@ def audit_manifest(path):
     if not rows:
         raise ValueError("manifest is empty")
     problems = leakage_errors(rows)
+    if require_independent_sites:
+        if any(not row.get("site_id") for row in rows):
+            problems.append("site_id missing from full manifest")
+        problems.extend(site_errors(rows))
     if problems:
-        raise ValueError("DATA LEAKAGE in manifest: " + "; ".join(problems))
+        raise ValueError("DATA LEAKAGE / INVALID HOLDOUT in manifest: " + "; ".join(problems))
     return {"rows": len(rows),
             "groups": len({r["group_id"] for r in rows}),
             "split_counts": dict(Counter(r["split"] for r in rows))}
@@ -261,6 +265,8 @@ def main():
         parser.error("--abstain-below must be a finite number in [0,1]")
     if not 0 <= args.bootstrap <= 10000:
         parser.error("--bootstrap must be within 0..10000")
+    if args.independent_sites and not args.manifest:
+        parser.error("--independent-sites requires --manifest for full training/test audit")
     labels = LIGHTNING_LABELS if args.task == "lightning" else CLOUD_HEAD_LABELS
     rows = read_predictions(args.predictions, labels, head=args.head)
     report = evaluate(rows, labels, split=args.split,
@@ -268,7 +274,8 @@ def main():
                       abstain_below=args.abstain_below,
                       bootstrap=args.bootstrap, seed=args.seed)
     if args.manifest:
-        report["manifest_audit"] = audit_manifest(args.manifest)
+        report["manifest_audit"] = audit_manifest(
+            args.manifest, require_independent_sites=args.independent_sites)
         report["manifest_sha256"] = hashlib.sha256(args.manifest.read_bytes()).hexdigest()
         # Predicted test samples must be represented in the full manifest.
         # No artificial confidence or scientific validity is conferred by passing this check.
