@@ -68,7 +68,9 @@ class ScientificEvaluationTests(unittest.TestCase):
     def test_unknown_label_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "rows.jsonl"
-            path.write_text(json.dumps(row(label="cumulonimbus")) + "\n")
+            obj = row()
+            obj["label"] = "cumulonimbus"
+            path.write_text(json.dumps(obj) + "\n")
             with self.assertRaisesRegex(ValueError, "unknown label"):
                 read_predictions(path, LIGHTNING_LABELS)
 
