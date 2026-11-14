@@ -38,7 +38,7 @@ class LightningTemporalModelTest {
         )
         assertEquals(8, times.size)
         assertEquals(Long.MAX_VALUE - 1, times.last())
-        assertTrue(times.zipWithNext().all { (first, next) -> next >= first })
+        assertTrue(times.asList().zipWithNext().all { (first, next) -> next >= first })
     }
 
     @Test fun sampleTimesDoNotOverflowOnVeryLongVideo() {
@@ -47,7 +47,7 @@ class LightningTemporalModelTest {
         )
         assertEquals(8, times.size)
         assertEquals(0L, times.first())
-        assertTrue(times.zipWithNext().all { (first, next) -> next >= first })
+        assertTrue(times.asList().zipWithNext().all { (first, next) -> next >= first })
         assertEquals(Long.MAX_VALUE - 500, times.last())
     }
 
