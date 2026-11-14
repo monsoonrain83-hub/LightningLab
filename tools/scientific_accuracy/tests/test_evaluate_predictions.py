@@ -133,5 +133,24 @@ class ScientificEvaluationTests(unittest.TestCase):
         self.assertLessEqual(result["ece_10_bins"], 1)
 
 
+    def test_independent_site_full_manifest_rejects_shared_site(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "manifest.csv"
+            path.write_text("event_group,split,site_id\n"
+                            "x,train,same\n"
+                            "y,test,same\n")
+            with self.assertRaisesRegex(ValueError, "site_id"):
+                audit_manifest(path, require_independent_sites=True)
+
+    def test_independent_site_full_manifest_rejects_missing_site(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "manifest.csv"
+            path.write_text("event_group,split,site_id\n"
+                            "x,train,\n"
+                            "y,test,different\n")
+            with self.assertRaisesRegex(ValueError, "site_id missing"):
+                audit_manifest(path, require_independent_sites=True)
+
+
 if __name__ == "__main__":
     unittest.main()
