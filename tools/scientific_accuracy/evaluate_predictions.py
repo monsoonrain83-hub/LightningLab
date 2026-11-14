@@ -79,7 +79,7 @@ def leakage_errors(rows):
     for key in ("group_id", "sha256"):
         owners = defaultdict(set)
         for row in rows:
-            if row[key]:
+            if row.get(key):
                 owners[row[key]].add(row["split"])
         duplicates = [value for value, splits in owners.items() if len(splits) > 1]
         if duplicates:
@@ -92,7 +92,7 @@ def site_errors(rows):
     """A site-independent benchmark cannot reuse a site across splits."""
     owners = defaultdict(set)
     for row in rows:
-        if row["site_id"]:
+        if row.get("site_id"):
             owners[row["site_id"]].add(row["split"])
     return [f"site_id: {len([v for v in owners.values() if len(v)>1])} sites cross splits"] \
         if any(len(v)>1 for v in owners.values()) else []
@@ -216,7 +216,7 @@ def evaluate(rows, labels, *, split="test", independent_sites=False,
              abstain_below=0.0, bootstrap=200, seed=42):
     failures = leakage_errors(rows)
     if independent_sites:
-        if any(not row["site_id"] for row in rows):
+        if any(not row.get("site_id") for row in rows):
             failures.append("independent-site mode requires site_id on every row")
         failures.extend(site_errors(rows))
     if failures:
@@ -229,9 +229,9 @@ def evaluate(rows, labels, *, split="test", independent_sites=False,
                                                   abstain_below)
     result["split"] = split
     result["independent_sites_checked"] = independent_sites
-    result["site_count"] = len({r["site_id"] for r in selected if r["site_id"]})
+    result["site_count"] = len({r["site_id"] for r in selected if r.get("site_id")})
     result["camera_count"] = len({(r["site_id"], r["camera_id"])
-                                  for r in selected if r["camera_id"]})
+                                  for r in selected if r.get("camera_id")})
     result["model_is_validated"] = False  # Never infer validity from these stats.
     result["caveat"] = (
         "Internal test only. Dataset representativeness, independent annotation, "
