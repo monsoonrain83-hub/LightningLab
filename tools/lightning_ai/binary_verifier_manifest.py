@@ -39,6 +39,15 @@ def load_manifest(path, root):
         split = str(row.get("split") or "").strip().lower()
         group = str(row.get("group_id") or "").strip()
         label = str(row.get("label") or "").strip()
+        try:
+            start_ms = int(row["start_ms"])
+            end_ms = int(row["end_ms"])
+        except (ValueError, TypeError, KeyError) as exc:
+            raise ValueError(f"Line {lineno}: missing/invalid candidate start_ms/end_ms") from exc
+        if start_ms < 0 or end_ms < start_ms or end_ms > 9_223_372_036_854_775:
+            raise ValueError(f"Line {lineno}: invalid candidate time range")
+        row["start_ms"] = start_ms
+        row["end_ms"] = end_ms
         rel = str(row.get("relative_path") or "").strip()
         expected = str(row.get("sha256") or "").strip().lower()
         if split not in SPLITS or label not in LABELS or not group or not rel:
@@ -70,6 +79,7 @@ def load_manifest(path, root):
             if counts[(split, label)] == 0:
                 raise ValueError(f"{split} lacks {label} examples")
     return rows, {
+        "sampling": "event-centered-8x-padding-500ms-v1",
         "clips": len(rows), "groups": len(groups),
         "counts": {f"{split}/{label}": counts[(split, label)]
                    for split in SPLITS for label in LABELS},
