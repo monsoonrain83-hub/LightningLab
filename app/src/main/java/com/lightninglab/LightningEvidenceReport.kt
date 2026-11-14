@@ -60,7 +60,7 @@ object LightningEvidenceReport {
                     .append(",\"model_softmax_uncalibrated\":").append(number(prediction.second))
             }
             binary[e.id]?.takeIf { it.isFinite() && it in 0f..1f }?.let {
-                append(",\\\"binary_lightning_score_uncalibrated\\\":").append(number(it))
+                append(",\"binary_lightning_score_uncalibrated\":").append(number(it))
             }
             append('}')
         }
