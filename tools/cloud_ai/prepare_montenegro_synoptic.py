@@ -5,7 +5,7 @@ Input directory: images.zip, annotation_items.csv, annotations.csv, LICENSE.txt.
 Preserves observer disagreement as soft-label distributions and creates chronological
 train/validation/test splits by day. CL/CM/CH are kept as a separate synoptic task.
 """
-import argparse, csv, json, math, zipfile
+import argparse, csv, hashlib, json, math, zipfile
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -110,8 +110,10 @@ def prepare(record_dir, out):
                     raise FileNotFoundError("Expected exactly one archive image " + repr(name))
                 member = matches[0]
             with zf.open(member) as src, (image_out/name).open("wb") as dst:
-                dst.write(src.read())
+                image_bytes = src.read()
+                dst.write(image_bytes)
             row = {"image_id": item_id, "image_path": "images/" + name,
+                   "sha256": hashlib.sha256(image_bytes).hexdigest(),
                    "timestamp_local": item["timestamp"], "day": item["day"],
                    "split": day_split[item["day"]],
                    "annotator_count": len(annotators_by_id[item_id])}
@@ -127,10 +129,18 @@ def prepare(record_dir, out):
             manifest_rows.append(row)
             split_counts[row["split"]] += 1
 
-    with (out/"manifest.csv").open("w", encoding="utf-8", newline="") as f:
+    pending_manifest = out/"manifest.pending.csv"
+    with pending_manifest.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(manifest_rows[0].keys()))
         writer.writeheader()
         writer.writerows(manifest_rows)
+    from validate_montenegro_manifest import audit_manifest
+    try:
+        audit_summary = audit_manifest(pending_manifest)
+    except Exception:
+        pending_manifest.unlink(missing_ok=True)
+        raise
+    pending_manifest.replace(out/"manifest.csv")
     (out/"LICENSE.txt").write_bytes(lic_path.read_bytes())
     attribution = ("Plamenac, Aleksandar; Tomovic, Savo (2026). A Multi-Annotator Ground-Based Sky Camera "
         "Dataset for Cloud Observation in Montenegro, Version 1.0.0. Zenodo. https://doi.org/"+DOI+
@@ -144,6 +154,7 @@ def prepare(record_dir, out):
         "attribution": attribution, "images": len(manifest_rows), "annotation_rows": len(annotations),
         "unique_image_annotator_pairs": len(seen_pairs), "split_image_counts": dict(split_counts),
         "split_days": split_days,
+        "integrity_audit": audit_summary,
         "class_annotation_counts": {k: dict(v) for k, v in report_counts.items()},
         "mean_normalized_annotator_entropy": {k: (entropy_sum[k]/entropy_n[k] if entropy_n[k] else None) for k in VARIABLES},
         "label_contract": {"heads": list(VARIABLES), "classes_per_head": CODES,
