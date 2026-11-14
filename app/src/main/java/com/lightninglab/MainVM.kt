@@ -1175,8 +1175,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val temporalLightningModel by lazy {
         LightningTemporalModel(File(app.filesDir, "lightning_temporal.tflite"))
     }
+    private val binaryLightningVerifier by lazy {
+        LightningBinaryVerifier(File(app.filesDir, "lightning_binary_verifier.tflite"))
+    }
     var lightningTemporalReady by mutableStateOf(false)
+    var lightningBinaryReady by mutableStateOf(false)
     val temporalScores = androidx.compose.runtime.mutableStateMapOf<Int, List<Pair<String, Float>>>()
+    val lightningBinaryScores = androidx.compose.runtime.mutableStateMapOf<Int, Float>()
     val lightningReviews = androidx.compose.runtime.mutableStateMapOf<Int, LightningReview>()
     private val reviewSidecar by lazy { LightningReviewSidecar(app) }
     private val reviewLedger = LightningReviewLedger()
@@ -1264,10 +1269,31 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Optional inference; never changes the independent heuristic detector's decisions. */
+    /** Installs optional negative-vs-lightning TFLite, independent of Brixton classifier. */
+    fun importLightningBinaryVerifier(u: Uri) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    installImportedModel(u, "lightning_binary_verifier.tflite",
+                        binaryLightningVerifier::close, binaryLightningVerifier::load)
+                }
+                lightningBinaryReady = withContext(Dispatchers.IO) { binaryLightningVerifier.load() }
+                lightningBinaryScores.clear()
+                info(if (imported) R.string.model_loaded else R.string.model_invalid)
+            } catch (_: Exception) {
+                info(R.string.model_invalid)
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    /** Optional inference only; never deletes candidates or overrides the human review. */
     fun classifyLightningEvents() {
         val source = uri ?: return
-        if (!lightningTemporalReady || busy || items.isEmpty()) return
+        if ((!lightningTemporalReady && !lightningBinaryReady) || busy || items.isEmpty()) return
         busy = true
         job = viewModelScope.launch {
             try {
@@ -1277,6 +1303,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                     val detector = Detector(app)
                     val duration = if (prepDur > 0L) prepDur else Long.MAX_VALUE / 2
                     val found = mutableMapOf<Int, List<Pair<String, Float>>>()
+                    val binaryFound = mutableMapOf<Int, Float>()
                     val runningJob = coroutineContext[Job]
                     for ((index, item) in selected.withIndex()) {
                         ensureActive()
@@ -1289,17 +1316,24 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
                         try {
                             ensureActive()
                             if (bitmaps.size == LightningTemporalModel.FRAMES) {
-                                temporalLightningModel.classify(bitmaps)?.let { found[item.event.id] = it }
+                                if (lightningTemporalReady)
+                                    temporalLightningModel.classify(bitmaps)?.let { found[item.event.id] = it }
+                                if (lightningBinaryReady)
+                                    binaryLightningVerifier.classify(bitmaps)?.let {
+                                        binaryFound[item.event.id] = it
+                                    }
                             }
                         } finally {
                             bitmaps.forEach { if (!it.isRecycled) it.recycle() }
                         }
                         progress = (index + 1).toFloat() / selected.size
                     }
-                    found
+                    found to binaryFound
                 }
                 temporalScores.clear()
-                temporalScores.putAll(results)
+                temporalScores.putAll(results.first)
+                lightningBinaryScores.clear()
+                lightningBinaryScores.putAll(results.second)
             } catch (c: CancellationException) {
                 throw c
             } catch (e: Exception) {
@@ -1383,6 +1417,11 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             ModelFileRecovery.loadOrRestore(File(app.filesDir, "lightning_temporal.tflite"),
                 File(app.filesDir, "lightning_temporal.tflite.previous"),
                 temporalLightningModel::close, temporalLightningModel::load)
+        }
+        lightningBinaryReady = withContext(Dispatchers.IO) {
+            ModelFileRecovery.loadOrRestore(File(app.filesDir, "lightning_binary_verifier.tflite"),
+                File(app.filesDir, "lightning_binary_verifier.tflite.previous"),
+                binaryLightningVerifier::close, binaryLightningVerifier::load)
         }
         synopticModelReady = withContext(Dispatchers.IO) {
             ModelFileRecovery.loadOrRestore(File(app.filesDir, "cloud_synoptic_model.tflite"), File(app.filesDir, "cloud_synoptic_model.tflite.previous"), cloudSynopticModel::close, cloudSynopticModel::load)
@@ -1710,6 +1749,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
             }
         }
         temporalScores.clear()
+        lightningBinaryScores.clear()
         lightningReviews.clear()
         reviewLedger.reset()
         reviewPersistenceStatus = null
@@ -1803,12 +1843,13 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     fun exportLightningEvidence(destination: Uri, json: Boolean) {
         val snapshot = items.map { it.event }
         val predictionSnapshot = temporalScores.toMap()
+        val binarySnapshot = lightningBinaryScores.toMap()
         val reviewSnapshot = lightningReviews.toMap()
         if (snapshot.isEmpty()) return
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot, reviewSnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot, reviewSnapshot)
+                    val payload = if (json) LightningEvidenceReport.json(snapshot, predictionSnapshot, reviewSnapshot, binarySnapshot) else LightningEvidenceReport.csv(snapshot, predictionSnapshot, reviewSnapshot, binarySnapshot)
                     app.contentResolver.openOutputStream(destination, "wt")?.use {
                         it.write(payload.toByteArray(Charsets.UTF_8))
                         it.flush()
