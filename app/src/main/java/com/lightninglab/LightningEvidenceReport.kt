@@ -4,7 +4,7 @@ import java.util.Locale
 
 /** Stable, offline evidence export. Scores are heuristic, not calibrated probabilities. */
 object LightningEvidenceReport {
-    const val SCHEMA_VERSION = 3
+    const val SCHEMA_VERSION = 4
     private fun number(value: Float): String =
         if (value.isFinite()) String.format(Locale.US, "%.6f", value) else "null"
 
@@ -15,8 +15,8 @@ object LightningEvidenceReport {
     private fun csvField(value: String): String =
         "\"" + value.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ") + "\""
 
-    fun csv(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap()): String = buildString {
-        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source,model_label,model_softmax_uncalibrated,human_review\n")
+    fun csv(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap(), binary: Map<Int, Float> = emptyMap()): String = buildString {
+        append("schema_version,id,start_ms,end_ms,best_ms,duration_ms,algorithm_score,visual_type,visual_evidence,spatial_spread,pulse_count,source,model_label,model_softmax_uncalibrated,human_review,binary_lightning_score_uncalibrated\n")
         for (e in events.sortedWith(compareBy<LightningEvent> { it.startMs }.thenBy { it.id })) {
             append(SCHEMA_VERSION).append(',').append(e.id).append(',')
                 .append(e.startMs).append(',').append(e.endMs).append(',').append(e.bestMs).append(',')
@@ -31,11 +31,12 @@ object LightningEvidenceReport {
                 append(',')
             }
             append(',').append(csvField((reviews[e.id] ?: LightningReview.UNREVIEWED).name))
+            append(',').append(binary[e.id]?.takeIf { it.isFinite() && it in 0f..1f }?.let(::number) ?: "")
             append('\n')
         }
     }
 
-    fun json(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap()): String = buildString {
+    fun json(events: List<LightningEvent>, predictions: Map<Int, List<Pair<String, Float>>> = emptyMap(), reviews: Map<Int, LightningReview> = emptyMap(), binary: Map<Int, Float> = emptyMap()): String = buildString {
         append("{\"schema_version\":").append(SCHEMA_VERSION)
             .append(",\"source\":\"visual_heuristic\"")
             .append(",\"scientific_caveat\":")
@@ -57,6 +58,9 @@ object LightningEvidenceReport {
             predictions[e.id]?.firstOrNull()?.let { prediction ->
                 append(",\"model_label\":").append(quote(prediction.first))
                     .append(",\"model_softmax_uncalibrated\":").append(number(prediction.second))
+            }
+            binary[e.id]?.takeIf { it.isFinite() && it in 0f..1f }?.let {
+                append(",\\\"binary_lightning_score_uncalibrated\\\":").append(number(it))
             }
             append('}')
         }
