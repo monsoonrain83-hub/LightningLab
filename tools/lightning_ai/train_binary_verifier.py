@@ -12,7 +12,7 @@ import random
 from pathlib import Path
 
 from binary_verifier_manifest import LABELS, load_manifest
-from binary_temporal_window import event_sample_times
+from binary_temporal_window import event_sample_times, phone_like_dimensions
 
 
 def train(args):
@@ -75,8 +75,15 @@ def train(args):
                             frame = previous
                         previous = frame
                         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        # Android first scales to a max side of 224 while
+                        # preserving aspect ratio, then the model resizes to
+                        # 224x224. Reproduce both stages (interpolation can
+                        # still vary by decoder and OS).
+                        phone_size = phone_like_dimensions(rgb.shape[1], rgb.shape[0])
+                        reduced = cv2.resize(rgb, phone_size,
+                                             interpolation=cv2.INTER_LINEAR)
                         x[item_index, fi] = cv2.resize(
-                            rgb, (224, 224), interpolation=cv2.INTER_AREA)
+                            reduced, (224, 224), interpolation=cv2.INTER_LINEAR)
                 finally:
                     cap.release()
                 y[item_index, labels[row["label"]]] = 1
@@ -161,7 +168,7 @@ def train(args):
 
     audit.update({
         "class_order": list(LABELS),
-        "preprocessing": "event-centered-8x-padding-500ms-v1, RGB float32 0..255, model-internal Rescaling(1/255)",
+        "preprocessing": "event-centered-8x-padding-500ms-v1; aspect-preserving max-side-224 then 224x224; RGB float32 0..255; model-internal Rescaling(1/255)",
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
         "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         "test_predictions_sha256": hashlib.sha256(predictions_path.read_bytes()).hexdigest(),
