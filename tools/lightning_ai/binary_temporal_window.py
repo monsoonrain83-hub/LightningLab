@@ -18,3 +18,15 @@ def event_sample_times(start_ms: int, end_ms: int, duration_ms: int) -> list[int
     begin = max(0, start_ms - 500)
     end = min(duration_ms, end_ms + 500)
     return [begin + (end - begin) * i // 7 for i in range(8)]
+
+
+def phone_like_dimensions(width: int, height: int, max_side: int = 224) -> tuple[int, int]:
+    """Replicate Detector.dims() before the model resizes to 224x224.
+
+    Pixel interpolation by OpenCV and Android may still differ, so this
+    function does not establish bit-exact preprocessing parity.
+    """
+    if any(type(v) is not int or v <= 0 for v in (width, height, max_side)):
+        raise ValueError("image dimensions and max_side must be positive integers")
+    scale = min(1.0, max_side / max(width, height))
+    return max(2, int(width * scale)), max(2, int(height * scale))
