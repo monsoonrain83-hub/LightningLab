@@ -15,14 +15,14 @@ class LightningEvidenceReportTest {
         val lines = csv.lines().filter { it.isNotEmpty() }
         assertEquals(3, lines.size)
         assertTrue(lines[0].contains("duration_ms"))
-        assertTrue(lines[1].startsWith("3,1,10,45,30,35,"))
-        assertTrue(lines[2].startsWith("3,2,120,180,160,60,"))
+        assertTrue(lines[1].startsWith("4,1,10,45,30,35,"))
+        assertTrue(lines[2].startsWith("4,2,120,180,160,60,"))
         assertTrue(lines[2].contains("visual_heuristic"))
     }
 
     @Test fun jsonParsesAndPreservesScientificCaveat() {
         val result = JSONObject(LightningEvidenceReport.json(events))
-        assertEquals(3, result.getInt("schema_version"))
+        assertEquals(4, result.getInt("schema_version"))
         assertEquals("visual_heuristic", result.getString("source"))
         assertTrue(result.getString("scientific_caveat").contains("CG/IC"))
         val rows = result.getJSONArray("events")
@@ -54,6 +54,29 @@ class LightningEvidenceReportTest {
         val csv = LightningEvidenceReport.csv(events, emptyMap(), decisions)
         assertTrue(csv.contains("human_review"))
         assertTrue(csv.contains("\"REJECTED\""))
+    }
+
+    @Test fun binaryModelIsIndependentOfHumanDecisionAndBrixton() {
+        val decisions = mapOf(1 to LightningReview.REJECTED)
+        val evidence = LightningEvidenceReport.json(
+            events, emptyMap(), decisions, mapOf(1 to 0.93f))
+        val result = JSONObject(evidence)
+        val first = result.getJSONArray("events").getJSONObject(0)
+        assertEquals("REJECTED", first.getString("human_review"))
+        assertEquals(0.93, first.getDouble("binary_lightning_score_uncalibrated"), 0.0001)
+        assertFalse(first.has("model_label"))
+        assertFalse(result.getJSONArray("events").getJSONObject(1)
+            .has("binary_lightning_score_uncalibrated"))
+        val csv = LightningEvidenceReport.csv(events, emptyMap(), decisions, mapOf(1 to 0.93f))
+        assertTrue(csv.contains("binary_lightning_score_uncalibrated"))
+        assertTrue(csv.contains("0.930000"))
+    }
+
+    @Test fun invalidBinaryScoreDoesNotEnterEvidence() {
+        val result = JSONObject(LightningEvidenceReport.json(
+            events, emptyMap(), emptyMap(), mapOf(1 to Float.NaN)))
+        assertFalse(result.getJSONArray("events").getJSONObject(0)
+            .has("binary_lightning_score_uncalibrated"))
     }
 
     @Test fun emptyReportIsWellFormed() {
