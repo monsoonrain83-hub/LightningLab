@@ -230,7 +230,7 @@ def evaluate(rows, labels, *, split="test", independent_sites=False,
     result["split"] = split
     result["independent_sites_checked"] = independent_sites
     result["site_count"] = len({r["site_id"] for r in selected if r.get("site_id")})
-    result["camera_count"] = len({(r["site_id"], r["camera_id"])
+    result["camera_count"] = len({(r.get("site_id", ""), r["camera_id"])
                                   for r in selected if r.get("camera_id")})
     result["model_is_validated"] = False  # Never infer validity from these stats.
     result["caveat"] = (
