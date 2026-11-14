@@ -12,6 +12,7 @@ import random
 from pathlib import Path
 
 from binary_verifier_manifest import LABELS, load_manifest
+from binary_temporal_window import event_sample_times
 
 
 def train(args):
@@ -52,10 +53,20 @@ def train(args):
                     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     if n <= 0:
                         raise ValueError("Undecodable video: " + row["relative_path"])
-                    positions = np.linspace(0, max(0, n - 1), 8).astype(int)
+                    fps = float(cap.get(cv2.CAP_PROP_FPS))
+                    if not np.isfinite(fps) or fps <= 0:
+                        raise ValueError("Video frame rate invalid: " + row["relative_path"])
+                    duration_ms = int(round(n * 1000.0 / fps))
+                    if row["end_ms"] > duration_ms:
+                        raise ValueError("Annotated candidate beyond video duration: " +
+                                         row["relative_path"])
+                    # Match the Android 500 ms event padding and eight evenly
+                    # spaced timestamps. Whole-clip sampling would train on
+                    # completely different evidence than phone inference.
+                    times = event_sample_times(row["start_ms"], row["end_ms"], duration_ms)
                     previous = None
-                    for fi, pos in enumerate(positions):
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, int(pos))
+                    for fi, timestamp_ms in enumerate(times):
+                        cap.set(cv2.CAP_PROP_POS_MSEC, float(timestamp_ms))
                         success, frame = cap.read()
                         if not success or frame is None:
                             if previous is None:
@@ -122,6 +133,8 @@ def train(args):
                 "sha256": row["sha256"],
                 "label": row["label"],
                 "probabilities": [float(v) for v in scores],
+                "start_ms": row["start_ms"],
+                "end_ms": row["end_ms"],
             }, sort_keys=True) + "\n")
 
     # Evaluation remains on untouched test split; thresholds must be set on
@@ -148,7 +161,7 @@ def train(args):
 
     audit.update({
         "class_order": list(LABELS),
-        "preprocessing": "RGB float32 0..255, model-internal Rescaling(1/255)",
+        "preprocessing": "event-centered-8x-padding-500ms-v1, RGB float32 0..255, model-internal Rescaling(1/255)",
         "tflite_sha256": hashlib.sha256(tflite).hexdigest(),
         "manifest_sha256": hashlib.sha256(args.manifest.read_bytes()).hexdigest(),
         "test_predictions_sha256": hashlib.sha256(predictions_path.read_bytes()).hexdigest(),
