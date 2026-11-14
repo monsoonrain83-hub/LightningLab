@@ -227,6 +227,9 @@ fun Results(vm: MainVM) {
     val pickTemporalModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         if (it != null) vm.importLightningTemporalModel(it)
     }
+    val pickBinaryModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        if (it != null) vm.importLightningBinaryVerifier(it)
+    }
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {
         if (it != null) vm.exportLightningEvidence(it, json = false)
     }
@@ -266,9 +269,13 @@ fun Results(vm: MainVM) {
                     OutlinedButton(onClick = { pickTemporalModel.launch(arrayOf("*/*")) }, enabled = !vm.busy) {
                         Text(if (vm.lightningTemporalReady) "تعویض مدل زمانی" else "ورود مدل زمانی TFLite")
                     }
+                    OutlinedButton(onClick = { pickBinaryModel.launch(arrayOf("*/*")) },
+                        enabled = !vm.busy) {
+                        Text(if (vm.lightningBinaryReady) "تعویض مدل بررسی دودویی" else "ورود مدل AI صاعقه/غیرصاعقه")
+                    }
                     OutlinedButton(onClick = { vm.classifyLightningEvents() },
-                        enabled = vm.lightningTemporalReady && vm.items.isNotEmpty() && !vm.busy) {
-                        Text("تحلیل زمانی با مدل")
+                        enabled = (vm.lightningTemporalReady || vm.lightningBinaryReady) && vm.items.isNotEmpty() && !vm.busy) {
+                        Text("تحلیل آفلاین مدل‌ها")
                     }
                 }
                 Text(if (vm.lightningTemporalReady)
@@ -308,6 +315,10 @@ fun Results(vm: MainVM) {
                                 style = MaterialTheme.typography.labelSmall, color = Storm.arc)
                             vm.temporalScores[item.event.id]?.firstOrNull()?.let { prediction ->
                                 Text("برچسب مدل: ${prediction.first} · امتیاز softmax ${(prediction.second * 100).roundToInt()}٪ (کالیبره‌نشده)",
+                                    style = MaterialTheme.typography.labelSmall, color = Storm.arc)
+                            }
+                            vm.lightningBinaryScores[item.event.id]?.let { score ->
+                                Text("بررسی‌کنندهٔ AI: امتیاز صاعقه ${(score * 100).roundToInt()}٪ (کالیبره‌نشده، بدون حذف رخداد)",
                                     style = MaterialTheme.typography.labelSmall, color = Storm.arc)
                             }
                             Text("بازه: ${fmt(item.event.startMs)} تا ${fmt(item.event.endMs)}",
