@@ -34,6 +34,7 @@ import com.google.common.collect.ImmutableList
 import com.lightninglab.atmospheric.knowledge.AtmosphericEngine
 import com.lightninglab.viewmodel.AppNavigationState
 import com.lightninglab.viewmodel.LocalProjectRepository
+import com.lightninglab.viewmodel.ProjectRepository
 import com.lightninglab.viewmodel.LightningReviewLedger
 import com.lightninglab.atmospheric.knowledge.CloudVisualEvidence
 import com.lightninglab.atmospheric.knowledge.CloudFrameObservation
@@ -350,7 +351,7 @@ class MainVM(private val app: Application) : AndroidViewModel(app) {
     private val videoHistory = ArrayList<VideoEditorSnapshot>()
     private var videoHistoryIndex = -1
     private var restoringVideoHistory = false
-    private val videoDraftStore by lazy { LocalProjectRepository(app) }
+    private val videoDraftStore: ProjectRepository by lazy { LocalProjectRepository(app) }
     private var videoDraftJob: Job? = null
     private var restoringVideoDraft = false
     var videoDraftStatus by mutableStateOf<String?>(null)
