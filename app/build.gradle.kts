@@ -10,8 +10,8 @@ android {
         applicationId = "com.lightninglab"
         minSdk = 29
         targetSdk = 34
-        versionCode = 81
-        versionName = "1.0-r10.74"
+        versionCode = 82
+        versionName = "1.0-r10.75"
         resourceConfigurations += listOf("en", "fa", "ar")
     }
     buildTypes {
