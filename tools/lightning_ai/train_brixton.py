@@ -160,6 +160,27 @@ def build_and_train(args) -> dict:
         batch_x, batch_y = test_seq[index]
         y_true.extend(np.argmax(batch_y, axis=1).tolist())
         y_score.extend(model.predict(batch_x, verbose=0).tolist())
+    # Trace every held-out prediction to its labelled event and SHA-256.
+    # This is the only split the trainer predicts for reporting: neither the
+    # training nor validation examples are re-used to claim test accuracy.
+    if len(test_seq.items) != len(y_score):
+        raise ValueError("prediction rows do not match ordered held-out clips")
+    prediction_path = output_dir / "test_predictions.jsonl"
+    with prediction_path.open("w", encoding="utf-8") as stream:
+        for item, scores in zip(test_seq.items, y_score):
+            record = {
+                "sample_id": item["relative_path"],
+                "split": "test",
+                "group_id": item["event_group"],
+                "sha256": item["sha256"],
+                "site_id": "brixton_single_site",
+                "camera_id": str(item["camera"]),
+                "label": item["label"],
+                "probabilities": [float(score) for score in scores],
+            }
+            stream.write(json.dumps(record, sort_keys=True) + "\n")
+    # Read this file with tools/scientific_accuracy/evaluate_predictions.py.
+    # Do NOT describe a same-site test as camera-independent generalization.
     y_true = np.asarray(y_true, dtype=np.int32)
     y_score = np.asarray(y_score, dtype=np.float32)
     y_pred = np.argmax(y_score, axis=1)
@@ -204,6 +225,7 @@ def build_and_train(args) -> dict:
         "training_clips": len(partitions["train"]),
         "validation_clips": len(partitions["validation"]),
         "test_clips": len(partitions["test"]),
+        "predictions_test_sha256": hashlib.sha256(prediction_path.read_bytes()).hexdigest(),
         "class_weights": {LABELS[i]: class_weights[i] for i in range(len(LABELS))},
     })
     (output_dir / "metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
