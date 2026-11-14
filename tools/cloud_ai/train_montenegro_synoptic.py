@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Train a three-head CL/CM/CH model from prepare_montenegro_synoptic.py output."""
-import argparse, csv, json, random
+import argparse, csv, hashlib, json, random
 from pathlib import Path
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from validate_montenegro_manifest import audit_manifest
 
 SIZE, HEADS, CLASSES = 224, ("CL", "CM", "CH"), 11
 LABELS = [str(i) for i in range(10)] + ["/"]
 
 def load_manifest(path):
+    audit_manifest(path)  # Verify paths, checksums, soft labels and split leakage before training.
     root = path.parent
     paths, targets, splits = [], [], []
     with path.open("r", encoding="utf-8-sig", newline="") as f:
@@ -102,6 +104,9 @@ def main():
     for hi, head in enumerate(HEADS):
         truth_dist, pred = y_true[:, hi, :], y_pred[:, hi, :]
         valid = truth_dist.sum(axis=1) > 0
+        if not bool(valid.any()):
+            metrics[head] = {"labelled_test_images": 0, "warning": "No labelled examples for this head"}
+            continue
         truth, guess = truth_dist[valid].argmax(axis=1), pred[valid].argmax(axis=1)
         soft_ce = float(np.mean(-np.sum(truth_dist[valid] * np.log(np.clip(pred[valid], 1e-7, 1.0)), axis=1)))
         brier = float(np.mean(np.sum((pred[valid] - truth_dist[valid]) ** 2, axis=1)))
@@ -117,12 +122,16 @@ def main():
     (out / "cloud_synoptic_architecture.json").write_text(model.to_json() + "\\n", encoding="utf-8")
     model.save_weights(out / "cloud_synoptic.weights.h5")
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-    (out / "cloud_synoptic_model.tflite").write_bytes(converter.convert())
+    tflite_bytes = converter.convert()
+    (out / "cloud_synoptic_model.tflite").write_bytes(tflite_bytes)
     contract = {
         "input_name": "image_rgb_0_255", "input_shape": [1, SIZE, SIZE, 3], "input_dtype": "float32",
         "input_range": [0, 255], "resize": "aspect-preserving", "padding_rgb": [128, 128, 128],
         "output_shape": [1, 3, 11], "output_dtype": "float32", "output_activation": "softmax_per_head",
         "head_order": list(HEADS), "class_order_per_head": LABELS,
+        "manifest_sha256": hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest(),
+        "tflite_sha256": hashlib.sha256(tflite_bytes).hexdigest(),
+        "external_site_validated": False,
         "slash_semantics": "not determinable by observer", "scores": "raw model scores; not calibrated probabilities"
     }
     (out / "model_contract.json").write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
