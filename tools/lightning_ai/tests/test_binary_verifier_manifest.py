@@ -19,7 +19,8 @@ def dataset(folder):
             data = name.encode()
             path.write_bytes(data)
             rows.append(dict(relative_path=name, sha256=hashlib.sha256(data).hexdigest(),
-                             split=split, group_id=name, label=label))
+                             split=split, group_id=name, label=label,
+                             start_ms="1000", end_ms="1150"))
     manifest = root / "binary.csv"
     def write():
         with manifest.open("w", newline="") as out:
@@ -69,6 +70,33 @@ class BinaryVerifierManifestTests(unittest.TestCase):
             write()
             with self.assertRaisesRegex(ValueError, "unsafe/missing"):
                 load_manifest(path, root)
+
+    def test_requires_event_window_annotations(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, path, rows, write = dataset(td)
+            rows[0].pop("start_ms")
+            # The CSV writer requires identical columns; use an explicit empty value.
+            rows[0]["start_ms"] = ""
+            write()
+            with self.assertRaisesRegex(ValueError, "start_ms/end_ms"):
+                load_manifest(path, root)
+
+    def test_rejects_invalid_candidate_ranges(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, path, rows, write = dataset(td)
+            rows[0]["end_ms"] = "500"
+            write()
+            with self.assertRaisesRegex(ValueError, "invalid candidate time range"):
+                load_manifest(path, root)
+
+    def test_accepts_zero_length_flash_candidate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root, path, rows, write = dataset(td)
+            rows[0]["end_ms"] = rows[0]["start_ms"]
+            write()
+            loaded, _ = load_manifest(path, root)
+            self.assertEqual(loaded[0]["start_ms"], loaded[0]["end_ms"])
+
 
 
 if __name__ == "__main__":

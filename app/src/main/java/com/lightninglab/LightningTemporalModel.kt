@@ -27,8 +27,16 @@ class LightningTemporalModel(private val file: File) {
         fun sampleTimes(startMs: Long, endMs: Long, durationMs: Long): LongArray {
             require(startMs >= 0L && endMs >= startMs && durationMs >= 0L)
             val start = (startMs - 500L).coerceIn(0L, durationMs)
-            val end = (endMs + 500L).coerceAtMost(durationMs).coerceAtLeast(start)
-            return LongArray(FRAMES) { i -> start + (end - start) * i / (FRAMES - 1) }
+            val paddedEnd = if (endMs > Long.MAX_VALUE - 500L)
+                Long.MAX_VALUE else endMs + 500L
+            val end = paddedEnd.coerceAtMost(durationMs).coerceAtLeast(start)
+            // Floor(span * i / 7) without overflowing Long on large durations.
+            val span = end - start
+            val steps = (FRAMES - 1).toLong()
+            return LongArray(FRAMES) { index ->
+                val i = index.toLong()
+                start + (span / steps) * i + (span % steps) * i / steps
+            }
         }
     }
 

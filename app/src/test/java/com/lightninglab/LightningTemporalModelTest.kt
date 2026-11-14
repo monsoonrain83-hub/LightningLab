@@ -25,6 +25,32 @@ class LightningTemporalModelTest {
         assertEquals(200L, times.last())
     }
 
+    @Test fun binaryTrainingContractUsesSameEventCenteredTimes() {
+        assertArrayEquals(
+            longArrayOf(500, 671, 842, 1014, 1185, 1357, 1528, 1700),
+            LightningTemporalModel.sampleTimes(1000, 1200, 2500)
+        )
+    }
+
+    @Test fun sampleTimesAreOverflowSafeNearLongMax() {
+        val times = LightningTemporalModel.sampleTimes(
+            Long.MAX_VALUE - 150, Long.MAX_VALUE - 120, Long.MAX_VALUE - 1
+        )
+        assertEquals(8, times.size)
+        assertEquals(Long.MAX_VALUE - 1, times.last())
+        assertTrue(times.asList().zipWithNext().all { (first, next) -> next >= first })
+    }
+
+    @Test fun sampleTimesDoNotOverflowOnVeryLongVideo() {
+        val times = LightningTemporalModel.sampleTimes(
+            0, Long.MAX_VALUE - 1000, Long.MAX_VALUE - 500
+        )
+        assertEquals(8, times.size)
+        assertEquals(0L, times.first())
+        assertTrue(times.asList().zipWithNext().all { (first, next) -> next >= first })
+        assertEquals(Long.MAX_VALUE - 500, times.last())
+    }
+
     @Test fun decodeRejectsMalformedAndUncalibratedValues() {
         assertNull(LightningTemporalModel.decode(floatArrayOf(1f)))
         assertNull(LightningTemporalModel.decode(floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, Float.NaN)))
