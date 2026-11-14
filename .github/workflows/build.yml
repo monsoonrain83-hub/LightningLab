@@ -9,6 +9,7 @@ on:
       - 'gradle/**'
       - 'tools/cloud_ai/**'
       - 'tools/lightning_ai/**'
+      - 'tools/scientific_accuracy/**'
       - '.github/workflows/build.yml'
   pull_request:
     paths:
@@ -54,6 +55,10 @@ jobs:
         run: python3 -m unittest discover -s tools/lightning_ai/tests -v
       - name: Compile lightning AI utilities
         run: python3 -m compileall -q tools/lightning_ai
+      - name: Run scientific evaluation tests
+        run: python3 -m unittest discover -s tools/scientific_accuracy/tests -v
+      - name: Compile scientific evaluation utilities
+        run: python3 -m compileall -q tools/scientific_accuracy
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
