@@ -37,7 +37,7 @@ def apply(archive, dest):
             rel=p.relative_to(root)
             if not rel.parts:continue
             if rel.parts[0] not in ROOT_DIRS and str(rel) not in ROOT_FILES:continue
-            if str(rel) in PROTECTED:continue
+            if str(rel) in PROTECTED or rel.parts[:2]==("tools","ci"):continue
             if any(v in DENIED or v.startswith(".env.") for v in rel.parts) or rel.suffix.lower() in {".jks",".keystore",".p12",".pem",".key"}:
                 raise ValueError("Potential local credential in source archive")
             if any(v in {".gradle","build","__pycache__"} for v in rel.parts):continue
