@@ -1,3 +1,19 @@
+# LightningLab — MetStat atmospheric media tools
+
+Android Kotlin/Jetpack Compose application for atmospheric media analysis. The project contains photo/video editing and lightning-detection development. The Ava Studio web bridge is a separate integration target, not a verified Android-to-web runtime connection. Current source milestone and build/test status must be checked in the repository and Actions; older changelog version numbers below are historical.
+
+## MetStat project family
+
+MetStat is a multi-repository project with independent release and deployment boundaries. Start with the [website repository](https://github.com/monsoonrain83-hub/metstat-site) for the project overview.
+
+| Repository | Responsibility |
+|---|---|
+| [metstat-site](https://github.com/monsoonrain83-hub/metstat-site) | Web interface, climate tools, station workflows and server integration |
+| [metstat-nwp](https://github.com/monsoonrain83-hub/metstat-nwp) | Numerical weather prediction data ingestion, processing and product publication |
+| [LightningLab](https://github.com/monsoonrain83-hub/LightningLab) | Android atmospheric media analysis, lightning detection and photo/video tools; web integration requires a separately verified adapter |
+
+Production databases, credentials, private observations and provider-restricted data are not required to review the source and must not be distributed with it. See [architecture](docs/ARCHITECTURE.md), [security](SECURITY.md) and [contributing](CONTRIBUTING.md). Public source does not imply that third-party data, trained weights or assets are redistributable. No repository may deploy code from untrusted pull requests.
+
 ## r10.45 — تایم‌لاین تعاملی و ویرایش دقیق‌تر ویدئو
 
 - خط‌کش تایم‌لاین اکنون تعاملی است: لمس یا کشیدن روی خط‌کش، playhead را به همان موقعیت می‌برد و پیش‌نمایش ویدئو را seek می‌کند؛ این رفتار با زوم ۱× تا ۴× نیز هماهنگ است.
