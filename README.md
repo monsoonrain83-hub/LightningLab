@@ -1,6 +1,8 @@
 # LightningLab — MetStat atmospheric media tools
 
-Android Kotlin/Jetpack Compose application for atmospheric media analysis. The project contains photo/video editing and lightning-detection development. The Ava Studio web bridge is a separate integration target, not a verified Android-to-web runtime connection. Current source milestone and build/test status must be checked in the repository and Actions; older changelog version numbers below are historical.
+Android Kotlin/Jetpack Compose application for atmospheric media analysis. The project contains photo/video editing and lightning-detection development. The Ava Studio web bridge is a separate integration target, not a verified Android-to-web runtime connection. Current source milestone: `1.0-r10.81` (`versionCode` 88, as recorded in `app/build.gradle.kts`). Check Actions for build results and releases for published binaries. Older changelog version numbers below are historical. No trained lightning verifier weights or validated accuracy are claimed by this milestone.
+
+Original project source is licensed under [GNU GPL v3](LICENSE). Third-party dependencies, media, datasets and model weights retain their applicable terms. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [data and licensing](docs/DATA_AND_LICENSING.md).
 
 ## MetStat project family
 
@@ -46,7 +48,7 @@ Production databases, credentials, private observations and provider-restricted 
 
 Lightning Lab is an Android application built with Kotlin and Jetpack Compose. It combines lightning-video tools, photo/video editing, an offline atmospheric knowledge atlas, and optional on-device TensorFlow Lite analysis.
 
-## Current source version
+## Historical source version (r10.41)
 
 - `versionName`: `1.0-r10.41`
 - `versionCode`: `51`
