@@ -10,6 +10,7 @@ on:
       - 'tools/cloud_ai/**'
       - 'tools/lightning_ai/**'
       - 'tools/scientific_accuracy/**'
+      - 'tools/ci/**'
       - '.github/workflows/build.yml'
   pull_request:
     paths:
@@ -20,33 +21,46 @@ on:
       - 'settings.gradle.kts'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  apply:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.prepare.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
-      - name: Apply update.zip (if present) and commit the real files
+        with:
+          ref: ${{ github.sha }}
+      - name: Apply validated source archive on trusted main only
+        id: prepare
         run: |
+          python3 -B -m unittest discover -s tools/ci -v
           if [ -f update.zip ]; then
-            rm -rf /tmp/upd && mkdir /tmp/upd && unzip -q update.zip -d /tmp/upd
-            SRC=$(find /tmp/upd -maxdepth 3 -name settings.gradle.kts -printf '%h\n' | head -n1)
-            echo "Source root: $SRC"
-            cp -r "$SRC"/. .
-            rm -f update.zip
+            python3 tools/ci/apply_update.py update.zip .
+            rm update.zip
             git config user.name "lightninglab-bot"
             git config user.email "bot@users.noreply.github.com"
             git add -A
-            # Do not commit the workflow copied from update.zip: the runner token
-            # intentionally lacks the special workflows permission.
-            git reset -- .github/workflows
-            git commit -m "Apply update.zip" || true
-            if ! git push; then
-              echo "::warning::Could not push extracted update.zip source; preserving the exact build tree as an artifact."
-            fi
+            git commit -m "Apply validated update.zip"
+            git push origin HEAD:main
           fi
-          echo "--- Kotlin sources in build ---"
-          ls app/src/main/java/com/lightninglab
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  build:
+    needs: apply
+    if: always() && (needs.apply.result == 'success' || needs.apply.result == 'skipped')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.apply.outputs.sha || github.sha }}
+          persist-credentials: false
+      - name: Validate source archive importer
+        run: python3 -B -m unittest discover -s tools/ci -v
       - name: Run cloud dataset preparation unit tests
         run: python3 -m unittest discover -s tools/cloud_ai/tests -v
       - name: Compile cloud training utilities
@@ -83,7 +97,7 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/lightninglab-build-source
-          tar --exclude=.git --exclude=app/build --exclude=.gradle -czf /tmp/lightninglab-build-source/source-used-for-build.tar.gz .
+          git archive --format=tar.gz HEAD -o /tmp/lightninglab-build-source/source-used-for-build.tar.gz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
