@@ -37,7 +37,7 @@ jobs:
       - name: Apply validated source archive on trusted main only
         id: prepare
         run: |
-          python3 -m unittest discover -s tools/ci -v
+          python3 -B -m unittest discover -s tools/ci -v
           if [ -f update.zip ]; then
             python3 tools/ci/apply_update.py update.zip .
             rm update.zip
@@ -60,7 +60,7 @@ jobs:
           ref: ${{ needs.apply.outputs.sha || github.sha }}
           persist-credentials: false
       - name: Validate source archive importer
-        run: python3 -m unittest discover -s tools/ci -v
+        run: python3 -B -m unittest discover -s tools/ci -v
       - name: Run cloud dataset preparation unit tests
         run: python3 -m unittest discover -s tools/cloud_ai/tests -v
       - name: Compile cloud training utilities
