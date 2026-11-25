@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {toneLut,grid,flashCandidates,skyEvidence} from './metstat-core.mjs';
+const rgba=(w,h,r,g,b,a=255)=>Uint8ClampedArray.from({length:w*h*4},(_,i)=>[r,g,b,a][i%4]);
+assert.deepEqual([...toneLut([0,.25,.5,.75,1])],Array.from({length:256},(_,i)=>i));
+assert.equal(toneLut([0,0,0,0,0])[255],0);
+assert.throws(()=>toneLut([0,1]));
+assert.ok([...grid(rgba(33,19,100,100,100),33,19)].every(v=>Math.abs(v-100)<.001));
+assert.throws(()=>grid(new Uint8Array(1),16,9));
+const samples=Array.from({length:41},(_,i)=>({t:i*50,cells:new Float32Array(144).fill(40)}));
+assert.deepEqual(flashCandidates(samples),[]);
+samples[20].cells.fill(100);assert.equal(flashCandidates(samples)[0].bestMs,1000);
+assert.throws(()=>flashCandidates([samples[0],samples[0]]));
+assert.equal(skyEvidence(rgba(20,20,60,100,190),20,20).oktas,0);
+assert.equal(skyEvidence(rgba(20,20,180,180,180),20,20).oktas,8);
+assert.equal(skyEvidence(rgba(20,20,0,0,0),20,20).cover,null);
+assert.ok(skyEvidence(rgba(20,20,255,255,255),20,20).flags.includes('clipped'));
+console.log('12 assertions passed');
